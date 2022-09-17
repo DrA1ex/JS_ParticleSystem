@@ -1,9 +1,11 @@
 const urlSearchParams = new URLSearchParams(window.location.search);
 const params = Object.fromEntries(urlSearchParams.entries());
 
-const MOUSE_POINT_RADIUS = ~~params.mouse_radius || 3;
-const PARTICLE_POINT_RADIUS = ~~params.particle_radius || 1;
-const PARTICLE_CNT = ~~params.particle_count || 10000;
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.orientation !== undefined;
+
+const MOUSE_POINT_RADIUS = ~~params.mouse_radius || (isMobile ? 5 : 3);
+const PARTICLE_POINT_RADIUS = ~~params.particle_radius || (isMobile ? 3 : 1);
+const PARTICLE_CNT = ~~params.particle_count || (isMobile ? 2000 : 10000);
 const FPS = ~~params.fps || 60;
 
 const canvas = document.getElementById("canvas");
