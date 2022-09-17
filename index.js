@@ -1,26 +1,39 @@
-const MOUSE_POINT_RADIUS = 5;
-const PARTICLE_POINT_RADIUS = 2;
-const PARTICLE_CNT = 10000;
+const urlSearchParams = new URLSearchParams(window.location.search);
+const params = Object.fromEntries(urlSearchParams.entries());
 
-const PI2 = Math.PI * 2;
+const MOUSE_POINT_RADIUS = ~~params.mouse_radius || 3;
+const PARTICLE_POINT_RADIUS = ~~params.particle_radius || 1;
+const PARTICLE_CNT = ~~params.particle_count || 10000;
+const FPS = ~~params.fps || 60;
 
 const canvas = document.getElementById("canvas");
+
+const dpr = window.devicePixelRatio;
+const rect = canvas.getBoundingClientRect();
+
+const CanvasWidth = rect.width;
+const CanvasHeight = rect.height;
+
+canvas.style.width = CanvasWidth + "px";
+canvas.style.height = CanvasHeight + "px";
+
+canvas.width = CanvasWidth * dpr;
+canvas.height = CanvasHeight * dpr;
+
 const ctx = canvas.getContext('2d');
 
-const MousePosition = {x: canvas.width / 2, y: canvas.height / 2};
+const MousePosition = {x: CanvasWidth / 2, y: CanvasHeight / 2};
 const Particles = new Array(PARTICLE_CNT);
 
 const PhysicsWorkers = new Array(Math.max(1, Math.min(4, navigator.hardwareConcurrency)));
 
 function init() {
-    const particlesPerRow = Math.floor(Math.sqrt(PARTICLE_CNT));
-    const stepX = canvas.width / particlesPerRow;
-    const stepY = canvas.height / particlesPerRow;
+    ctx.scale(dpr, dpr);
 
     for (let i = 0; i < PARTICLE_CNT; i++) {
         Particles[i] = {
-            x: stepX / 2 + (i % particlesPerRow) * stepX + MOUSE_POINT_RADIUS / 2,
-            y: stepY / 2 + Math.floor(i / particlesPerRow) * stepY + MOUSE_POINT_RADIUS / 2,
+            x: Math.random() * CanvasWidth,
+            y: Math.random() * CanvasHeight,
             velX: 0, velY: 0
         };
     }
@@ -47,13 +60,16 @@ function init() {
             type: "init",
             particles: Particles.slice(workerStartParticle, workerStopParticle),
             mousePoint: MousePosition,
-            size: {height: canvas.height, width: canvas.width}
+            size: {width: CanvasWidth, height: CanvasHeight}
         });
     }
 
-    canvas.onmousemove = (e) => {
-        MousePosition.x = e.offsetX;
-        MousePosition.y = e.offsetY;
+    canvas.onmousemove = canvas.ontouchmove = (e) => {
+        const point = e.touches ? e.touches[0] : e
+        const bcr = e.target.getBoundingClientRect();
+
+        MousePosition.x = point.clientX - bcr.x;
+        MousePosition.y = point.clientY - bcr.y;
 
         for (let i = 0; i < PhysicsWorkers.length; i++) {
             PhysicsWorkers[i].postMessage({
@@ -61,25 +77,27 @@ function init() {
                 mousePoint: MousePosition
             });
         }
+
+        e.preventDefault();
     }
 }
 
 init();
 
 setInterval(() => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, CanvasWidth, CanvasHeight);
 
     ctx.fillStyle = "red";
     ctx.beginPath();
     ctx.arc(MousePosition.x - MOUSE_POINT_RADIUS / 2, MousePosition.y - MOUSE_POINT_RADIUS / 2,
-        MOUSE_POINT_RADIUS, 0, PI2);
+        MOUSE_POINT_RADIUS, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = "black";
+    ctx.fillStyle = "#092e9c";
     for (let i = 0; i < Particles.length; i++) {
         const p = Particles[i];
 
         //ctx.fillStyle = `rgb(200,${Math.floor(125 + p.velX * 25)},${Math.floor(125 + p.velY * 25)})`;
         ctx.fillRect(p.x - PARTICLE_POINT_RADIUS / 2, p.y - PARTICLE_POINT_RADIUS / 2, PARTICLE_POINT_RADIUS, PARTICLE_POINT_RADIUS);
     }
-}, 1000 / 60);
+}, 1000 / FPS);
