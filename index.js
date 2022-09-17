@@ -3,14 +3,14 @@ const params = Object.fromEntries(urlSearchParams.entries());
 
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.orientation !== undefined;
 
-const MOUSE_POINT_RADIUS = ~~params.mouse_radius || (isMobile ? 5 : 3);
-const PARTICLE_POINT_RADIUS = ~~params.particle_radius || (isMobile ? 3 : 1);
-const PARTICLE_CNT = ~~params.particle_count || (isMobile ? 2000 : 10000);
+const MOUSE_POINT_RADIUS = 3;
+const PARTICLE_CNT = ~~params.particle_count || (isMobile ? 20000 : 50000);
 const FPS = ~~params.fps || 60;
+const G = 9;
+const Resistance = 0.99;
 
 const canvas = document.getElementById("canvas");
 
-const dpr = window.devicePixelRatio;
 const rect = canvas.getBoundingClientRect();
 
 const CanvasWidth = rect.width;
@@ -18,52 +18,21 @@ const CanvasHeight = rect.height;
 
 canvas.style.width = CanvasWidth + "px";
 canvas.style.height = CanvasHeight + "px";
-
-canvas.width = CanvasWidth * dpr;
-canvas.height = CanvasHeight * dpr;
+canvas.width = CanvasWidth;
+canvas.height = CanvasHeight;
 
 const ctx = canvas.getContext('2d');
 
 const MousePosition = {x: CanvasWidth / 2, y: CanvasHeight / 2};
 const Particles = new Array(PARTICLE_CNT);
 
-const PhysicsWorkers = new Array(Math.max(1, Math.min(4, navigator.hardwareConcurrency)));
-
 function init() {
-    ctx.scale(dpr, dpr);
-
     for (let i = 0; i < PARTICLE_CNT; i++) {
         Particles[i] = {
             x: Math.random() * CanvasWidth,
             y: Math.random() * CanvasHeight,
             velX: 0, velY: 0
         };
-    }
-
-    const perWorkerCnt = Math.floor(Particles.length / PhysicsWorkers.length);
-    for (let i = 0; i < PhysicsWorkers.length; i++) {
-        const workerIndex = i;
-        const workerStartParticle = workerIndex * perWorkerCnt;
-        const workerStopParticle = Math.min((workerIndex + 1) * perWorkerCnt, PARTICLE_CNT);
-
-        PhysicsWorkers[workerIndex] = new Worker("physics.js");
-
-        PhysicsWorkers[workerIndex].onmessage = (e) => {
-            const data = e.data;
-            for (let i = workerStartParticle, j = 0; i < workerStopParticle; i++, j++) {
-                Particles[i].x = data[j * 4];
-                Particles[i].y = data[j * 4 + 1];
-                Particles[i].velX = data[j * 4 + 2];
-                Particles[i].velY = data[j * 4 + 3];
-            }
-        }
-
-        PhysicsWorkers[workerIndex].postMessage({
-            type: "init",
-            particles: Particles.slice(workerStartParticle, workerStopParticle),
-            mousePoint: MousePosition,
-            size: {width: CanvasWidth, height: CanvasHeight}
-        });
     }
 
     canvas.onmousemove = canvas.ontouchmove = (e) => {
@@ -73,15 +42,43 @@ function init() {
         MousePosition.x = point.clientX - bcr.x;
         MousePosition.y = point.clientY - bcr.y;
 
-        for (let i = 0; i < PhysicsWorkers.length; i++) {
-            PhysicsWorkers[i].postMessage({
-                type: "mouse",
-                mousePoint: MousePosition
-            });
-        }
-
         e.preventDefault();
     }
+}
+
+function animateParticle(particle, g, position) {
+    const dx = particle.x - position.x,
+        dy = particle.y - position.y;
+
+    const distSquare = Math.pow(dx, 2) + Math.pow(dy, 2);
+
+    let force = 0;
+    if (distSquare >= 400) // A magic number represent min process distance
+    {
+        force = -g / distSquare;
+    }
+
+    const xForce = dx * force
+        , yForce = dy * force;
+
+    particle.velX *= Resistance;
+    particle.velY *= Resistance;
+
+    particle.velX += xForce;
+    particle.velY += yForce;
+
+    particle.x += particle.velX;
+    particle.y += particle.velY;
+
+    if (particle.x > CanvasWidth)
+        particle.x -= CanvasWidth;
+    else if (particle.x < 0)
+        particle.x += CanvasWidth;
+
+    if (particle.y > CanvasHeight)
+        particle.y -= CanvasHeight;
+    else if (particle.y < 0)
+        particle.y += CanvasHeight;
 }
 
 init();
@@ -89,17 +86,23 @@ init();
 setInterval(() => {
     ctx.clearRect(0, 0, CanvasWidth, CanvasHeight);
 
+    const imageData = ctx.createImageData(CanvasWidth, CanvasHeight);
+    const imageWidth = imageData.width;
+    for (let i = 0; i < Particles.length; i++) {
+        const p = Particles[i];
+        animateParticle(p, G, MousePosition);
+
+        const index = (Math.floor(p.x) + Math.floor(p.y) * imageWidth) * 4;
+        imageData.data[index] = 0x00;
+        imageData.data[index + 1] = 125 + Math.floor(p.velX * 20);
+        imageData.data[index + 2] = 125 + Math.floor(p.velY * 20);
+        imageData.data[index + 3] = 0xff;
+    }
+    ctx.putImageData(imageData, 0, 0);
+
     ctx.fillStyle = "red";
     ctx.beginPath();
     ctx.arc(MousePosition.x - MOUSE_POINT_RADIUS / 2, MousePosition.y - MOUSE_POINT_RADIUS / 2,
         MOUSE_POINT_RADIUS, 0, Math.PI * 2);
     ctx.fill();
-
-    ctx.fillStyle = "#092e9c";
-    for (let i = 0; i < Particles.length; i++) {
-        const p = Particles[i];
-
-        //ctx.fillStyle = `rgb(200,${Math.floor(125 + p.velX * 25)},${Math.floor(125 + p.velY * 25)})`;
-        ctx.fillRect(p.x - PARTICLE_POINT_RADIUS / 2, p.y - PARTICLE_POINT_RADIUS / 2, PARTICLE_POINT_RADIUS, PARTICLE_POINT_RADIUS);
-    }
 }, 1000 / FPS);
