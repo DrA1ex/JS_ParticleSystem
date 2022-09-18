@@ -6,8 +6,8 @@ const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window
 const MOUSE_POINT_RADIUS = 3;
 const PARTICLE_CNT = ~~params.particle_count || (isMobile ? 20000 : 50000);
 const FPS = ~~params.fps || 60;
-const G = 9;
-const Resistance = 0.99;
+const G = Number.parseFloat(params.g) || 9;
+const Resistance = Number.parseFloat(params.resistance) || 0.99;
 
 const canvas = document.getElementById("canvas");
 
@@ -96,8 +96,11 @@ function render() {
         const p = Particles[i];
         animateParticle(p, G, MousePosition);
 
+        const xVelToColor = 125 + Math.floor(p.velX * 20);
+        const yVelToColor = 125 + Math.floor(p.velY * 20);
+        const overSpeedColor = Math.max(0, Math.abs(xVelToColor) + Math.abs(yVelToColor) - 255 * 2);
         const index = (Math.floor(p.x) + Math.floor(p.y) * imageWidth);
-        pixels[index] = 0xff000000 | ((125 + Math.floor(p.velX * 20)) & 0xff) << 16 | ((125 + Math.floor(p.velY * 20)) & 0xff) << 8;
+        pixels[index] = 0xff000000 | (xVelToColor % 255) << 16 | (yVelToColor % 255) << 8 | overSpeedColor % 255;
     }
     ctx.putImageData(imageData, 0, 0);
 
