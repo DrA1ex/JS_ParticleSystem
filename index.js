@@ -81,9 +81,7 @@ function animateParticle(particle, g, position) {
         particle.y += CanvasHeight;
 }
 
-init();
-
-setInterval(() => {
+function render() {
     ctx.clearRect(0, 0, CanvasWidth, CanvasHeight);
 
     const imageData = ctx.createImageData(CanvasWidth, CanvasHeight);
@@ -105,4 +103,19 @@ setInterval(() => {
     ctx.arc(MousePosition.x - MOUSE_POINT_RADIUS / 2, MousePosition.y - MOUSE_POINT_RADIUS / 2,
         MOUSE_POINT_RADIUS, 0, Math.PI * 2);
     ctx.fill();
-}, 1000 / FPS);
+}
+
+const refreshTime = 1000 / FPS;
+let lastStepTime = 0;
+
+function step(timestamp) {
+    if (timestamp >= lastStepTime + refreshTime) {
+        lastStepTime = timestamp;
+        render();
+    }
+
+    requestAnimationFrame(step)
+}
+
+init();
+requestAnimationFrame(step);
