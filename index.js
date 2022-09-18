@@ -4,7 +4,7 @@ const params = Object.fromEntries(urlSearchParams.entries());
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.orientation !== undefined;
 
 const MOUSE_POINT_RADIUS = 3;
-const PARTICLE_CNT = ~~params.particle_count || (isMobile ? 20000 : 50000);
+const PARTICLE_CNT = ~~params.particle_count || (isMobile ? 100000 : 300000);
 const FPS = ~~params.fps || 60;
 const G = Number.parseFloat(params.g) || 9;
 const Resistance = Number.parseFloat(params.resistance) || 0.99;
