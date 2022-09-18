@@ -23,6 +23,10 @@ canvas.height = CanvasHeight;
 
 const ctx = canvas.getContext('2d');
 
+const imageData = ctx.createImageData(CanvasWidth, CanvasHeight);
+const imageWidth = imageData.width;
+const pixels = new Uint32Array(imageData.data.buffer);
+
 const MousePosition = {x: CanvasWidth / 2, y: CanvasHeight / 2};
 const Particles = new Array(PARTICLE_CNT);
 
@@ -84,17 +88,16 @@ function animateParticle(particle, g, position) {
 function render() {
     ctx.clearRect(0, 0, CanvasWidth, CanvasHeight);
 
-    const imageData = ctx.createImageData(CanvasWidth, CanvasHeight);
-    const imageWidth = imageData.width;
+    for (let i = 0; i < pixels.length; i++) {
+        pixels[i] = 0;
+    }
+
     for (let i = 0; i < Particles.length; i++) {
         const p = Particles[i];
         animateParticle(p, G, MousePosition);
 
-        const index = (Math.floor(p.x) + Math.floor(p.y) * imageWidth) * 4;
-        imageData.data[index] = 0x00;
-        imageData.data[index + 1] = 125 + Math.floor(p.velX * 20);
-        imageData.data[index + 2] = 125 + Math.floor(p.velY * 20);
-        imageData.data[index + 3] = 0xff;
+        const index = (Math.floor(p.x) + Math.floor(p.y) * imageWidth);
+        pixels[index] = 0xff000000 | ((125 + Math.floor(p.velX * 20)) & 0xff) << 16 | ((125 + Math.floor(p.velY * 20)) & 0xff) << 8;
     }
     ctx.putImageData(imageData, 0, 0);
 
