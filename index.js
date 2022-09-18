@@ -98,9 +98,9 @@ function render() {
 
         const xVelToColor = 125 + Math.floor(p.velX * 20);
         const yVelToColor = 125 + Math.floor(p.velY * 20);
-        const overSpeedColor = Math.max(0, Math.abs(xVelToColor) + Math.abs(yVelToColor) - 255 * 2);
+        const overSpeedColor = Math.max(0, xVelToColor + yVelToColor - 255 * 2);
         const index = (Math.floor(p.x) + Math.floor(p.y) * imageWidth);
-        pixels[index] = 0xff000000 | (xVelToColor % 255) << 16 | (yVelToColor % 255) << 8 | overSpeedColor % 255;
+        pixels[index] = 0xff000000 | (xVelToColor & 0xff) << 16 | (yVelToColor & 0xff) << 8 | overSpeedColor & 0xff;
     }
     ctx.putImageData(imageData, 0, 0);
 
