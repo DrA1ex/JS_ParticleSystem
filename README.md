@@ -1,6 +1,9 @@
 # Newtons's Gravity Law simulation
 This is a JS implementation of Newton's Gravity Law simulation.
 
+<img width="1328" alt="image" src="https://user-images.githubusercontent.com/1194059/191757118-01e26a70-922e-4599-9fda-abb854d25d16.png">
+
+
 Demo: https://dra1ex.github.io/JS_ParticleSystem/
 
 ## Parameters:
