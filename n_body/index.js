@@ -146,7 +146,6 @@ function _calculateTree(leaf) {
             }
         }
     } else {
-        return;
         for (let i = 0; i < leaf.length; i++) {
             const attractor = leaf.data[i];
             for (let j = 0; j < leaf.length; j++) {
