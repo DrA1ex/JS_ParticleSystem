@@ -10,8 +10,10 @@ const ENABLE_MOUSE = params.mouse ? Number.parseInt(params.mouse) : false;
 const PARTICLE_CNT = ~~params.particle_count || (isMobile ? 10000 : 20000);
 const FPS = ~~params.fps || 60;
 const G = Number.parseFloat(params.g) || 1;
-const ParticleG = G / PARTICLE_CNT * 10;
-const Resistance = Number.parseFloat(params.resistance) || 0.999;
+const PARTICLE_G = G / PARTICLE_CNT * 10;
+const RESISTANCE = Number.parseFloat(params.resistance) || 0.999;
+
+const DEBUG = params.debug ? Number.parseInt(params.debug) : false;
 
 const canvas = document.getElementById("canvas");
 
@@ -35,12 +37,21 @@ const MousePosition = {x: CanvasWidth / 2, y: CanvasHeight / 2};
 const Particles = new Array(PARTICLE_CNT);
 
 function init() {
+    let angle = 0,
+        step = Math.PI * 2 / PARTICLE_CNT,
+        radius = Math.min(CanvasWidth, CanvasHeight) / 2.5,
+        wiggle = radius / 3,
+        centerX = CanvasWidth / 2,
+        centerY = CanvasHeight / 2;
+
     for (let i = 0; i < PARTICLE_CNT; i++) {
         Particles[i] = {
-            x: Math.random() * CanvasWidth,
-            y: Math.random() * CanvasHeight,
+            x: centerX + Math.cos(angle) * radius + (Math.random() * wiggle - wiggle / 2),
+            y: centerY + Math.sin(angle) * radius + (Math.random() * wiggle - wiggle / 2),
             velX: 0, velY: 0
         };
+
+        angle += step;
     }
 
     canvas.onmousemove = canvas.ontouchmove = (e) => {
@@ -85,8 +96,8 @@ function applyForce(leaf, force) {
 }
 
 function physicsStep(particle) {
-    particle.velX *= Resistance;
-    particle.velY *= Resistance;
+    particle.velX *= RESISTANCE;
+    particle.velY *= RESISTANCE;
     particle.x += particle.velX;
     particle.y += particle.velY;
 
@@ -103,36 +114,50 @@ function physicsStep(particle) {
     }
 }
 
-function render() {
-    function _calculateTree(leaf) {
-        const blocks = leaf.children;
-        if (blocks.length > 0) {
-            for (let i = 0; i < blocks.length; i++) {
-                _calculateTree(blocks[i]);
+function _calculateTree(leaf) {
+    const blocks = leaf.children;
+    if (blocks.length > 0) {
+        for (let i = 0; i < blocks.length; i++) {
+            _calculateTree(blocks[i]);
+        }
+
+        // Apply force between blocks
+        for (let i = 0; i < blocks.length; i++) {
+            const attractor = blocks[i].boundaryRect.center();
+            const g = PARTICLE_G * blocks[i].length;
+
+            for (let j = 0; j < blocks.length; j++) {
+                if (i === j) continue;
+
+                const force = calculateForce(blocks[j].boundaryRect.center(), attractor, g);
+                applyForce(blocks[j], force);
             }
-
-            // Apply force between blocks
-            for (let i = 0; i < blocks.length; i++) {
-                const attractor = blocks[i].boundaryRect.center();
-                const g = ParticleG * blocks[i].length;
-
-                for (let j = 0; j < blocks.length; j++) {
-                    if (i === j) continue;
-
-                    const force = calculateForce(blocks[j].boundaryRect.center(), attractor, g);
-                    applyForce(blocks[j], force);
-                }
-            }
-        } else {
-            for (let i = 0; i < leaf.data.length; i++) {
-                const attractor = leaf.data[i];
-                for (let j = 0; j < leaf.data.length; j++) {
-                    if (i === j) continue;
-                    animateParticle(leaf.data[j], ParticleG, attractor);
-                }
+        }
+    } else {
+        for (let i = 0; i < leaf.data.length; i++) {
+            const attractor = leaf.data[i];
+            for (let j = 0; j < leaf.data.length; j++) {
+                if (i === j) continue;
+                animateParticle(leaf.data[j], PARTICLE_G, attractor);
             }
         }
     }
+}
+
+function _drawTreeStructure(ctx, parent) {
+    for (let i = 0; i < parent.children.length; i++) {
+        const leaf = parent.children[i];
+        const rect = leaf.boundaryRect;
+
+        ctx.beginPath()
+        ctx.rect(rect.left, rect.top, rect.width, rect.height);
+        ctx.stroke();
+
+        _drawTreeStructure(ctx, leaf);
+    }
+}
+
+function render() {
 
     ctx.clearRect(0, 0, CanvasWidth, CanvasHeight);
 
@@ -140,7 +165,7 @@ function render() {
         pixels[i] = 0;
     }
 
-    const tree = new SpatialTree(Particles, 128, 8);
+    const tree = new SpatialTree(Particles, 128, 2);
     _calculateTree(tree.root);
 
     for (let i = 0; i < Particles.length; i++) {
@@ -159,6 +184,11 @@ function render() {
     }
 
     ctx.putImageData(imageData, 0, 0);
+
+    if (DEBUG) {
+        ctx.strokeStyle = "#00ff00";
+        _drawTreeStructure(ctx, tree.root);
+    }
 
     if (ENABLE_MOUSE) {
         ctx.fillStyle = "red";

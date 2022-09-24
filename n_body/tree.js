@@ -62,20 +62,24 @@ class BoundaryRect {
 
 class Leaf {
     /**
+     * @param {SpatialTree} tree
      * @param {Array<Particle>} data
      * @param {number=1} depth
      * @param {BoundaryRect|null} rect
      */
-    constructor(data, depth = 1, rect = null) {
+    constructor(tree, data, depth = 1, rect = null) {
+        this.tree = tree;
         this.data = data;
         this.depth = depth;
         this.length = data.length;
         this.children = [];
         this.boundaryRect = rect || BoundaryRect.fromData(data);
+
+        this.index = this.tree._getIndex();
     }
 
     appendChild(data, rect = null) {
-        const leaf = new Leaf(data, this.depth + 1, rect);
+        const leaf = new Leaf(this.tree, data, this.depth + 1, rect);
         this.children.push(leaf);
 
         return leaf;
@@ -95,9 +99,11 @@ export class SpatialTree {
     constructor(data, maxCount, divideFactor = 2) {
         data.sort((p1, p2) => p1.x - p2.x || p1.y - p2.y);
 
-        this.root = new Leaf(data);
+        this.root = new Leaf(this, data);
         this.maxCount = maxCount;
         this.divideFactor = divideFactor;
+
+        this._index = 0;
 
         this._populate(this.root, data)
     }
@@ -124,5 +130,9 @@ export class SpatialTree {
                 }
             }
         }
+    }
+
+    _getIndex() {
+        return ++this._index;
     }
 }
