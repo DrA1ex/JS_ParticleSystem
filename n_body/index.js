@@ -6,12 +6,12 @@ const params = Object.fromEntries(urlSearchParams.entries());
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.orientation !== undefined;
 
 const MOUSE_POINT_RADIUS = 3;
-const ENABLE_MOUSE = params.mouse ? Number.parseInt(params.mouse) : true;
+const ENABLE_MOUSE = params.mouse ? Number.parseInt(params.mouse) : false;
 const PARTICLE_CNT = ~~params.particle_count || (isMobile ? 10000 : 20000);
 const FPS = ~~params.fps || 60;
-const G = Number.parseFloat(params.g) || 9;
+const G = Number.parseFloat(params.g) || 1;
 const ParticleG = G / PARTICLE_CNT * 10;
-const Resistance = Number.parseFloat(params.resistance) || 0.99;
+const Resistance = Number.parseFloat(params.resistance) || 0.999;
 
 const canvas = document.getElementById("canvas");
 

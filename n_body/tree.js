@@ -11,6 +11,7 @@ class BoundaryRect {
 
         this._height = null;
         this._width = null;
+        this._center = null;
     }
 
     get width() {
@@ -33,7 +34,11 @@ class BoundaryRect {
     }
 
     center() {
-        return {x: this.left + this.width / 2, y: this.top + this.height / 2};
+        if (this._center === null) {
+            this._center = {x: this.left + this.width / 2, y: this.top + this.height / 2};
+        }
+
+        return this._center;
     }
 
     static fromData(data) {
