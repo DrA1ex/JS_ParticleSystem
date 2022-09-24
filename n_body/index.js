@@ -13,6 +13,9 @@ const G = Number.parseFloat(params.g) || 1;
 const PARTICLE_G = G / PARTICLE_CNT * 10;
 const RESISTANCE = Number.parseFloat(params.resistance) || 0.999;
 
+const SEGMENT_DIVIDER = Math.max(2, ~~params.segment_divider || 2);
+const SEGMENT_MAX_COUNT = Math.max(2, ~~params.segment_max_count || 512);
+
 const DEBUG = params.debug ? Number.parseInt(params.debug) : false;
 const DEBUG_DATA = {};
 
@@ -181,7 +184,7 @@ function render() {
         pixels[i] = 0;
     }
 
-    const tree = new SpatialTree(Particles, 512, 2);
+    const tree = new SpatialTree(Particles, SEGMENT_MAX_COUNT, SEGMENT_DIVIDER);
     _calculateTree(tree.root);
 
     for (let i = 0; i < Particles.length; i++) {
