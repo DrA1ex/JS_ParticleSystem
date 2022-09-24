@@ -14,7 +14,7 @@ const PARTICLE_G = G / PARTICLE_CNT * 10;
 const RESISTANCE = Number.parseFloat(params.resistance) || 0.999;
 
 const SEGMENT_DIVIDER = Math.max(2, ~~params.segment_divider || 2);
-const SEGMENT_MAX_COUNT = Math.max(2, ~~params.segment_max_count || 512);
+const SEGMENT_MAX_COUNT = Math.max(2, ~~params.segment_max_count || 128);
 
 const DEBUG = params.debug ? Number.parseInt(params.debug) : false;
 const DEBUG_DATA = {};
