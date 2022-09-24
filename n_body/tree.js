@@ -29,8 +29,8 @@ class BoundaryRect {
     }
 
     contains(particle) {
-        return particle.x >= this.left && particle.x <= this.right &&
-            particle.y >= this.top && particle.y <= this.bottom;
+        return particle.x >= this.left && particle.x < this.right &&
+            particle.y >= this.top && particle.y < this.bottom;
     }
 
     center() {
@@ -97,7 +97,7 @@ export class SpatialTree {
      * @param {number=4} divideFactor
      */
     constructor(data, maxCount, divideFactor = 2) {
-        data.sort((p1, p2) => p1.x - p2.x || p1.y - p2.y);
+        //data.sort((p1, p2) => p1.x - p2.x || p1.y - p2.y);
 
         this.root = new Leaf(this, data);
         this.maxCount = maxCount;

@@ -13,3 +13,4 @@ N-Body demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 - *g* - Attraction force of mouse pointer (default: __9__, n-body: __1__)
 - *resistance* - Resistance of environment, *1* - means no resistance (default: __0.99__, , n-body: __0.999__)
 - *mouse* - Enable mouse interaction, only for n-body (default: __0__)
+- *debug* - Debug mode (default: __0__)

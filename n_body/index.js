@@ -14,6 +14,18 @@ const PARTICLE_G = G / PARTICLE_CNT * 10;
 const RESISTANCE = Number.parseFloat(params.resistance) || 0.999;
 
 const DEBUG = params.debug ? Number.parseInt(params.debug) : false;
+let debugInfoElem;
+
+if (DEBUG) {
+    const div = document.createElement("div");
+    div.style.position = "absolute";
+    div.style.bottom = "4px";
+    div.style.left = "4px";
+    div.style.color = "white";
+
+    document.body.appendChild(div);
+    debugInfoElem = div;
+}
 
 const canvas = document.getElementById("canvas");
 
@@ -88,7 +100,7 @@ function animateParticle(particle, g, attractor) {
 
 function applyForce(leaf, force) {
     const [xForce, yForce] = force;
-    for (let i = 0; i < leaf.data.length; i++) {
+    for (let i = 0; i < leaf.length; i++) {
         const particle = leaf.data[i];
         particle.velX += xForce;
         particle.velY += yForce;
@@ -134,9 +146,9 @@ function _calculateTree(leaf) {
             }
         }
     } else {
-        for (let i = 0; i < leaf.data.length; i++) {
+        for (let i = 0; i < leaf.length; i++) {
             const attractor = leaf.data[i];
-            for (let j = 0; j < leaf.data.length; j++) {
+            for (let j = 0; j < leaf.length; j++) {
                 if (i === j) continue;
                 animateParticle(leaf.data[j], PARTICLE_G, attractor);
             }
@@ -205,7 +217,14 @@ let lastStepTime = 0;
 function step(timestamp) {
     if (timestamp >= lastStepTime + refreshTime) {
         lastStepTime = timestamp;
-        render();
+
+        if (!DEBUG) {
+            render();
+        } else {
+            const t = performance.now();
+            render();
+            debugInfoElem.innerText = `${(performance.now() - t).toFixed(2)} ms`;
+        }
     }
 
     requestAnimationFrame(step)
