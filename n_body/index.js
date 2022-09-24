@@ -14,7 +14,7 @@ const PARTICLE_G = G / PARTICLE_CNT * 10;
 const RESISTANCE = Number.parseFloat(params.resistance) || 0.999;
 
 const DEBUG = params.debug ? Number.parseInt(params.debug) : false;
-let debugInfoElem;
+const DEBUG_DATA = {};
 
 if (DEBUG) {
     const div = document.createElement("div");
@@ -24,7 +24,7 @@ if (DEBUG) {
     div.style.color = "white";
 
     document.body.appendChild(div);
-    debugInfoElem = div;
+    DEBUG_DATA.infoElem = div;
 }
 
 const canvas = document.getElementById("canvas");
@@ -146,6 +146,7 @@ function _calculateTree(leaf) {
             }
         }
     } else {
+        return;
         for (let i = 0; i < leaf.length; i++) {
             const attractor = leaf.data[i];
             for (let j = 0; j < leaf.length; j++) {
@@ -167,6 +168,10 @@ function _drawTreeStructure(ctx, parent) {
 
         _drawTreeStructure(ctx, leaf);
     }
+
+    if (parent.depth > DEBUG_DATA.depth) {
+        DEBUG_DATA.depth = parent.depth;
+    }
 }
 
 function render() {
@@ -177,7 +182,7 @@ function render() {
         pixels[i] = 0;
     }
 
-    const tree = new SpatialTree(Particles, 128, 2);
+    const tree = new SpatialTree(Particles, 512, 2);
     _calculateTree(tree.root);
 
     for (let i = 0; i < Particles.length; i++) {
@@ -199,7 +204,9 @@ function render() {
 
     if (DEBUG) {
         ctx.strokeStyle = "#00ff00";
+        DEBUG_DATA.depth = 0;
         _drawTreeStructure(ctx, tree.root);
+        DEBUG_DATA.segmentCount = tree._index;
     }
 
     if (ENABLE_MOUSE) {
@@ -223,7 +230,15 @@ function step(timestamp) {
         } else {
             const t = performance.now();
             render();
-            debugInfoElem.innerText = `${(performance.now() - t).toFixed(2)} ms`;
+            const renderTime = performance.now() - t;
+            DEBUG_DATA.renderTime = DEBUG_DATA.renderTime !== undefined ?
+                (DEBUG_DATA.renderTime + renderTime) / 2 : renderTime;
+
+            DEBUG_DATA.infoElem.innerText = [
+                `max depth: ${DEBUG_DATA.depth}`,
+                `segments: ${DEBUG_DATA.segmentCount}`,
+                `render time: ${DEBUG_DATA.renderTime.toFixed(1)} ms`
+            ].join("\n");
         }
     }
 
