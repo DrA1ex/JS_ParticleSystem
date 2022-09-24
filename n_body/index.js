@@ -6,6 +6,7 @@ const params = Object.fromEntries(urlSearchParams.entries());
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.orientation !== undefined;
 
 const MOUSE_POINT_RADIUS = 3;
+const ENABLE_MOUSE = params.mouse ? Number.parseInt(params.mouse) : true;
 const PARTICLE_CNT = ~~params.particle_count || (isMobile ? 10000 : 20000);
 const FPS = ~~params.fps || 60;
 const G = Number.parseFloat(params.g) || 9;
@@ -89,15 +90,17 @@ function physicsStep(particle) {
     particle.x += particle.velX;
     particle.y += particle.velY;
 
-    if (particle.x > CanvasWidth)
+    if (particle.x > CanvasWidth) {
         particle.x -= CanvasWidth;
-    else if (particle.x < 0)
+    } else if (particle.x < 0) {
         particle.x += CanvasWidth;
+    }
 
-    if (particle.y > CanvasHeight)
+    if (particle.y > CanvasHeight) {
         particle.y -= CanvasHeight;
-    else if (particle.y < 0)
+    } else if (particle.y < 0) {
         particle.y += CanvasHeight;
+    }
 }
 
 function render() {
@@ -143,7 +146,9 @@ function render() {
     for (let i = 0; i < Particles.length; i++) {
         const particle = Particles[i];
 
-        //animateParticle(particle, G, MousePosition);
+        if (ENABLE_MOUSE) {
+            animateParticle(particle, G, MousePosition);
+        }
         physicsStep(particle);
 
         const xVelToColor = 125 + Math.floor(particle.velX * 20);
@@ -155,11 +160,13 @@ function render() {
 
     ctx.putImageData(imageData, 0, 0);
 
-    ctx.fillStyle = "red";
-    ctx.beginPath();
-    ctx.arc(MousePosition.x - MOUSE_POINT_RADIUS / 2, MousePosition.y - MOUSE_POINT_RADIUS / 2,
-        MOUSE_POINT_RADIUS, 0, Math.PI * 2);
-    ctx.fill();
+    if (ENABLE_MOUSE) {
+        ctx.fillStyle = "red";
+        ctx.beginPath();
+        ctx.arc(MousePosition.x - MOUSE_POINT_RADIUS / 2, MousePosition.y - MOUSE_POINT_RADIUS / 2,
+            MOUSE_POINT_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
+    }
 }
 
 const refreshTime = 1000 / FPS;
