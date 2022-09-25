@@ -14,11 +14,10 @@ export const ENABLE_MOUSE = params.mouse ? Number.parseInt(params.mouse) : false
 export const FPS = ~~params.fps || 60;
 
 export const SEGMENT_DIVIDER = Math.max(2, ~~params.segment_divider || 2);
-export const SEGMENT_MAX_COUNT = Math.max(2, ~~params.segment_max_count || 128);
+export const SEGMENT_MAX_COUNT = Math.max(2, ~~params.segment_max_count || 32);
 
 export const DEBUG = params.debug ? Number.parseInt(params.debug) : false;
 export const STATS = params.stats ? Number.parseInt(params.stats) : true;
-export const DEBUG_DATA = {};
 
 // MIN distance for particles interaction, to avoid infinitive forces
 export const MIN_DISTANCE_SQ = Math.pow(20, 2);

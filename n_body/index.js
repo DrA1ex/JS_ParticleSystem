@@ -5,6 +5,7 @@ import {
     DEBUG,
     ENABLE_MOUSE,
     FPS,
+    MOUSE_POINT_RADIUS,
     PARTICLE_G,
     PARTICLE_INIT,
     STATS,
