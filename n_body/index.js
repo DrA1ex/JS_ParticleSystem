@@ -14,6 +14,7 @@ import {
     PARTICLE_CNT,
     SEGMENT_DIVIDER,
 } from "./settings.js";
+import {DEBUG_DATA} from "./debug.js";
 
 Debug.init();
 
@@ -89,8 +90,17 @@ function render() {
         pixels[i] = 0;
     }
 
+    let t = performance.now();
     const tree = new SpatialTree(Particles, SEGMENT_MAX_COUNT, SEGMENT_DIVIDER);
+    if (STATS) {
+        DEBUG_DATA.tree_time = performance.now() - t;
+    }
+
+    t = performance.now();
     _calculateTree(tree.root);
+    if (STATS) {
+        DEBUG_DATA.physics_time = performance.now() - t;
+    }
 
     for (let i = 0; i < Particles.length; i++) {
         const particle = Particles[i];

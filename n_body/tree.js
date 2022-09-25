@@ -97,8 +97,6 @@ export class SpatialTree {
      * @param {number=4} divideFactor
      */
     constructor(data, maxCount, divideFactor = 2) {
-        //data.sort((p1, p2) => p1.x - p2.x || p1.y - p2.y);
-
         this.root = new Leaf(this, data);
         this.maxCount = maxCount;
         this.divideFactor = divideFactor;

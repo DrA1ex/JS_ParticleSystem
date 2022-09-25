@@ -86,6 +86,8 @@ export function drawStats(renderTime) {
         `max depth: ${DEBUG_DATA.depth}`,
         `segments: ${DEBUG_DATA.segmentCount}`,
         `computations: ${flops.toFixed(2)} ${flopsUnit}FLOPS`,
-        `render time: ${DEBUG_DATA.renderTime.toFixed(1)} ms`
+        `render time: ${DEBUG_DATA.renderTime.toFixed(1)} ms`,
+        `- tree building: ${DEBUG_DATA.tree_time.toFixed(1)} ms`,
+        `- physics calc: ${DEBUG_DATA.physics_time.toFixed(1)} ms`,
     ].join("\n");
 }
