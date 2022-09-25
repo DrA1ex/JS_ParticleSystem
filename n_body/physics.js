@@ -1,8 +1,9 @@
-import {MIN_DISTANCE_SQ, RESISTANCE} from "./settings.js";
+import {MIN_DISTANCE_SQ, RESISTANCE, G} from "./settings.js";
 
 export const InitType = {
     circle: 0,
-    uniform: 1
+    uniform: 1,
+    bang: 2,
 }
 
 export function initParticles(initType, particleCount, width, height) {
@@ -37,9 +38,31 @@ export function initParticles(initType, particleCount, width, height) {
         }
     }
 
+    function _bangInitializer() {
+        const radius = 50;
+        const initialVelocity = Math.sqrt(G) * 5;
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const pi2 = Math.PI * 2;
+
+        for (let i = 0; i < particleCount; i++) {
+            const angle = Math.random() * pi2;
+            Particles[i] = {
+                x: centerX + Math.cos(angle) * Math.random() * radius - radius / 2,
+                y: centerY + Math.sin(angle) * Math.random() * radius - radius / 2,
+                velX: Math.cos(angle) * initialVelocity,
+                velY: Math.sin(angle) * initialVelocity
+            };
+        }
+    }
+
     switch (initType) {
         case InitType.circle:
             _circleInitializer();
+            break;
+
+        case InitType.bang:
+            _bangInitializer();
             break;
 
         case InitType.uniform:

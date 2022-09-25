@@ -5,7 +5,7 @@ export const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) |
 
 export const PARTICLE_INIT = params.particle_init || "circle";
 export const PARTICLE_CNT = ~~params.particle_count || (IS_MOBILE ? 10000 : 20000);
-export const RESISTANCE = Number.parseFloat(params.resistance) || 0.999;
+export const RESISTANCE = Math.max(0.1e-3, Math.min(1, Number.parseFloat(params.resistance) || 0.999));
 export const G = Number.parseFloat(params.g) || 1;
 export const PARTICLE_G = G / PARTICLE_CNT * 10;
 
