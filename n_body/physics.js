@@ -1,4 +1,4 @@
-import {MIN_DISTANCE_SQ, RESISTANCE} from "./settings.js";
+import {DISTANCE_MULTIPLIER, MIN_DISTANCE_SQ, RESISTANCE} from "./settings.js";
 
 export const InitType = {
     circle: 0,
@@ -55,7 +55,7 @@ export function calculateForce(p1, p2, g) {
     const dx = p1.x - p2.x,
         dy = p1.y - p2.y;
 
-    const distSquare = dx * dx + dy * dy;
+    const distSquare = (dx * dx + dy * dy) * DISTANCE_MULTIPLIER;
 
     let force = 0;
     if (distSquare >= MIN_DISTANCE_SQ) {

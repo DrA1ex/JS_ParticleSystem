@@ -21,5 +21,8 @@ export const STATS = params.stats ? Number.parseInt(params.stats) : true;
 
 export const FILTER_ENABLE = params.filter ? Number.parseInt(params.filter) : false;
 
-// MIN distance for particles interaction, to avoid infinitive forces
-export const MIN_DISTANCE_SQ = Math.pow(20, 2);
+const minDistance = params.min_distance ? ~~params.min_distance : 20;
+export const MIN_DISTANCE_SQ = Math.pow(minDistance, 2);
+
+const distanceMul = ~~params.distance_mul || 1;
+export const DISTANCE_MULTIPLIER = Math.pow(distanceMul, 2);
