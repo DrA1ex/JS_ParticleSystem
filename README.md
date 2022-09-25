@@ -47,7 +47,7 @@ Without optimization, _100,000_ particles would require _10,000,000,000_ operati
 
 <img width="1291" alt="image" src="https://user-images.githubusercontent.com/1194059/192136192-65606492-466a-40fe-9274-204b1b446349.png">
 
-Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body?debug=1
+Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 
 ### Parameters:
 
