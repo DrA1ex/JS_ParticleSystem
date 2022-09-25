@@ -137,12 +137,12 @@ let hueAngle = 0;
 
 function step(timestamp) {
     if (timestamp >= lastStepTime + refreshTime) {
-        lastStepTime = timestamp;
         const t = performance.now();
         render();
 
-        const renderTime = performance.now() - t;
-        if (STATS) Debug.drawStats(renderTime);
+        DEBUG_DATA.elapsed = timestamp - lastStepTime;
+        lastStepTime = timestamp;
+        if (STATS) Debug.drawStats();
     }
 
     if (FILTER_ENABLE) {

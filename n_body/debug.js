@@ -62,10 +62,7 @@ export function calcStatistics(tree) {
     DEBUG_DATA.segmentCount = tree._index;
 }
 
-export function drawStats(renderTime) {
-    DEBUG_DATA.renderTime = DEBUG_DATA.renderTime !== undefined ?
-        (DEBUG_DATA.renderTime + renderTime) / 2 : renderTime;
-
+export function drawStats() {
     const flopsUnits = [
         {unit: "T", exp: 1e12},
         {unit: "G", exp: 1e9},
@@ -86,8 +83,8 @@ export function drawStats(renderTime) {
         `max depth: ${DEBUG_DATA.depth}`,
         `segments: ${DEBUG_DATA.segmentCount}`,
         `computations: ${flops.toFixed(2)} ${flopsUnit}FLOPS`,
-        `render time: ${DEBUG_DATA.renderTime.toFixed(1)} ms`,
-        `- tree building: ${DEBUG_DATA.tree_time.toFixed(1)} ms`,
-        `- physics calc: ${DEBUG_DATA.physics_time.toFixed(1)} ms`,
+        `fps: ${(1000 / DEBUG_DATA.elapsed).toFixed(1)}`,
+        `  - tree building: ${DEBUG_DATA.tree_time.toFixed(1)} ms`,
+        `  - physics calc: ${DEBUG_DATA.physics_time.toFixed(1)} ms`,
     ].join("\n");
 }
