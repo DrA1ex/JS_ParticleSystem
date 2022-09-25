@@ -1,5 +1,7 @@
 # Newtons's Gravity Law simulation
 
+<img width="640" alt="Simulation gif" src="https://user-images.githubusercontent.com/1194059/192136681-ccd9e0e9-1395-48f5-a2fe-9851505dbf9c.gif">
+
 # 1-Body Simulation
 This is not a something like simulation of a galaxy, since in a galaxy all bodies interact with each other.
 The simulation roughly visualizes how ultralight bodies would interact with one supermassive body.
