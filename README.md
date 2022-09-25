@@ -36,7 +36,7 @@ Each particle in a segment interacts with each other, but not with particles in 
 Instead, the segments themselves are perceived as large particles and interact with each other.
 This allows us to achieve an acceptable complexity: _O(N*logN)_ instead of unoptimized _O(N*N)_.
 
-#### Visualization of Spartial tree used to optimize 100,000 particles interactio
+#### Visualization of Spartial tree used to optimize 100,000 particles interaction
 <img width="674" alt="image" src="https://user-images.githubusercontent.com/1194059/192135991-7862b239-eb4d-4757-934f-586015abe304.png">
 
 You can see Spartial Tree segmentation in real-time: https://dra1ex.github.io/JS_ParticleSystem/n_body?debug=1
