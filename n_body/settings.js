@@ -19,5 +19,7 @@ export const SEGMENT_MAX_COUNT = Math.max(2, ~~params.segment_max_count || 32);
 export const DEBUG = params.debug ? Number.parseInt(params.debug) : false;
 export const STATS = params.stats ? Number.parseInt(params.stats) : true;
 
+export const FILTER_ENABLE = params.filter ? Number.parseInt(params.filter) : false;
+
 // MIN distance for particles interaction, to avoid infinitive forces
 export const MIN_DISTANCE_SQ = Math.pow(20, 2);

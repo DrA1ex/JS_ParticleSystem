@@ -4,14 +4,15 @@ import * as Physics from "./physics.js";
 import {
     DEBUG,
     ENABLE_MOUSE,
+    SEGMENT_MAX_COUNT,
     FPS,
+    FILTER_ENABLE,
     MOUSE_POINT_RADIUS,
     PARTICLE_G,
     PARTICLE_INIT,
     STATS,
     PARTICLE_CNT,
     SEGMENT_DIVIDER,
-    SEGMENT_MAX_COUNT,
 } from "./settings.js";
 
 Debug.init();
@@ -82,7 +83,6 @@ function _calculateTree(leaf) {
 }
 
 function render() {
-
     ctx.clearRect(0, 0, CanvasWidth, CanvasHeight);
 
     for (let i = 0; i < pixels.length; i++) {
@@ -123,6 +123,7 @@ function render() {
 
 const refreshTime = 1000 / FPS;
 let lastStepTime = 0;
+let hueAngle = 0;
 
 function step(timestamp) {
     if (timestamp >= lastStepTime + refreshTime) {
@@ -134,6 +135,10 @@ function step(timestamp) {
         if (STATS) Debug.drawStats(renderTime);
     }
 
+    if (FILTER_ENABLE) {
+        canvas.style.filter = `contrast(2) brightness(2) hue-rotate(${hueAngle % 360}deg)`;
+        hueAngle += 0.2;
+    }
     requestAnimationFrame(step)
 }
 

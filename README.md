@@ -36,10 +36,10 @@ Each particle in a segment interacts with each other, but not with particles in 
 Instead, the segments themselves are perceived as large particles and interact with each other.
 This allows us to achieve an acceptable complexity: _O(N*logN)_ instead of unoptimized _O(N*N)_.
 
-#### Visualization of Spartial tree used to optimize 100,000 particles interaction
+#### Visualization of Spatial tree used to optimize 100,000 particles interaction
 <img width="674" alt="image" src="https://user-images.githubusercontent.com/1194059/192135991-7862b239-eb4d-4757-934f-586015abe304.png">
 
-You can see Spartial Tree segmentation in real-time: https://dra1ex.github.io/JS_ParticleSystem/n_body?debug=1
+You can see Spatial Tree segmentation in real-time: https://dra1ex.github.io/JS_ParticleSystem/n_body?debug=1
 
 This means that we can simulate _100,000_ particles in just about _500,000_ operations.
 Without optimization, _100,000_ particles would require _10,000,000,000_ operations (_20,000_ times more)
@@ -53,9 +53,12 @@ Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 
 - *particle_count* - Count of particles to simulate (default: __10000__ for mobile, __20000__ for desktop)
 - *particle_init* - Particle initialization, values: __circle__, __uniform__ (default: __circle__)
-- *fps* - Refresh rate in frames per second (default: __60__)
+- *segment_divider* - Spatial subdivision factor while segmentation (default: __2__)
+- *segment_max_count* - Max particle count in segment, larger values increase accuracy (default: __32__)
 - *g* - Attraction force of mouse pointer (default: __1__)
 - *resistance* - Resistance of environment, *1* - means no resistance (default: __0.999__)
+- *fps* - Refresh rate in frames per second (default: __60__)
+- *filter* - Makes particle brighter and change color over time (default: __0__)
 - *mouse* - Enable mouse interaction (default: __0__)
 - *stats* - Display statistics (default: __1__)
 - *debug* - Debug mode (default: __0__)
