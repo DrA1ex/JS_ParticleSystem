@@ -38,18 +38,12 @@ export function drawTreeStructure(ctx, tree) {
 }
 
 export function calcStatistics(tree) {
-    DEBUG_DATA.depth = 0;
     const flopsPerOp = 12;
     let flops = 0;
 
     function _processLeaf(parent) {
         if (parent.children.length === 0) {
             flops += Math.pow(parent.data.length * flopsPerOp, 2);
-
-            if (parent.depth > DEBUG_DATA.depth) {
-                DEBUG_DATA.depth = parent.depth;
-            }
-
             return;
         }
 
@@ -63,6 +57,7 @@ export function calcStatistics(tree) {
     _processLeaf(tree.root);
 
     DEBUG_DATA.flops = flops;
+    DEBUG_DATA.depth = tree.maxDepth;
     DEBUG_DATA.segmentCount = tree._index;
 }
 

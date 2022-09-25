@@ -97,17 +97,22 @@ export class SpatialTree {
      * @param {number=4} divideFactor
      */
     constructor(data, maxCount, divideFactor = 2) {
+        this._index = 0;
+        this.maxDepth = 0;
+
         this.root = new Leaf(this, data);
         this.maxCount = maxCount;
         this.divideFactor = divideFactor;
-
-        this._index = 0;
 
         this._populate(this.root, data)
     }
 
     _populate(current) {
         if (current.length <= this.maxCount) {
+            if (current.depth > this.maxDepth) {
+                this.maxDepth = current.depth;
+            }
+
             return;
         }
 
