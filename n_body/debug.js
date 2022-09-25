@@ -1,6 +1,10 @@
-import {STATS} from "./settings.js";
+import {FPS, STATS} from "./settings.js";
 
-export const DEBUG_DATA = {};
+export const DEBUG_DATA = {
+    elapsed: 0,
+    _frameIndex: 0,
+    _frameTimes: []
+};
 
 export function init() {
     if (STATS) {
@@ -60,6 +64,19 @@ export function calcStatistics(tree) {
 
     DEBUG_DATA.flops = flops;
     DEBUG_DATA.segmentCount = tree._index;
+}
+
+export function postFrameTime(elapsed) {
+    const framesToSmooth = FPS;
+
+    if (DEBUG_DATA._frameTimes.length < framesToSmooth) {
+        DEBUG_DATA._frameTimes.push(elapsed);
+    } else {
+        DEBUG_DATA._frameTimes[DEBUG_DATA._frameIndex] = elapsed;
+    }
+
+    DEBUG_DATA._frameIndex = (DEBUG_DATA._frameIndex + 1) % framesToSmooth;
+    DEBUG_DATA.elapsed = DEBUG_DATA._frameTimes.reduce((p, c) => p + c, 0) / DEBUG_DATA._frameTimes.length;
 }
 
 export function drawStats() {

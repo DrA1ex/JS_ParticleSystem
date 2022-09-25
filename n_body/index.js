@@ -140,7 +140,9 @@ function step(timestamp) {
         const t = performance.now();
         render();
 
-        DEBUG_DATA.elapsed = timestamp - lastStepTime;
+        if (lastStepTime > 0) {
+            Debug.postFrameTime(timestamp - lastStepTime);
+        }
         lastStepTime = timestamp;
         if (STATS) Debug.drawStats();
     }
