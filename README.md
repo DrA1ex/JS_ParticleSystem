@@ -17,7 +17,7 @@ But with some optimization it is achievable! See implementation of N-Body simula
 
 #### 1-Body Visualization frame with 1,000,000 particles
 
-<img width="1328" alt="image" src="https://user-images.githubusercontent.com/1194059/191757118-01e26a70-922e-4599-9fda-abb854d25d16.png">
+<img width="1080" alt="image" src="https://user-images.githubusercontent.com/1194059/192269216-d1ed71f0-a3cb-48cc-9d3f-33126291c91e.png">
 
 Demo: https://dra1ex.github.io/JS_ParticleSystem/
 
@@ -45,7 +45,7 @@ complexity: _O(N*logN)_ instead of unoptimized _O(N*N)_.
 
 #### Visualization of Spatial tree used to optimize 100,000 particles interaction
 
-<img width="674" alt="image" src="https://user-images.githubusercontent.com/1194059/192135991-7862b239-eb4d-4757-934f-586015abe304.png">
+<img width="720" alt="image" src="https://user-images.githubusercontent.com/1194059/192269736-64fe4b19-d0bb-4cbc-b0df-591e17191355.png">
 
 You can see Spatial Tree segmentation in real-time: https://dra1ex.github.io/JS_ParticleSystem/n_body?debug=1
 
@@ -53,7 +53,7 @@ This means that we can simulate _100,000_ particles in just about _500,000_ oper
 particles would require _10,000,000,000_ operations (_20,000_ times more)
 
 
-<img width="1291" alt="image" src="https://user-images.githubusercontent.com/1194059/192136192-65606492-466a-40fe-9274-204b1b446349.png">
+<img width="1080" alt="image" src="https://user-images.githubusercontent.com/1194059/192136192-65606492-466a-40fe-9274-204b1b446349.png">
 
 Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 
