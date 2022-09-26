@@ -89,7 +89,7 @@ export function calculateForce(p1, p2, g) {
     return [0, 0];
 }
 
-export function animateParticle(particle, g, attractor) {
+export function particleInteract(particle, attractor, g) {
     const [xForce, yForce] = calculateForce(particle, attractor, g);
     particle.velX += xForce;
     particle.velY += yForce;

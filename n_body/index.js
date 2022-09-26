@@ -53,34 +53,45 @@ function init() {
 }
 
 
-function _calculateTree(leaf) {
-    const blocks = leaf.children;
-    if (blocks.length > 0) {
-        for (let i = 0; i < blocks.length; i++) {
-            _calculateTree(blocks[i]);
-        }
+function calculateTree(tree) {
+    function _calculateLeaf(leaf, [pForceX, pForceY]) {
+        const blocks = leaf.children;
+        if (blocks.length > 0) {
+            for (let i = 0; i < blocks.length; i++) {
+                const blockCenter = blocks[i].boundaryRect.center();
+                let forceX = pForceX;
+                let forceY = pForceY;
 
-        // Apply force between blocks
-        for (let i = 0; i < blocks.length; i++) {
-            const attractor = blocks[i].boundaryRect.center();
-            const g = PARTICLE_G * blocks[i].length;
+                for (let j = 0; j < blocks.length; j++) {
+                    if (i === j) continue;
 
-            for (let j = 0; j < blocks.length; j++) {
-                if (i === j) continue;
+                    const g = PARTICLE_G * blocks[j].length;
+                    const [jForceX, jForceY] = Physics.calculateForce(blockCenter, blocks[j].boundaryRect.center(), g);
+                    forceX += jForceX;
+                    forceY += jForceY;
+                }
 
-                const force = Physics.calculateForce(blocks[j].boundaryRect.center(), attractor, g);
-                Physics.applyForce(blocks[j], force);
+                _calculateLeaf(blocks[i], [forceX, forceY]);
             }
-        }
-    } else {
-        for (let i = 0; i < leaf.length; i++) {
-            const attractor = leaf.data[i];
-            for (let j = 0; j < leaf.length; j++) {
-                if (i === j) continue;
-                Physics.animateParticle(leaf.data[j], PARTICLE_G, attractor);
+        } else {
+            for (let i = 0; i < leaf.length; i++) {
+                const attractor = leaf.data[i];
+                attractor.velX += pForceX;
+                attractor.velY += pForceY;
+
+                for (let j = 0; j < leaf.length; j++) {
+                    if (i === j) continue;
+
+                    const particle = leaf.data[j];
+                    const [forceX, forceY] = Physics.calculateForce(particle, attractor, PARTICLE_G);
+                    particle.velX += forceX;
+                    particle.velY += forceY;
+                }
             }
         }
     }
+
+    return _calculateLeaf(tree.root, [0, 0]);
 }
 
 function render() {
@@ -97,7 +108,7 @@ function render() {
     }
 
     t = performance.now();
-    _calculateTree(tree.root);
+    calculateTree(tree);
     if (STATS) {
         DEBUG_DATA.physics_time = performance.now() - t;
     }
@@ -106,7 +117,7 @@ function render() {
         const particle = Particles[i];
 
         if (ENABLE_MOUSE) {
-            animateParticle(particle, G, MousePosition);
+            Physics.particleInteract(particle, MousePosition, G);
         }
         Physics.physicsStep(particle, CanvasWidth, CanvasHeight);
 
