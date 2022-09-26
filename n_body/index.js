@@ -4,15 +4,16 @@ import * as Physics from "./physics.js";
 import {
     DEBUG,
     ENABLE_MOUSE,
-    SEGMENT_MAX_COUNT,
     FPS,
+    G,
     FILTER_ENABLE,
     MOUSE_POINT_RADIUS,
     PARTICLE_G,
     PARTICLE_INIT,
+    SEGMENT_DIVIDER,
+    SEGMENT_MAX_COUNT,
     STATS,
     PARTICLE_CNT,
-    SEGMENT_DIVIDER,
 } from "./settings.js";
 import {DEBUG_DATA} from "./debug.js";
 
@@ -38,8 +39,12 @@ const pixels = new Uint32Array(imageData.data.buffer);
 const MousePosition = {x: CanvasWidth / 2, y: CanvasHeight / 2};
 const Particles = Physics.initParticles(Physics.InitType[PARTICLE_INIT], PARTICLE_CNT, CanvasWidth, CanvasHeight);
 
+let hueAngle = 0;
+let maxSpeed = 0;
+
 function init() {
     if (ENABLE_MOUSE) {
+        document.body.style.cursor = "none";
         canvas.onmousemove = canvas.ontouchmove = (e) => {
             const point = e.touches ? e.touches[0] : e
             const bcr = e.target.getBoundingClientRect();
@@ -94,13 +99,7 @@ function calculateTree(tree) {
     return _calculateLeaf(tree.root, [0, 0]);
 }
 
-function render() {
-    ctx.clearRect(0, 0, CanvasWidth, CanvasHeight);
-
-    for (let i = 0; i < pixels.length; i++) {
-        pixels[i] = 0;
-    }
-
+function calculatePhysics() {
     let t = performance.now();
     const tree = new SpatialTree(Particles, SEGMENT_MAX_COUNT, SEGMENT_DIVIDER);
     if (STATS) {
@@ -115,23 +114,36 @@ function render() {
 
     for (let i = 0; i < Particles.length; i++) {
         const particle = Particles[i];
-
         if (ENABLE_MOUSE) {
             Physics.particleInteract(particle, MousePosition, G);
         }
-        Physics.physicsStep(particle, CanvasWidth, CanvasHeight);
 
-        const xVelToColor = 125 + Math.floor(particle.velX * 20);
-        const yVelToColor = 125 + Math.floor(particle.velY * 20);
-        const overSpeedColor = Math.max(0, xVelToColor + yVelToColor - 255 * 2);
+        Physics.physicsStep(particle, CanvasWidth, CanvasHeight);
+    }
+
+    if (STATS) Debug.calcStatistics(tree);
+
+    return tree;
+}
+
+function render() {
+    ctx.clearRect(0, 0, CanvasWidth, CanvasHeight);
+    for (let i = 0; i < pixels.length; i++) {
+        pixels[i] = 0;
+    }
+
+    for (let i = 0; i < Particles.length; i++) {
+        const particle = Particles[i];
+
+        maxSpeed = Math.max(maxSpeed, Math.abs(particle.velX), Math.abs(particle.velY));
+
+        const xVelToColor = Math.floor(255 * (0.5 + particle.velX / maxSpeed / 2));
+        const yVelToColor = Math.floor(255 * (0.5 + particle.velY / maxSpeed / 2));
         const index = (Math.floor(particle.x) + Math.floor(particle.y) * imageWidth);
-        pixels[index] = 0xff000000 | (xVelToColor & 0xff) << 16 | (yVelToColor & 0xff) << 8 | overSpeedColor & 0xff;
+        pixels[index] = 0xff000010 | xVelToColor << 16 | yVelToColor << 8;
     }
 
     ctx.putImageData(imageData, 0, 0);
-
-    if (DEBUG) Debug.drawTreeStructure(ctx, tree);
-    if (STATS) Debug.calcStatistics(tree);
 
     if (ENABLE_MOUSE) {
         ctx.fillStyle = "red";
@@ -140,30 +152,35 @@ function render() {
             MOUSE_POINT_RADIUS, 0, Math.PI * 2);
         ctx.fill();
     }
-}
-
-const refreshTime = 1000 / FPS;
-let lastStepTime = 0;
-let hueAngle = 0;
-
-function step(timestamp) {
-    if (timestamp >= lastStepTime + refreshTime) {
-        const t = performance.now();
-        render();
-
-        if (lastStepTime > 0) {
-            Debug.postFrameTime(timestamp - lastStepTime);
-        }
-        lastStepTime = timestamp;
-        if (STATS) Debug.drawStats();
-    }
 
     if (FILTER_ENABLE) {
         canvas.style.filter = `contrast(2) brightness(2) hue-rotate(${hueAngle % 360}deg)`;
         hueAngle += 0.2;
     }
-    requestAnimationFrame(step)
+}
+
+const refreshTime = 1000 / FPS;
+let lastStepTime = 0;
+
+function step() {
+    const tree = calculatePhysics();
+
+    requestAnimationFrame((timestamp) => {
+        if (timestamp >= lastStepTime + refreshTime) {
+            render();
+
+            if (DEBUG) Debug.drawTreeStructure(ctx, tree);
+
+            if (lastStepTime > 0) {
+                Debug.postFrameTime(timestamp - lastStepTime);
+            }
+            lastStepTime = timestamp;
+            if (STATS) Debug.drawStats();
+        }
+
+        step();
+    })
 }
 
 init();
-requestAnimationFrame(step);
+step();
