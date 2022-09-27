@@ -2,6 +2,7 @@ const urlSearchParams = new URLSearchParams(window.location.search);
 const params = Object.fromEntries(urlSearchParams.entries());
 
 export const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.orientation !== undefined;
+export const USE_DPR = params.dpr ? Number.parseInt(params.dpr) : false;
 
 export const PARTICLE_INIT = params.particle_init || "circle";
 export const PARTICLE_CNT = ~~params.particle_count || (IS_MOBILE ? 10000 : 20000);

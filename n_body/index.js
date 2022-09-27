@@ -12,14 +12,15 @@ import {
     PARTICLE_INIT,
     SEGMENT_DIVIDER,
     SEGMENT_MAX_COUNT,
-    STATS,
     PARTICLE_CNT,
+    STATS,
+    USE_DPR,
 } from "./settings.js";
 import {DEBUG_DATA} from "./debug.js";
 
 Debug.init();
 
-const dpr = window.devicePixelRatio;
+const dpr = USE_DPR ? window.devicePixelRatio : 1;
 const canvas = document.getElementById("canvas");
 const rect = canvas.getBoundingClientRect();
 

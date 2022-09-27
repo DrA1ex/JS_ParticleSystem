@@ -67,6 +67,7 @@ Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 - *min_distance* - Minimal distance (pixels) to process interactions (default: __10__)
 - *resistance* - Resistance of environment, *1* - means no resistance (default: __1__)
 - *fps* - Refresh rate in frames per second (default: __60__)
+- *dpr* - Enable drawing according to Device Pixel Ratio (default: __0__)
 - *filter* - Makes particle brighter and change color over time (default: __0__)
 - *mouse* - Enable mouse interaction (default: __0__)
 - *stats* - Display statistics (default: __1__)
