@@ -165,8 +165,10 @@ function step() {
 
     requestAnimationFrame((timestamp) => {
         if (timestamp >= lastStepTime + refreshTime) {
+            const t = performance.now();
             render();
 
+            if (STATS) DEBUG_DATA.render_time = performance.now() - t;
             if (DEBUG) Debug.drawTreeStructure(ctx, tree);
 
             if (lastStepTime > 0) {

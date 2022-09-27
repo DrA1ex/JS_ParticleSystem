@@ -1,6 +1,9 @@
 import {FPS, STATS} from "./settings.js";
 
 export const DEBUG_DATA = {
+    tree_time: 0,
+    physics_time: 0,
+    render_time: 0,
     elapsed: 0,
     _frameIndex: 0,
     _frameTimes: []
@@ -98,5 +101,6 @@ export function drawStats() {
         `fps: ${(1000 / DEBUG_DATA.elapsed).toFixed(1)}`,
         `  - tree building: ${DEBUG_DATA.tree_time.toFixed(1)} ms`,
         `  - physics calc: ${DEBUG_DATA.physics_time.toFixed(1)} ms`,
+        `  - render: ${DEBUG_DATA.render_time.toFixed(1)} ms`,
     ].join("\n");
 }
