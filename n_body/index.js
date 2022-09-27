@@ -19,14 +19,15 @@ import {DEBUG_DATA} from "./debug.js";
 
 Debug.init();
 
+const dpr = window.devicePixelRatio;
 const canvas = document.getElementById("canvas");
 const rect = canvas.getBoundingClientRect();
 
-const CanvasWidth = rect.width;
-const CanvasHeight = rect.height;
+const CanvasWidth = rect.width * dpr;
+const CanvasHeight = rect.height * dpr;
 
-canvas.style.width = CanvasWidth + "px";
-canvas.style.height = CanvasHeight + "px";
+canvas.style.width = rect.width + "px";
+canvas.style.height = rect.height + "px";
 canvas.width = CanvasWidth;
 canvas.height = CanvasHeight;
 
