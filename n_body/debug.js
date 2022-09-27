@@ -94,7 +94,7 @@ export function drawStats() {
     DEBUG_DATA.infoElem.innerText = [
         `max depth: ${DEBUG_DATA.depth}`,
         `segments: ${DEBUG_DATA.segmentCount}`,
-        `computations: ${flops.toFixed(2)} ${flopsUnit}FLOPS`,
+        `complexity: ${flops.toFixed(0)} ${flopsUnit}FLOPS`,
         `fps: ${(1000 / DEBUG_DATA.elapsed).toFixed(1)}`,
         `  - tree building: ${DEBUG_DATA.tree_time.toFixed(1)} ms`,
         `  - physics calc: ${DEBUG_DATA.physics_time.toFixed(1)} ms`,

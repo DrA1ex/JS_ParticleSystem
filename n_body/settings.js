@@ -21,5 +21,5 @@ export const STATS = params.stats ? Number.parseInt(params.stats) : true;
 
 export const FILTER_ENABLE = params.filter ? Number.parseInt(params.filter) : false;
 
-const minDistance = params.min_distance ? ~~params.min_distance : 5;
+const minDistance = params.min_distance ? ~~params.min_distance : 10;
 export const MIN_DISTANCE_SQ = Math.pow(minDistance, 2);
