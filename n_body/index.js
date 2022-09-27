@@ -62,38 +62,33 @@ function init() {
 
 
 function calculateTree(tree) {
-    function _calculateLeaf(leaf, [pForceX, pForceY]) {
+    function _calculateLeaf(leaf, pForce) {
         const blocks = leaf.children;
         if (blocks.length > 0) {
             for (let i = 0; i < blocks.length; i++) {
                 const blockCenter = blocks[i].boundaryRect.center();
-                let forceX = pForceX;
-                let forceY = pForceY;
+                const iForce = pForce.slice();
 
                 for (let j = 0; j < blocks.length; j++) {
                     if (i === j) continue;
 
                     const g = PARTICLE_G * blocks[j].length;
-                    const [jForceX, jForceY] = Physics.calculateForce(blockCenter, blocks[j].boundaryRect.center(), g);
-                    forceX += jForceX;
-                    forceY += jForceY;
+                    Physics.calculateForce(blockCenter, blocks[j].boundaryRect.center(), g, iForce);
                 }
 
-                _calculateLeaf(blocks[i], [forceX, forceY]);
+                _calculateLeaf(blocks[i], iForce);
             }
         } else {
             for (let i = 0; i < leaf.length; i++) {
                 const attractor = leaf.data[i];
-                attractor.velX += pForceX;
-                attractor.velY += pForceY;
+                attractor.velX += pForce[0];
+                attractor.velY += pForce[1];
 
                 for (let j = 0; j < leaf.length; j++) {
                     if (i === j) continue;
 
                     const particle = leaf.data[j];
-                    const [forceX, forceY] = Physics.calculateForce(particle, attractor, PARTICLE_G);
-                    particle.velX += forceX;
-                    particle.velY += forceY;
+                    Physics.calculateForce(particle, attractor, PARTICLE_G, particle);
                 }
             }
         }
@@ -118,7 +113,7 @@ function calculatePhysics() {
     for (let i = 0; i < Particles.length; i++) {
         const particle = Particles[i];
         if (ENABLE_MOUSE) {
-            Physics.particleInteract(particle, MousePosition, G);
+            Physics.calculateForce(particle, MousePosition, G, particle);
         }
 
         Physics.physicsStep(particle, CanvasWidth, CanvasHeight);

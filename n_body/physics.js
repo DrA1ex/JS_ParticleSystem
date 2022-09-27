@@ -1,5 +1,11 @@
 import {MIN_DISTANCE_SQ, RESISTANCE, G} from "./settings.js";
 
+/**
+ * @typedef {{x: number, y: number}} PositionVector
+ * @typedef {{velX: number, velY: number}} VelocityVector
+ * @typedef {{x: number, y: number, velX: number, velY: number}} Particle
+ */
+
 export const InitType = {
     circle: 0,
     uniform: 1,
@@ -74,7 +80,13 @@ export function initParticles(initType, particleCount, width, height) {
     return Particles
 }
 
-export function calculateForce(p1, p2, g) {
+/**
+ * @param {PositionVector} p1
+ * @param {PositionVector} p2
+ * @param {number} g
+ * @param {VelocityVector|[number,number]} out
+ */
+export function calculateForce(p1, p2, g, out) {
     const dx = p1.x - p2.x,
         dy = p1.y - p2.y;
 
@@ -83,27 +95,23 @@ export function calculateForce(p1, p2, g) {
     let force = 0;
     if (distSquare >= MIN_DISTANCE_SQ) {
         force = -g / distSquare;
-        return [dx * force, dy * force];
-    }
 
-    return [0, 0];
-}
-
-export function particleInteract(particle, attractor, g) {
-    const [xForce, yForce] = calculateForce(particle, attractor, g);
-    particle.velX += xForce;
-    particle.velY += yForce;
-}
-
-export function applyForce(leaf, force) {
-    const [xForce, yForce] = force;
-    for (let i = 0; i < leaf.length; i++) {
-        const particle = leaf.data[i];
-        particle.velX += xForce;
-        particle.velY += yForce;
+        if (out.velX !== undefined) {
+            out.velX += dx * force;
+            out.velY += dy * force;
+        } else {
+            out[0] += dx * force;
+            out[1] += dy * force;
+        }
     }
 }
 
+/**
+ *
+ * @param {Particle} particle
+ * @param {number} width
+ * @param {number} height
+ */
 export function physicsStep(particle, width, height) {
     particle.velX *= RESISTANCE;
     particle.velY *= RESISTANCE;
