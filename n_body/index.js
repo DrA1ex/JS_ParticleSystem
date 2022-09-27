@@ -52,8 +52,8 @@ function init() {
             const point = e.touches ? e.touches[0] : e
             const bcr = e.target.getBoundingClientRect();
 
-            MousePosition.x = point.clientX - bcr.x;
-            MousePosition.y = point.clientY - bcr.y;
+            MousePosition.x = (point.clientX - bcr.x) * dpr;
+            MousePosition.y = (point.clientY - bcr.y) * dpr;
 
             e.preventDefault();
         }
