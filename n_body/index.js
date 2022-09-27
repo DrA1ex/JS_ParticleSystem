@@ -32,6 +32,7 @@ canvas.width = CanvasWidth;
 canvas.height = CanvasHeight;
 
 const ctx = canvas.getContext('2d');
+ctx.lineWidth = dpr;
 
 const imageData = ctx.createImageData(CanvasWidth, CanvasHeight);
 const imageWidth = imageData.width;
