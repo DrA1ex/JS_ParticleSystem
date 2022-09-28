@@ -1,26 +1,107 @@
-const urlSearchParams = new URLSearchParams(window.location.search);
-const params = Object.fromEntries(urlSearchParams.entries());
+export const ParticleInitType = {
+    circle: 0,
+    uniform: 1,
+    bang: 2,
+}
 
-export const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.orientation !== undefined;
-export const USE_DPR = params.dpr ? Number.parseInt(params.dpr) : false;
+export class Settings {
+    enableFilter = false;
+    isMobile = false;
+    useDpr = false;
+    fps = 60;
 
-export const PARTICLE_INIT = params.particle_init || "circle";
-export const PARTICLE_CNT = ~~params.particle_count || (IS_MOBILE ? 10000 : 20000);
-export const RESISTANCE = Math.max(0.1e-3, Math.min(1, Number.parseFloat(params.resistance) || 1));
-export const G = Number.parseFloat(params.g) || 0.2;
-export const PARTICLE_G = G / PARTICLE_CNT * 10;
+    particleInitType = ParticleInitType.circle;
+    particleCount = null;
 
-export const MOUSE_POINT_RADIUS = 3;
-export const ENABLE_MOUSE = params.mouse ? Number.parseInt(params.mouse) : false;
-export const FPS = ~~params.fps || 60;
+    resistance = 1;
+    gravity = 1;
+    particleGravity = null;
+    minInteractionDistance = 0.01;
+    minInteractionDistanceSq = null;
 
-export const SEGMENT_DIVIDER = Math.max(2, ~~params.segment_divider || 2);
-export const SEGMENT_MAX_COUNT = Math.max(2, ~~params.segment_max_count || 32);
+    segmentDivider = 2;
+    segmentMaxCount = 32;
 
-export const DEBUG = params.debug ? Number.parseInt(params.debug) : false;
-export const STATS = params.stats ? Number.parseInt(params.stats) : true;
+    debug = false;
+    stats = true;
 
-export const FILTER_ENABLE = params.filter ? Number.parseInt(params.filter) : false;
+    worldWidth = 1920;
+    worldHeight = 1080;
 
-const minDistance = params.min_distance ? ~~params.min_distance : 10;
-export const MIN_DISTANCE_SQ = Math.pow(minDistance, 2);
+    constructor(values) {
+        for (const [key, value] of Object.entries(values)) {
+            if (value !== null && this.hasOwnProperty(key)) {
+                this[key] = value;
+            }
+        }
+
+        if (!this.particleCount) {
+            this.particleCount = this.isMobile ? 10000 : 20000;
+        }
+
+        this.particleGravity = this.gravity / this.particleCount;
+        this.minInteractionDistanceSq = Math.pow(this.minInteractionDistance, 2);
+    }
+
+    static fromQueryParams(queryParams, width, height) {
+        function _string(key) {
+            const value = queryParams[key] && queryParams[key].trim();
+            if (value && value.length > 0) {
+                return value;
+            }
+
+            return null;
+        }
+
+        function _bool(key) {
+            const value = queryParams[key] && queryParams[key].trim();
+            if (value && ["1", "true", "on"].includes(value)) {
+                return true;
+            } else if (value && ["0", "false", "off"].includes(value)) {
+                return false;
+            }
+
+            return null;
+        }
+
+        function _int(key) {
+            const value = queryParams[key] && queryParams[key].trim();
+            if (value && value.length > 0) {
+                const parsed = Number.parseInt(value);
+                if (Number.isFinite(parsed)) {
+                    return parsed;
+                }
+            }
+
+            return null;
+        }
+
+        function _float(key) {
+            const value = queryParams[key] && queryParams[key].trim();
+            if (value && value.length > 0) {
+                const parsed = Number.parseFloat(value);
+                if (Number.isFinite(parsed)) {
+                    return parsed;
+                }
+            }
+
+            return null;
+        }
+
+        return new Settings({
+            isMobile: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.orientation !== undefined,
+            useDpr: _bool("dpr"),
+            fps: _int("fps"),
+            enableFilter: _bool("filter"),
+            particleInitType: ParticleInitType[_string("particle_init")],
+            particleCount: _int("particle_count"),
+            resistance: _float("resistance"),
+            gravity: _float("g"),
+            minInteractionDistance: _int("min_distance"),
+            segmentDivider: _int("segment_divider"),
+            segmentMaxCount: _int("segment_max_count"),
+            debug: _bool("debug"),
+            stats: _bool("stats")
+        });
+    }
+}

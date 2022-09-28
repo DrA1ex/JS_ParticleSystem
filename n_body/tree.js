@@ -1,7 +1,3 @@
-/**
- * @typedef {{x:number, y:number}} Particle
- */
-
 class BoundaryRect {
     constructor(left, top, right, bottom) {
         this.left = left;
@@ -63,7 +59,7 @@ class BoundaryRect {
 class Leaf {
     /**
      * @param {SpatialTree} tree
-     * @param {Array<Particle>} data
+     * @param {Particle[]} data
      * @param {number=1} depth
      * @param {BoundaryRect|null} rect
      */
