@@ -2,6 +2,7 @@ export const ParticleInitType = {
     circle: 0,
     uniform: 1,
     bang: 2,
+    disk: 3
 }
 
 export class Settings {

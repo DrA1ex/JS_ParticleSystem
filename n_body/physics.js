@@ -24,6 +24,10 @@ export class ParticleInitializer {
                 this._bangInitializer(particles, settings);
                 break;
 
+            case ParticleInitType.disk:
+                this._diskInitializer(particles, settings);
+                break;
+
             case ParticleInitType.circle:
             default:
                 this._circleInitializer(particles, settings);
@@ -39,19 +43,46 @@ export class ParticleInitializer {
      * @private
      */
     static _circleInitializer(particles, settings) {
+        const {worldWidth, worldHeight} = settings;
+
+        const radius = Math.min(worldWidth, worldHeight) / 2.5;
+        const wiggle = radius / 3;
+        this._circleInitializerBase(particles, settings, radius, wiggle);
+    }
+
+
+    /**
+     * @param {Particle[]} particles
+     * @param {Settings} settings
+     * @private
+     */
+    static _diskInitializer(particles, settings) {
+        const {worldWidth, worldHeight} = settings;
+
+        const radius = Math.min(worldWidth, worldHeight) / 4;
+        this._circleInitializerBase(particles, settings, radius, radius * 2);
+    }
+
+    /**
+     * @param {Particle[]} particles
+     * @param {Settings} settings
+     * @param {number} radius
+     * @param {number} wiggle
+     * @private
+     */
+    static _circleInitializerBase(particles, settings, radius, wiggle) {
         const {particleCount, worldWidth, worldHeight} = settings;
 
-        let angle = 0,
-            step = Math.PI * 2 / particleCount,
-            radius = Math.min(worldWidth, worldHeight) / 2.5,
-            wiggle = radius / 3,
+        const step = Math.PI * 2 / particleCount,
             centerX = worldWidth / 2,
             centerY = worldHeight / 2;
 
+        let angle = 0;
         for (let i = 0; i < particleCount; i++) {
+            const r = (radius + (Math.random() - 0.5) * wiggle)
             particles[i] = {
-                x: centerX + Math.cos(angle) * radius + (Math.random() - 0.5) * wiggle,
-                y: centerY + Math.sin(angle) * radius + (Math.random() - 0.5) * wiggle,
+                x: centerX + Math.cos(angle) * r,
+                y: centerY + Math.sin(angle) * r,
                 velX: 0, velY: 0
             };
 
@@ -84,20 +115,14 @@ export class ParticleInitializer {
     static _bangInitializer(particles, settings) {
         const {particleCount, worldWidth, worldHeight} = settings;
 
-        const radius = 50;
-        const initialVelocity = Math.sqrt(settings.gravity) * 1.5;
-        const centerX = worldWidth / 2;
-        const centerY = worldHeight / 2;
-        const pi2 = Math.PI * 2;
+        const radius = Math.min(worldWidth, worldHeight) / 20;
+        this._circleInitializerBase(particles, settings, radius, radius / 2);
 
+        const initialVelocity = Math.sqrt(settings.gravity) * 1.5;
         for (let i = 0; i < particleCount; i++) {
-            const angle = Math.random() * pi2;
-            particles[i] = {
-                x: centerX + Math.cos(angle) * Math.random() * radius - radius / 2,
-                y: centerY + Math.sin(angle) * Math.random() * radius - radius / 2,
-                velX: Math.cos(angle) * initialVelocity,
-                velY: Math.sin(angle) * initialVelocity
-            };
+            const angle = Math.random() * Math.PI * 2;
+            particles[i].velX = Math.cos(angle) * initialVelocity;
+            particles[i].velY = Math.sin(angle) * initialVelocity;
         }
     }
 }
