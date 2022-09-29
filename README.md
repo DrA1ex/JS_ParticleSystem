@@ -74,5 +74,6 @@ Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 - *fps* - Refresh rate in frames per second (default: __60__)
 - *dpr* - Enable drawing according to Device Pixel Ratio (default: __0__)
 - *filter* - Makes particle brighter and change color over time (default: __0__)
+- *blend* - Enable color blending (default: __0__)
 - *stats* - Display statistics (default: __1__)
 - *debug* - Debug mode (default: __0__)

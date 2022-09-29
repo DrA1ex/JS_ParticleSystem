@@ -72,7 +72,13 @@ export class CanvasRenderer {
             const xVelToColor = Math.floor(255 * (0.5 + particle.velX / this._maxSpeed / 2));
             const yVelToColor = Math.floor(255 * (0.5 + particle.velY / this._maxSpeed / 2));
             const index = (Math.floor(x) + Math.floor(y) * this.canvasWidth);
-            this.pixels[index] = 0xff000050 | xVelToColor << 16 | yVelToColor << 8;
+            const color = 0xff000088 | xVelToColor << 16 | yVelToColor << 8;
+
+            if (this.settings.enableBlending && this.pixels[index]) {
+                this.pixels[index] = this._blendColors(this.pixels[index], color);
+            } else {
+                this.pixels[index] = color;
+            }
         }
 
         this.ctx.putImageData(this.renderImageData, 0, 0);
@@ -83,6 +89,22 @@ export class CanvasRenderer {
         }
 
         this.stats.renderTime = performance.now() - t;
+    }
+
+    _blendColors(bottom, top) {
+        const bottomR = bottom >> 16 & 0xff,
+            bottomG = bottom >> 8 & 0xff,
+            bottomB = bottom & 0xff;
+
+        const topR = top >> 16 & 0xff,
+            topG = top >> 8 & 0xff,
+            topB = top & 0xff
+
+        const r = Math.min(255, Math.max(0, Math.floor((topR < 128) ? (bottomR + 2 * topR - 255) : (bottomR + topR))));
+        const g = Math.min(255, Math.max(0, Math.floor((topG < 128) ? (bottomG + 2 * topG - 255) : (bottomG + topG))));
+        const b = Math.min(255, Math.max(0, Math.floor((topB < 128) ? (bottomB + 2 * topB - 255) : (bottomB + topB))));
+
+        return 0xff000000 | r << 16 | g << 8 | ~~b;
     }
 
     drawWorldRect(x, y, width, height) {

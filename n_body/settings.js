@@ -7,6 +7,7 @@ export const ParticleInitType = {
 
 export class Settings {
     enableFilter = false;
+    enableBlending = false;
     isMobile = false;
     useDpr = false;
     fps = 60;
@@ -95,6 +96,7 @@ export class Settings {
             useDpr: _bool("dpr"),
             fps: _int("fps"),
             enableFilter: _bool("filter"),
+            enableBlending: _bool("blend"),
             particleInitType: ParticleInitType[_string("particle_init")],
             particleCount: _int("particle_count"),
             resistance: _float("resistance"),
