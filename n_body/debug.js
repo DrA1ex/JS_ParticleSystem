@@ -7,6 +7,7 @@ export class Debug {
     treeTime = 0;
     physicsTime = 0;
     renderTime = 0;
+    treeDebugData = [];
 
     constructor(renderer, settings) {
         this.renderer = renderer;
@@ -68,18 +69,11 @@ export class Debug {
         this.elapsed = this._frameTimes.reduce((p, c) => p + c, 0) / this._frameTimes.length;
     }
 
-    drawTreeStructure(tree) {
+    drawTreeDebug() {
         this.renderer.ctx.strokeStyle = "#00ff00";
-        this._drawLeafStructure(tree.root);
-    }
-
-    _drawLeafStructure(parent) {
-        for (let i = 0; i < parent.children.length; i++) {
-            const leaf = parent.children[i];
-            const rect = leaf.boundaryRect;
-
-            this.renderer.drawWorldRect(rect.left, rect.top, rect.width, rect.height);
-            this._drawLeafStructure(leaf);
+        for (let i = 0; i < this.treeDebugData.length; i++) {
+            const data = this.treeDebugData[i];
+            this.renderer.drawWorldRect(data.x, data.y, data.width, data.height);
         }
     }
 
@@ -89,5 +83,9 @@ export class Debug {
         this.flops = physics.stats.tree.flops;
         this.depth = physics.stats.tree.depth;
         this.segmentCount = physics.stats.tree.segmentCount;
+    }
+
+    importTreeDebugData(data) {
+        this.treeDebugData = data;
     }
 }

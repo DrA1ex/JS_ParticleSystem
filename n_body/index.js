@@ -1,5 +1,4 @@
 import {CanvasRenderer, InteractionHandler} from "./renderer.js";
-import {PhysicsEngine, ParticleInitializer} from "./physics.js";
 import {Debug} from "./debug.js";
 import {Settings} from "./settings.js";
 
@@ -9,44 +8,78 @@ const params = Object.fromEntries(urlSearchParams.entries());
 const canvas = document.getElementById("canvas");
 
 const SettingsInstance = Settings.fromQueryParams(params);
-const PhysicsEngineInstance = new PhysicsEngine(SettingsInstance);
 const Renderer = new CanvasRenderer(canvas, SettingsInstance);
-const InteractionHandlerInstance = new InteractionHandler(Renderer, SettingsInstance);
-const Particles = ParticleInitializer.initialize(SettingsInstance);
 const DebugInstance = new Debug(Renderer, SettingsInstance);
 
+const InteractionHandlerInstance = new InteractionHandler(Renderer, SettingsInstance);
 InteractionHandlerInstance.enable();
 
+const PhysicsWorker = new Worker("./worker.js", {type: "module"});
+PhysicsWorker.onmessage = function (e) {
+    if (e.data.type === "data") {
+        onData(e.data);
+    }
+}
+
+const Particles = new Array(SettingsInstance.particleCount);
+for (let i = 0; i < SettingsInstance.particleCount; i++) {
+    Particles[i] = {x: 0, y: 0, velX: 0, velY: 0};
+}
+
 const refreshTime = 1000 / SettingsInstance.fps;
-let lastStepTime = 0;
+const buffers = [];
+let lastStepTime = performance.now() - refreshTime;
+let ready = false;
 
-function calculatePhysics() {
-    const tree = PhysicsEngineInstance.step(Particles);
-    if (SettingsInstance.stats) DebugInstance.importPhysicsStats(PhysicsEngineInstance);
+function onData(data) {
+    if (!ready) {
+        const e = document.getElementById("wait");
+        e.style.display = "none";
+        ready = true;
+    }
 
-    return tree;
+    buffers.push(data.buffer);
+    if (buffers.length < 2) {
+        requestNextStep();
+    }
+
+    const buffer = buffers[0];
+    for (let i = 0; i < SettingsInstance.particleCount; i++) {
+        Particles[i].x = buffer[i * 4];
+        Particles[i].y = buffer[i * 4 + 1];
+        Particles[i].velX = buffer[i * 4 + 2];
+        Particles[i].velY = buffer[i * 4 + 3];
+    }
+
+    if (SettingsInstance.stats) DebugInstance.importPhysicsStats(data);
+    if (SettingsInstance.debug) DebugInstance.importTreeDebugData(data.treeDebug);
 }
 
-function step() {
-    const tree = calculatePhysics();
-
-    requestAnimationFrame((timestamp) => {
-        if (timestamp >= lastStepTime + refreshTime) {
-            const t = performance.now();
-            Renderer.render(Particles);
-
-            if (SettingsInstance.stats) DebugInstance.renderTime = performance.now() - t;
-            if (SettingsInstance.debug) DebugInstance.drawTreeStructure(tree);
-
-            if (lastStepTime > 0) {
-                DebugInstance.postFrameTime(timestamp - lastStepTime);
-            }
-            lastStepTime = timestamp;
-            if (SettingsInstance.stats) DebugInstance.drawStats();
-        }
-
-        step();
-    })
+function requestNextStep() {
+    PhysicsWorker.postMessage({type: "step"});
 }
 
-step();
+function render(timestamp) {
+    Renderer.render(Particles);
+
+    if (SettingsInstance.debug) DebugInstance.drawTreeDebug();
+
+    if (SettingsInstance.stats) {
+        DebugInstance.renderTime = Renderer.stats.renderTime;
+        DebugInstance.postFrameTime(timestamp - lastStepTime);
+        DebugInstance.drawStats();
+    }
+
+    lastStepTime = timestamp;
+
+    if (buffers.length > 1) {
+        PhysicsWorker.postMessage({type: "ack", buffer: buffers.shift()});
+        requestNextStep();
+    }
+    requestAnimationFrame(render);
+}
+
+PhysicsWorker.postMessage({type: "init", settings: SettingsInstance});
+
+requestNextStep();
+requestAnimationFrame(render);

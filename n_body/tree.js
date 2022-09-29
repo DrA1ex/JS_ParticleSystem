@@ -134,4 +134,24 @@ export class SpatialTree {
     _getIndex() {
         return ++this._index;
     }
+
+    getDebugData() {
+        const result = [];
+        this._collectLeafDebugData(this.root, result);
+
+        return result;
+    }
+
+    _collectLeafDebugData(leaf, out) {
+        const rect = leaf.boundaryRect;
+        out.push({
+            x: rect.left, y: rect.top,
+            width: rect.width, height: rect.height,
+            count: leaf.length, depth: leaf.depth
+        });
+
+        for (let i = 0; i < leaf.children.length; i++) {
+            this._collectLeafDebugData(leaf.children[i], out);
+        }
+    }
 }

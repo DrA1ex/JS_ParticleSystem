@@ -2,6 +2,7 @@ export class CanvasRenderer {
     constructor(canvas, settings) {
         this._hueAngle = 0;
         this._maxSpeed = 0;
+        this.stats = {renderTime: 0};
 
         this.settings = settings;
         this.canvas = canvas;
@@ -50,6 +51,7 @@ export class CanvasRenderer {
     }
 
     render(particles) {
+        const t = performance.now();
         this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
         for (let i = 0; i < this.pixels.length; i++) {
             this.pixels[i] = 0;
@@ -70,15 +72,17 @@ export class CanvasRenderer {
             const xVelToColor = Math.floor(255 * (0.5 + particle.velX / this._maxSpeed / 2));
             const yVelToColor = Math.floor(255 * (0.5 + particle.velY / this._maxSpeed / 2));
             const index = (Math.floor(x) + Math.floor(y) * this.canvasWidth);
-            this.pixels[index] = 0xff000010 | xVelToColor << 16 | yVelToColor << 8;
+            this.pixels[index] = 0xff000050 | xVelToColor << 16 | yVelToColor << 8;
         }
 
         this.ctx.putImageData(this.renderImageData, 0, 0);
 
         if (this.settings.enableFilter) {
-            this.canvas.style.filter = `contrast(2) brightness(2) hue-rotate(${this._hueAngle % 360}deg)`;
+            this.canvas.style.filter = `brightness(2) hue-rotate(${this._hueAngle % 360}deg)`;
             this._hueAngle += 0.2;
         }
+
+        this.stats.renderTime = performance.now() - t;
     }
 
     drawWorldRect(x, y, width, height) {
