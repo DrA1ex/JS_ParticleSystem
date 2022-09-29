@@ -15,7 +15,7 @@ For a real N-Body simulation, it would be necessary to calculate the interaction
 
 But with some optimization it is achievable! See implementation of N-Body simulation in the next section.
 
-#### 1-Body Visualization frame with 1,000,000 particles
+_1-Body Visualization frame with 1,000,000 particles_
 
 <img width="1080" alt="image" src="https://user-images.githubusercontent.com/1194059/192269216-d1ed71f0-a3cb-48cc-9d3f-33126291c91e.png">
 
@@ -36,6 +36,8 @@ formed by millions of years of interactions. Moreover, the number of particles i
 could recreate the birth of a galaxy with high accuracy. But this simulation will allow you to enjoy the process on a
 small scale.
 
+_50,000 particles forms a Galaxy-like image_
+
 <img width="691" alt="image" src="https://user-images.githubusercontent.com/1194059/193060048-2f9dd976-e675-42f2-aef1-1f381a807ced.png">
 
 
@@ -46,7 +48,7 @@ Each particle in a segment interacts with each other, but not with particles in 
 themselves are perceived as large particles and interact with each other. This allows us to achieve an acceptable
 complexity: _O(N*logN)_ instead of unoptimized _O(N*N)_.
 
-#### Visualization of Spatial tree used to optimize 100,000 particles interaction
+_Visualization of Spatial tree used to optimize 100,000 particles interaction_
 
 <img width="720" alt="image" src="https://user-images.githubusercontent.com/1194059/192269736-64fe4b19-d0bb-4cbc-b0df-591e17191355.png">
 
