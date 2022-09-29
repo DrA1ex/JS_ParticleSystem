@@ -36,7 +36,7 @@ formed by millions of years of interactions. Moreover, the number of particles i
 could recreate the birth of a galaxy with high accuracy. But this simulation will allow you to enjoy the process on a
 small scale.
 
-_50,000 particles forms a Galaxy-like image_ ([link](https://dra1ex.github.io/JS_ParticleSystem/n_body?particle_count=50000&dpr=1&particle_init=bang&blend=1))
+_50,000 particles forms a Galaxy-like image_ ([demo](https://dra1ex.github.io/JS_ParticleSystem/n_body?particle_count=50000&dpr=1&particle_init=bang&blend=1))
 
 <img width="691" alt="image" src="https://user-images.githubusercontent.com/1194059/193060048-2f9dd976-e675-42f2-aef1-1f381a807ced.png">
 
