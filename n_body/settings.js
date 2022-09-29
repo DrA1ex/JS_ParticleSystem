@@ -27,6 +27,7 @@ export class Settings {
 
     worldWidth = 1920;
     worldHeight = 1080;
+    bufferCount = 3;
 
     constructor(values) {
         for (const [key, value] of Object.entries(values)) {
@@ -100,6 +101,7 @@ export class Settings {
             minInteractionDistance: _int("min_distance"),
             segmentDivider: _int("segment_divider"),
             segmentMaxCount: _int("segment_max_count"),
+            bufferCount: _int("buffers"),
             debug: _bool("debug"),
             stats: _bool("stats")
         });

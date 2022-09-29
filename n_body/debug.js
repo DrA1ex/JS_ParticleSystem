@@ -3,6 +3,7 @@ export class Debug {
     segmentCount = 0;
     flops = 0;
     elapsed = 0;
+    bufferCount = 0;
 
     treeTime = 0;
     physicsTime = 0;
@@ -49,6 +50,7 @@ export class Debug {
             `max depth: ${this.depth}`,
             `segments: ${this.segmentCount}`,
             `complexity: ${flops.toFixed(0)} ${flopsUnit}FLOPS`,
+            `ready buffers: ${this.bufferCount}`,
             `fps: ${(1000 / this.elapsed).toFixed(1)}`,
             `  - tree building: ${this.treeTime.toFixed(1)} ms`,
             `  - physics calc: ${this.physicsTime.toFixed(1)} ms`,

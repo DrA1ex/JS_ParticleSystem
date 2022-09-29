@@ -39,7 +39,7 @@ function onData(data) {
     }
 
     buffers.push(data.buffer);
-    if (buffers.length < 2) {
+    if (buffers.length < SettingsInstance.bufferCount) {
         requestNextStep();
     }
 
@@ -60,19 +60,26 @@ function requestNextStep() {
 }
 
 function render(timestamp) {
-    Renderer.render(Particles);
+    if (ready) {
+        if (buffers.length === 0) {
+            console.warn("Buffers are empty");
+        }
+
+        Renderer.render(Particles);
+    }
 
     if (SettingsInstance.debug) DebugInstance.drawTreeDebug();
 
     if (SettingsInstance.stats) {
         DebugInstance.renderTime = Renderer.stats.renderTime;
+        DebugInstance.bufferCount = buffers.length;
         DebugInstance.postFrameTime(timestamp - lastStepTime);
         DebugInstance.drawStats();
     }
 
     lastStepTime = timestamp;
 
-    if (buffers.length > 1) {
+    if (buffers.length > SettingsInstance.bufferCount - 1) {
         PhysicsWorker.postMessage({type: "ack", buffer: buffers.shift()});
         requestNextStep();
     }

@@ -4,8 +4,7 @@ let Settings;
 let Particles;
 let PhysicsEngineInstance;
 
-let CurrentBuffer;
-let NextBuffer;
+const Buffers = [];
 
 onmessage = function (e) {
     const {type} = e.data;
@@ -31,38 +30,39 @@ function init(data) {
     PhysicsEngineInstance = new PhysicsEngine(Settings);
     Particles = ParticleInitializer.initialize(Settings);
 
-    CurrentBuffer = new Float32Array(Settings.particleCount * 4);
-    NextBuffer = new Float32Array(Settings.particleCount * 4);
+    for (let i = 0; i < Settings.bufferCount; i++) {
+        Buffers.push(new Float32Array(Settings.particleCount * 4));
+    }
+
 }
 
 function ack(data) {
-    if (CurrentBuffer === null) {
-        CurrentBuffer = data.buffer;
-    } else if (NextBuffer === null) {
-        NextBuffer = data.buffer;
+    if (Buffers.length < Settings.bufferCount) {
+        Buffers.push(data.buffer);
     } else {
         console.error("Unexpected ack: buffers already fulfilled");
     }
 }
 
 function step() {
-    if (CurrentBuffer === null) {
+    if (Buffers.length === 0) {
         console.error("Unexpected step: buffer is not ready");
         return;
     }
 
     const tree = PhysicsEngineInstance.step(Particles);
 
+    const buffer = Buffers.shift();
     for (let i = 0; i < Settings.particleCount; i++) {
-        CurrentBuffer[i * 4] = Particles[i].x;
-        CurrentBuffer[i * 4 + 1] = Particles[i].y;
-        CurrentBuffer[i * 4 + 2] = Particles[i].velX;
-        CurrentBuffer[i * 4 + 3] = Particles[i].velY;
+        buffer[i * 4] = Particles[i].x;
+        buffer[i * 4 + 1] = Particles[i].y;
+        buffer[i * 4 + 2] = Particles[i].velX;
+        buffer[i * 4 + 3] = Particles[i].velY;
     }
 
     postMessage({
         type: "data",
-        buffer: CurrentBuffer,
+        buffer: buffer,
         treeDebug: Settings.debug ? tree.getDebugData() : [],
         stats: {
             physicsTime: PhysicsEngineInstance.stats.physicsTime,
@@ -73,8 +73,5 @@ function step() {
                 segmentCount: PhysicsEngineInstance.stats.tree.segmentCount
             }
         }
-    }, CurrentBuffer.buffer);
-
-    CurrentBuffer = NextBuffer;
-    NextBuffer = null;
+    }, buffer.buffer);
 }
