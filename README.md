@@ -36,6 +36,9 @@ formed by millions of years of interactions. Moreover, the number of particles i
 could recreate the birth of a galaxy with high accuracy. But this simulation will allow you to enjoy the process on a
 small scale.
 
+<img width="691" alt="image" src="https://user-images.githubusercontent.com/1194059/193060048-2f9dd976-e675-42f2-aef1-1f381a807ced.png">
+
+
 Since an accurate calculation of the gravitational interaction would be too difficult, some optimizations were used. All
 particles are divided into hierarchical segments, thus creating a Spatial Tree.
 
