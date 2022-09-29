@@ -23,6 +23,7 @@ export class Debug {
             div.style.bottom = "4px";
             div.style.left = "4px";
             div.style.color = "white";
+            div.style.pointerEvents = "none";
 
             document.body.appendChild(div);
             this.infoElem = div;
