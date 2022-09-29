@@ -108,7 +108,9 @@ export class InteractionHandler {
         this.settings = settings;
 
         this._pressed = false;
+        this._pinched = false;
         this._initPos = {x: 0, y: 0};
+        this._initDistance = 0;
     }
 
     enable() {
@@ -125,6 +127,7 @@ export class InteractionHandler {
 
     _beginDragInteraction(point) {
         this._pressed = true;
+        this._pinched = false;
         this._initPos = point;
     }
 
@@ -135,6 +138,28 @@ export class InteractionHandler {
     _interactionDrag(point) {
         this.renderer.move(point.x - this._initPos.x, point.y - this._initPos.y);
         this._initPos = point;
+    }
+
+    _beginPinchInteraction(point1, point2) {
+        this._pinched = true;
+        this._pressed = false;
+        this._initPos = point1;
+        this._initDistance = Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2))
+    }
+
+    _endPinchInteraction() {
+        this._pinched = false;
+    }
+
+    _interactionPinch(point1, point2) {
+        const distance = Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2));
+        const diff = Math.max(-5, Math.min(5, (distance - this._initDistance) / 30));
+
+        const factor = Math.pow(1.05, diff);
+        this.renderer.scaleCentered(factor)
+
+        this._initPos = point1;
+        this._initDistance = distance;
     }
 
     _interactionScale(factor) {
@@ -176,27 +201,51 @@ export class InteractionHandler {
     }
 
     _onTouchStart(e) {
-        const touch = e.touches && e.touches[0];
-        if (!touch) {
+        const touches = e.touches;
+        if (!touches) {
             return;
         }
 
-        this._beginDragInteraction({x: touch.clientX, y: touch.clientY});
+        if (touches.length === 2) {
+            this._beginPinchInteraction(
+                {x: touches[0].clientX, y: touches[0].clientY},
+                {x: touches[1].clientX, y: touches[1].clientY}
+            )
+        } else if (touches.length === 1) {
+            this._beginDragInteraction({x: touches[0].clientX, y: touches[0].clientY});
+        }
+
         e.preventDefault();
     }
 
     _onTouchEnd(e) {
-        this._endDragInteraction();
+        if (this._pressed) {
+            this._endDragInteraction();
+        } else if (this._pinched) {
+            this._endPinchInteraction();
+        }
+
         e.preventDefault();
     }
 
     _onTouchMove(e) {
-        if (!this._pressed) {
-            return;
+        const touches = e.touches;
+        if (this._pressed && touches.length === 2) {
+            this._beginPinchInteraction(
+                {x: touches[0].clientX, y: touches[0].clientY},
+                {x: touches[1].clientX, y: touches[1].clientY}
+            );
+        } else if (this._pinched && touches.length === 1) {
+            this._beginDragInteraction({x: touches[0].clientX, y: touches[0].clientY});
+        } else if (this._pressed) {
+            this._interactionDrag({x: touches[0].clientX, y: touches[0].clientY});
+        } else if (this._pinched) {
+            this._interactionPinch(
+                {x: touches[0].clientX, y: touches[0].clientY},
+                {x: touches[1].clientX, y: touches[1].clientY}
+            );
         }
 
-        const touch = e.touches[0];
-        this._interactionDrag({x: touch.clientX, y: touch.clientY});
         e.preventDefault();
     }
 }
