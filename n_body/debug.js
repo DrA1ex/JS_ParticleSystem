@@ -1,9 +1,12 @@
+import {DataSmoother} from "./utils.js";
+
 export class Debug {
     depth = 0;
     segmentCount = 0;
     flops = 0;
     elapsed = 0;
     bufferCount = 0;
+    interpolateFrames = 0;
 
     treeTime = 0;
     physicsTime = 0;
@@ -14,8 +17,7 @@ export class Debug {
         this.renderer = renderer;
         this.settings = settings;
 
-        this._frameIndex = 0;
-        this._frameTimes = [];
+        this.frameRateSmoother = new DataSmoother(this.settings.fps);
 
         if (settings.stats) {
             const div = document.createElement("div");
@@ -53,23 +55,15 @@ export class Debug {
             `complexity: ${flops.toFixed(0)} ${flopsUnit}FLOPS`,
             `ready buffers: ${this.bufferCount}`,
             `fps: ${(1000 / this.elapsed).toFixed(1)}`,
-            `  - tree building: ${this.treeTime.toFixed(1)} ms`,
-            `  - physics calc: ${this.physicsTime.toFixed(1)} ms`,
-            `  - render: ${this.renderTime.toFixed(1)} ms`,
-        ].join("\n");
+            this.settings.enableDFRI ? `- interpolated: ${this.interpolateFrames}` : "",
+            `- tree building: ${this.treeTime.toFixed(1)} ms`,
+            `- physics calc: ${this.physicsTime.toFixed(1)} ms`,
+            `- render: ${this.renderTime.toFixed(1)} ms`,
+        ].filter(v => v).join("\n");
     }
 
     postFrameTime(elapsed) {
-        const framesToSmooth = this.settings.fps;
-
-        if (this._frameTimes.length < framesToSmooth) {
-            this._frameTimes.push(elapsed);
-        } else {
-            this._frameTimes[this._frameIndex] = elapsed;
-        }
-
-        this._frameIndex = (this._frameIndex + 1) % framesToSmooth;
-        this.elapsed = this._frameTimes.reduce((p, c) => p + c, 0) / this._frameTimes.length;
+        this.elapsed = this.frameRateSmoother.postValue(elapsed)
     }
 
     drawTreeDebug() {

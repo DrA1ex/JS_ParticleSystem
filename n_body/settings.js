@@ -8,6 +8,9 @@ export const ParticleInitType = {
 export class Settings {
     enableFilter = false;
     enableBlending = false;
+    //TODO: enable when feature tested
+    enableDFRI = false;
+    DFRIMaxFrames = 20;
     isMobile = false;
     useDpr = false;
     fps = 60;
@@ -97,6 +100,8 @@ export class Settings {
             fps: _int("fps"),
             enableFilter: _bool("filter"),
             enableBlending: _bool("blend"),
+            enableDFRI: _bool("dfri"),
+            DFRIMaxFrames: _int("dfri_max"),
             particleInitType: ParticleInitType[_string("particle_init")],
             particleCount: _int("particle_count"),
             resistance: _float("resistance"),

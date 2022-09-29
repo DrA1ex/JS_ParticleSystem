@@ -50,7 +50,7 @@ export class CanvasRenderer {
         this.yOffset += yDelta * this.dpr;
     }
 
-    render(particles) {
+    render(particles, deltas, timeFactor) {
         const t = performance.now();
         this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
         for (let i = 0; i < this.pixels.length; i++) {
@@ -59,11 +59,12 @@ export class CanvasRenderer {
 
         for (let i = 0; i < particles.length; i++) {
             const particle = particles[i];
+            const delta = deltas[i];
 
             this._maxSpeed = Math.max(this._maxSpeed, Math.abs(particle.velX), Math.abs(particle.velY));
 
-            const x = this.xOffset + particle.x * this.scale;
-            const y = this.yOffset + particle.y * this.scale;
+            const x = this.xOffset + (particle.x + delta.x * timeFactor) * this.scale;
+            const y = this.yOffset + (particle.y + delta.y * timeFactor) * this.scale;
 
             if (x < 0 || x > this.canvasWidth || y < 0 || y > this.canvasHeight) {
                 continue;

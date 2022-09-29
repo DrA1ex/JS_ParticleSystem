@@ -44,7 +44,7 @@ function ack(data) {
     }
 }
 
-function step() {
+function step(data) {
     if (Buffers.length === 0) {
         console.error("Unexpected step: buffer is not ready");
         return;
@@ -62,6 +62,7 @@ function step() {
 
     postMessage({
         type: "data",
+        timestamp: data.timestamp,
         buffer: buffer,
         treeDebug: Settings.debug ? tree.getDebugData() : [],
         stats: {
@@ -73,5 +74,5 @@ function step() {
                 segmentCount: PhysicsEngineInstance.stats.tree.segmentCount
             }
         }
-    }, buffer.buffer);
+    }, [buffer.buffer]);
 }

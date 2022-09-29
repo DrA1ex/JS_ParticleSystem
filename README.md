@@ -73,6 +73,8 @@ Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 - *resistance* - Resistance of environment, *1* - means no resistance (default: __1__)
 - *fps* - Refresh rate in frames per second (default: __60__)
 - *dpr* - Enable drawing according to Device Pixel Ratio (default: __0__)
+- *dfri* - Enable Dynamic Frame Rate Interpolation (boosts framerate) (default: __1__)
+- *dfri_max* - Max frames to interpolate (default: __20__)
 - *filter* - Makes particle brighter and change color over time (default: __0__)
 - *blend* - Enable color blending (default: __0__)
 - *stats* - Display statistics (default: __1__)
