@@ -40,8 +40,9 @@ export class CanvasRenderer {
         }
 
         const delta = newScale - this.scale;
-        this.xOffset -= (this.settings.worldWidth * delta) / 2;
-        this.yOffset -= (this.settings.worldHeight * delta) / 2;
+
+        this.xOffset -= (this.canvasWidth / 2 - this.xOffset) / this.scale * delta;
+        this.yOffset -= (this.canvasHeight / 2 - this.yOffset) / this.scale * delta;
         this.scale = newScale;
     }
 
