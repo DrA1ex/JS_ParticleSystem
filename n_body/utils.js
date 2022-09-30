@@ -1,6 +1,7 @@
 export class DataSmoother {
-    constructor(count) {
+    constructor(count, dropFirstCount = 0) {
         this.count = count;
+        this.dropCount = dropFirstCount;
         this.smoothedValue = 0;
 
         this._historyIndex = 0;
@@ -8,7 +9,12 @@ export class DataSmoother {
         this._historySum = 0;
     }
 
-    postValue(value) {
+    postValue(value, force = false) {
+        if (!force && this.dropCount > 0) {
+            this.dropCount -= 1;
+            return;
+        }
+
         this._historySum += value
         if (this._historyValues.length < this.count) {
             this._historyValues.push(value);
@@ -28,10 +34,12 @@ export class DFRIHelper {
         this.renderer = renderer;
         this.settings = settings;
 
-        this.desiredLatency = 1000 / this.settings.fps;
         this.frame = 0;
-        this.frameTimeSmoother = new DataSmoother(this.settings.fps * 2);
         this.interpolateFrames = 0;
+        this.frameTimeSmoother = new DataSmoother(this.settings.fps * 2);
+        this.renderTimeSmoother = new DataSmoother(this.settings.fps * 2, this.settings.fps / 2);
+        this.renderTimeSmoother.postValue(1000 / this.settings.fps, true);
+
         this._isFirstRender = true;
     }
 
@@ -59,8 +67,7 @@ export class DFRIHelper {
     }
 
     _getInterpolateFramesCount() {
-        //TODO: use actual framerate
-        const interpolate = Math.ceil(this.frameTimeSmoother.smoothedValue / this.desiredLatency);
+        const interpolate = Math.ceil(this.frameTimeSmoother.smoothedValue / this.renderTimeSmoother.smoothedValue);
         return Math.max(0, Math.min(this.settings.DFRIMaxFrames, interpolate));
     }
 
@@ -73,7 +80,11 @@ export class DFRIHelper {
         this.interpolateFrames = this._getInterpolateFramesCount();
     }
 
-    postFrameTime(time) {
+    postStepTime(time) {
         this.frameTimeSmoother.postValue(time);
+    }
+
+    postRenderTime(time) {
+        this.renderTimeSmoother.postValue(time);
     }
 }

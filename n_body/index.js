@@ -38,8 +38,7 @@ let physicsFrame = 0;
 let ready = false;
 
 function onData(data) {
-    DFRIHelperInstance.postFrameTime(performance.now() - data.timestamp);
-
+    DFRIHelperInstance.postStepTime(performance.now() - data.timestamp);
 
     if (!ready) {
         const e = document.getElementById("wait");
@@ -121,11 +120,14 @@ function render(timestamp) {
         if (SettingsInstance.debug) DebugInstance.drawTreeDebug();
     }
 
+    const elapsed = timestamp - lastRenderTime;
+    DFRIHelperInstance.postRenderTime(elapsed);
+
     if (SettingsInstance.stats) {
         DebugInstance.renderTime = Renderer.stats.renderTime;
         DebugInstance.bufferCount = buffers.length;
         DebugInstance.interpolateFrames = DFRIHelperInstance.interpolateFrames;
-        DebugInstance.postFrameTime(timestamp - lastRenderTime);
+        DebugInstance.postFrameTime(elapsed);
         DebugInstance.drawStats();
     }
 
