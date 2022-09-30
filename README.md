@@ -78,6 +78,6 @@ Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 - *dfri_max* - Max frames to interpolate (default: __120__)
 - *buffers* - How many physics frames will be requested ahead of time (default: __2__)
 - *filter* - Makes particle brighter and change color over time (default: __0__)
-- *blend* - Enable color blending (default: __0__)
+- *blend* - Enable color blending (default: __1__)
 - *stats* - Display statistics (default: __1__)
 - *debug* - Debug mode (default: __0__)

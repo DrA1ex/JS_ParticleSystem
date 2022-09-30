@@ -7,7 +7,7 @@ export const ParticleInitType = {
 
 export class Settings {
     enableFilter = false;
-    enableBlending = false;
+    enableBlending = true;
     enableDFRI = true;
     DFRIMaxFrames = 120;
     isMobile = false;
