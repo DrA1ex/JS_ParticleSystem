@@ -12,6 +12,7 @@ export class Settings {
     DFRIMaxFrames = 120;
     isMobile = false;
     useDpr = false;
+    dprRate = 0;
     fps = 60;
 
     particleInitType = ParticleInitType.circle;
@@ -96,6 +97,7 @@ export class Settings {
         return new Settings({
             isMobile: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.orientation !== undefined,
             useDpr: _bool("dpr"),
+            dprRate: _float("dpr_rate"),
             fps: _int("fps"),
             enableFilter: _bool("filter"),
             enableBlending: _bool("blend"),

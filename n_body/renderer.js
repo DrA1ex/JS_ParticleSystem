@@ -6,7 +6,7 @@ export class CanvasRenderer {
 
         this.settings = settings;
         this.canvas = canvas;
-        this.dpr = settings.useDpr ? window.devicePixelRatio : 1;
+        this.dpr = settings.useDpr ? (settings.dprRate || window.devicePixelRatio) : 1;
 
         const rect = canvas.getBoundingClientRect();
 
