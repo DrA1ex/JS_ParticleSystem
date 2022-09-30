@@ -40,6 +40,7 @@ let ready = false;
 function onData(data) {
     DFRIHelperInstance.postFrameTime(performance.now() - data.timestamp);
 
+
     if (!ready) {
         const e = document.getElementById("wait");
         e.style.display = "none";
@@ -63,11 +64,15 @@ function requestNextStep() {
 
 function switchBuffer() {
     if (buffers.length === 0) {
-        return;
+        console.warn(`${performance.now().toFixed(0)} Next buffer not ready. Frames may be dropped`);
+        return false;
     }
 
     const {buffer} = buffers[0];
-    const nextBuffer = SettingsInstance.enableDFRI && buffers.length > 1 ? buffers[1].buffer : null;
+    const nextBuffer = buffers.length > 1 ? buffers[1].buffer : null;
+    if (SettingsInstance.enableDFRI && !nextBuffer) {
+        console.warn(`${performance.now().toFixed(0)} No available ahead buffer, interpolation may be inconsistent`);
+    }
 
     for (let i = 0; i < SettingsInstance.particleCount; i++) {
         Particles[i].x = buffer[i * 4];
@@ -76,8 +81,8 @@ function switchBuffer() {
         Particles[i].velY = buffer[i * 4 + 3];
 
         if (SettingsInstance.enableDFRI) {
-            Deltas[i].x = nextBuffer ? nextBuffer[i * 4] - Particles[i].x : 0;
-            Deltas[i].y = nextBuffer ? nextBuffer[i * 4 + 1] - Particles[i].y : 0;
+            Deltas[i].x = nextBuffer ? nextBuffer[i * 4] - Particles[i].x : Particles[i].velX;
+            Deltas[i].y = nextBuffer ? nextBuffer[i * 4 + 1] - Particles[i].y : Particles[i].velY;
         }
     }
 
@@ -88,6 +93,8 @@ function switchBuffer() {
         PhysicsWorker.postMessage({type: "ack", buffer: buffer}, [buffer.buffer]);
         requestNextStep();
     }
+
+    return true;
 }
 
 function render(timestamp) {
@@ -99,7 +106,10 @@ function render(timestamp) {
     if (ready) {
         if (SettingsInstance.enableDFRI) {
             if (DFRIHelperInstance.needSwitchBuffer()) {
-                switchBuffer();
+                const success = switchBuffer();
+                if (success) {
+                    DFRIHelperInstance.bufferSwitched();
+                }
             }
 
             DFRIHelperInstance.render(Particles, Deltas);

@@ -36,7 +36,8 @@ formed by millions of years of interactions. Moreover, the number of particles i
 could recreate the birth of a galaxy with high accuracy. But this simulation will allow you to enjoy the process on a
 small scale.
 
-_50,000 particles forms a Galaxy-like image_ ([demo](https://dra1ex.github.io/JS_ParticleSystem/n_body?particle_count=50000&dpr=1&particle_init=bang&blend=1))
+_50,000 particles forms a Galaxy-like
+image_ ([demo](https://dra1ex.github.io/JS_ParticleSystem/n_body?particle_count=50000&dpr=1&particle_init=bang&blend=1))
 
 <img width="691" alt="image" src="https://user-images.githubusercontent.com/1194059/193060048-2f9dd976-e675-42f2-aef1-1f381a807ced.png">
 
@@ -74,7 +75,8 @@ Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 - *fps* - Refresh rate in frames per second (default: __60__)
 - *dpr* - Enable drawing according to Device Pixel Ratio (default: __0__)
 - *dfri* - Enable Dynamic Frame Rate Interpolation (boosts framerate) (default: __1__)
-- *dfri_max* - Max frames to interpolate (default: __20__)
+- *dfri_max* - Max frames to interpolate (default: __120__)
+- *buffers* - How many physics frames will be requested ahead of time (default: __2__)
 - *filter* - Makes particle brighter and change color over time (default: __0__)
 - *blend* - Enable color blending (default: __0__)
 - *stats* - Display statistics (default: __1__)

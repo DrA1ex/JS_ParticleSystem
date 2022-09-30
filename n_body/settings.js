@@ -8,9 +8,8 @@ export const ParticleInitType = {
 export class Settings {
     enableFilter = false;
     enableBlending = false;
-    //TODO: enable when feature tested
-    enableDFRI = false;
-    DFRIMaxFrames = 20;
+    enableDFRI = true;
+    DFRIMaxFrames = 120;
     isMobile = false;
     useDpr = false;
     fps = 60;
