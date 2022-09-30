@@ -67,8 +67,8 @@ export class DFRIHelper {
     }
 
     _getInterpolateFramesCount() {
-        const interpolate = Math.ceil(this.frameTimeSmoother.smoothedValue / this.renderTimeSmoother.smoothedValue);
-        return Math.max(0, Math.min(this.settings.DFRIMaxFrames, interpolate));
+        const interpolate = this.frameTimeSmoother.smoothedValue / this.renderTimeSmoother.smoothedValue - 1;
+        return Math.max(0, Math.min(this.settings.DFRIMaxFrames, Math.ceil(interpolate * 1.1)));
     }
 
     needSwitchBuffer() {

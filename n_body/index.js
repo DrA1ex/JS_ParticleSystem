@@ -103,6 +103,7 @@ function render(timestamp) {
     }
 
     if (ready) {
+        const t = performance.now();
         if (SettingsInstance.enableDFRI) {
             if (DFRIHelperInstance.needSwitchBuffer()) {
                 const success = switchBuffer();
@@ -118,16 +119,15 @@ function render(timestamp) {
         }
 
         if (SettingsInstance.debug) DebugInstance.drawTreeDebug();
-    }
 
-    const elapsed = timestamp - lastRenderTime;
-    DFRIHelperInstance.postRenderTime(elapsed);
+        DFRIHelperInstance.postRenderTime(Math.max(refreshTime, performance.now() - t));
+    }
 
     if (SettingsInstance.stats) {
         DebugInstance.renderTime = Renderer.stats.renderTime;
         DebugInstance.bufferCount = buffers.length;
         DebugInstance.interpolateFrames = DFRIHelperInstance.interpolateFrames;
-        DebugInstance.postFrameTime(elapsed);
+        DebugInstance.postFrameTime(timestamp - lastRenderTime);
         DebugInstance.drawStats();
     }
 

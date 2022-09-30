@@ -48,7 +48,7 @@ export class Settings {
         this.minInteractionDistanceSq = Math.pow(this.minInteractionDistance, 2);
     }
 
-    static fromQueryParams(queryParams, width, height) {
+    static fromQueryParams(queryParams) {
         function _string(key) {
             const value = queryParams[key] && queryParams[key].trim();
             if (value && value.length > 0) {
