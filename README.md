@@ -79,7 +79,7 @@ Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 - *dpr_rate* - Custom Device Pixel Ratio, *0* - means use default (default: __0__)
 - *dfri* - Enable Dynamic Frame Rate Interpolation (boosts framerate) (default: __1__)
 - *dfri_max* - Max frames to interpolate (default: __120__)
-- *buffers* - How many physics frames will be requested ahead of time (default: __2__)
+- *buffers* - How many physics frames will be requested ahead of time (default: __3__)
 - *filter* - Makes particle brighter and change color over time (default: __0__)
 - *blend* - Enable color blending (default: __1__)
 - *stats* - Display statistics (default: __1__)
