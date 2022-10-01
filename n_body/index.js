@@ -54,10 +54,14 @@ function requestNextStep() {
     PhysicsWorker.postMessage({type: "step", timestamp: performance.now()});
 }
 
-function switchBuffer() {
+function prepareNextStep() {
+    if (!DFRIHelperInstance.needSwitchBuffer()) {
+        return;
+    }
+
     if (AheadBuffers.length === 0) {
         console.warn(`${performance.now().toFixed(0)} Next buffer not ready. Frames may be dropped`);
-        return false;
+        return;
     }
 
     const bufferEntry = AheadBuffers.shift();
@@ -74,7 +78,9 @@ function switchBuffer() {
     PhysicsWorker.postMessage({type: "ack", buffer: data}, [data.buffer]);
     requestNextStep();
 
-    return true;
+    if (DFRIHelperInstance.needSwitchBuffer()) {
+        DFRIHelperInstance.bufferSwitched(Particles, AheadBuffers[0]);
+    }
 }
 
 function render(timestamp) {
@@ -84,18 +90,7 @@ function render(timestamp) {
         return;
     }
 
-
-    if (SettingsInstance.enableDFRI) {
-        if (DFRIHelperInstance.needSwitchBuffer()) {
-            const success = switchBuffer();
-            if (success) {
-                DFRIHelperInstance.bufferSwitched(Particles, AheadBuffers[0]);
-            }
-        }
-    } else {
-        switchBuffer();
-    }
-
+    prepareNextStep();
     if (SettingsInstance.enableDFRI) {
         DFRIHelperInstance.render(Particles);
     } else {
