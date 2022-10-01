@@ -97,11 +97,6 @@ function switchBuffer() {
 }
 
 function render(timestamp) {
-    if (timestamp - lastRenderTime < refreshTime) {
-        requestAnimationFrame(render);
-        return;
-    }
-
     if (ready) {
         const t = performance.now();
         if (SettingsInstance.enableDFRI) {
@@ -119,15 +114,15 @@ function render(timestamp) {
         }
 
         if (SettingsInstance.debug) DebugInstance.drawTreeDebug();
-
-        DFRIHelperInstance.postRenderTime(Math.max(refreshTime, performance.now() - t));
     }
 
+    const elapsed = timestamp - lastRenderTime;
+    DFRIHelperInstance.postRenderTime(elapsed);
     if (SettingsInstance.stats) {
         DebugInstance.renderTime = Renderer.stats.renderTime;
         DebugInstance.bufferCount = buffers.length;
         DebugInstance.interpolateFrames = DFRIHelperInstance.interpolateFrames;
-        DebugInstance.postFrameTime(timestamp - lastRenderTime);
+        DebugInstance.postFrameTime(elapsed);
         DebugInstance.drawStats();
     }
 

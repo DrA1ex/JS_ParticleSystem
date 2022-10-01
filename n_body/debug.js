@@ -17,7 +17,7 @@ export class Debug {
         this.renderer = renderer;
         this.settings = settings;
 
-        this.frameRateSmoother = new DataSmoother(this.settings.fps);
+        this.frameRateSmoother = new DataSmoother(this.settings.fps, 3, true);
 
         if (settings.stats) {
             const div = document.createElement("div");
@@ -55,7 +55,7 @@ export class Debug {
             `complexity: ${flops.toFixed(0)} ${flopsUnit}FLOPS`,
             `ahead buffers: ${this.bufferCount}`,
             this.settings.enableDFRI ? `interpolated: ${this.interpolateFrames} frames` : "",
-            `fps: ${(1000 / this.elapsed).toFixed(1)}`,
+            `fps: ${(1000 / this.elapsed || 0).toFixed(1)}`,
             `- tree building: ${this.treeTime.toFixed(1)} ms`,
             `- physics calc: ${this.physicsTime.toFixed(1)} ms`,
             `- render: ${this.renderTime.toFixed(1)} ms`,

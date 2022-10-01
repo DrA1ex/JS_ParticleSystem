@@ -98,7 +98,6 @@ export class Settings {
             isMobile: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.orientation !== undefined,
             useDpr: _bool("dpr"),
             dprRate: _float("dpr_rate"),
-            fps: _int("fps"),
             enableFilter: _bool("filter"),
             enableBlending: _bool("blend"),
             enableDFRI: _bool("dfri"),
