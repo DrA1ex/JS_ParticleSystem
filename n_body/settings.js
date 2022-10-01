@@ -49,7 +49,10 @@ export class Settings {
         this.minInteractionDistanceSq = Math.pow(this.minInteractionDistance, 2);
     }
 
-    static fromQueryParams(queryParams) {
+    static fromQueryParams() {
+        const urlSearchParams = new URLSearchParams(window.location.search);
+        const queryParams = Object.fromEntries(urlSearchParams.entries());
+
         function _string(key) {
             const value = queryParams[key] && queryParams[key].trim();
             if (value && value.length > 0) {

@@ -33,7 +33,6 @@ function init(data) {
     for (let i = 0; i < Settings.bufferCount; i++) {
         Buffers.push(new Float32Array(Settings.particleCount * 4));
     }
-
 }
 
 function ack(data) {

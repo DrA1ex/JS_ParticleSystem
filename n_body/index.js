@@ -3,13 +3,8 @@ import {Debug} from "./debug.js";
 import {Settings} from "./settings.js";
 import {DFRIHelper} from "./utils.js";
 
-const urlSearchParams = new URLSearchParams(window.location.search);
-const params = Object.fromEntries(urlSearchParams.entries());
-
-const canvas = document.getElementById("canvas");
-
-const SettingsInstance = Settings.fromQueryParams(params);
-const Renderer = new CanvasRenderer(canvas, SettingsInstance);
+const SettingsInstance = Settings.fromQueryParams();
+const Renderer = new CanvasRenderer(document.getElementById("canvas"), SettingsInstance);
 const DFRIHelperInstance = new DFRIHelper(Renderer, SettingsInstance);
 const DebugInstance = new Debug(Renderer, SettingsInstance);
 
@@ -24,17 +19,15 @@ PhysicsWorker.onmessage = function (e) {
 }
 
 const Particles = new Array(SettingsInstance.particleCount);
-const Deltas = new Array(SettingsInstance.particleCount);
 for (let i = 0; i < SettingsInstance.particleCount; i++) {
     Particles[i] = {x: 0, y: 0, velX: 0, velY: 0};
-    Deltas[i] = {x: 0, y: 0};
 }
 
+const AheadBuffers = [];
+let pendingBufferCount = 0;
+
 const refreshTime = 1000 / SettingsInstance.fps;
-const buffers = [];
-let pendingBuffers = 0;
 let lastRenderTime = performance.now() - refreshTime;
-let physicsFrame = 0;
 let ready = false;
 
 function onData(data) {
@@ -46,10 +39,10 @@ function onData(data) {
         ready = true;
     }
 
-    buffers.push({index: ++physicsFrame, buffer: data.buffer, treeDebug: data.treeDebug});
-    pendingBuffers -= 1;
+    AheadBuffers.push({buffer: data.buffer, treeDebug: data.treeDebug});
+    pendingBufferCount -= 1;
 
-    if (buffers.length + pendingBuffers < SettingsInstance.bufferCount) {
+    if (AheadBuffers.length + pendingBufferCount < SettingsInstance.bufferCount) {
         requestNextStep();
     }
 
@@ -57,17 +50,17 @@ function onData(data) {
 }
 
 function requestNextStep() {
-    pendingBuffers += 1;
+    pendingBufferCount += 1;
     PhysicsWorker.postMessage({type: "step", timestamp: performance.now()});
 }
 
 function switchBuffer() {
-    if (buffers.length === 0) {
+    if (AheadBuffers.length === 0) {
         console.warn(`${performance.now().toFixed(0)} Next buffer not ready. Frames may be dropped`);
         return false;
     }
 
-    const bufferEntry = buffers.shift();
+    const bufferEntry = AheadBuffers.shift();
     const data = bufferEntry.buffer;
     for (let i = 0; i < SettingsInstance.particleCount; i++) {
         Particles[i].x = data[i * 4];
@@ -85,32 +78,37 @@ function switchBuffer() {
 }
 
 function render(timestamp) {
-    if (ready) {
-        if (SettingsInstance.enableDFRI) {
-            if (DFRIHelperInstance.needSwitchBuffer()) {
-                const success = switchBuffer();
-                if (success) {
-                    DFRIHelperInstance.bufferSwitched(Particles, buffers[0]);
-                }
-            }
-        } else {
-            switchBuffer();
-        }
-
-        if (SettingsInstance.enableDFRI) {
-            DFRIHelperInstance.render(Particles);
-        } else {
-            Renderer.render(Particles);
-        }
-
-        if (SettingsInstance.debug) DebugInstance.drawTreeDebug();
+    if (!ready) {
+        lastRenderTime = timestamp;
+        requestAnimationFrame(render);
+        return;
     }
+
+
+    if (SettingsInstance.enableDFRI) {
+        if (DFRIHelperInstance.needSwitchBuffer()) {
+            const success = switchBuffer();
+            if (success) {
+                DFRIHelperInstance.bufferSwitched(Particles, AheadBuffers[0]);
+            }
+        }
+    } else {
+        switchBuffer();
+    }
+
+    if (SettingsInstance.enableDFRI) {
+        DFRIHelperInstance.render(Particles);
+    } else {
+        Renderer.render(Particles);
+    }
+
+    if (SettingsInstance.debug) DebugInstance.drawTreeDebug();
 
     const elapsed = timestamp - lastRenderTime;
     DFRIHelperInstance.postRenderTime(elapsed);
     if (SettingsInstance.stats) {
         DebugInstance.renderTime = Renderer.stats.renderTime;
-        DebugInstance.bufferCount = buffers.length;
+        DebugInstance.bufferCount = AheadBuffers.length;
         DebugInstance.interpolateFrames = DFRIHelperInstance.interpolateFrames;
         DebugInstance.postFrameTime(elapsed);
         DebugInstance.drawStats();
