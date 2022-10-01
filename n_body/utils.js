@@ -48,6 +48,8 @@ export class DFRIHelper {
         this.renderer = renderer;
         this.settings = settings;
 
+        this.renderer.setCoordinateTransformer(this._transformParticlePosition.bind(this));
+
         this.frame = 0;
         this.interpolateFrames = 0;
         this.stepTimeSmoother = new DataSmoother(this.settings.fps * 4, 1);
@@ -55,16 +57,22 @@ export class DFRIHelper {
         this.renderTimeSmoother.postValue(1000 / this.settings.fps, true);
 
         this._isFirstRender = true;
+        this._currentFactor = 0;
+
+        this._deltas = new Array(this.settings.particleCount);
+        for (let i = 0; i < this.settings.particleCount; i++) {
+            this._deltas[i] = {x: 0, y: 0};
+        }
     }
 
-    render(particles, deltas) {
+    render(particles) {
         if (this._isFirstRender) {
             this.interpolateFrames = this._getInterpolateFramesCount();
             this._isFirstRender = false;
         }
 
-        const factor = this.getFactor();
-        this.renderer.render(particles, deltas, factor);
+        this._currentFactor = this.getFactor();
+        this.renderer.render(particles);
 
         this.frame += 1;
     }
@@ -85,11 +93,26 @@ export class DFRIHelper {
         return Math.max(0, Math.min(this.settings.DFRIMaxFrames, Math.ceil(interpolate * 1.1)));
     }
 
+    _transformParticlePosition(index, particle, out) {
+        out.x = particle.x + this._deltas[index].x * this._currentFactor;
+        out.y = particle.y + this._deltas[index].y * this._currentFactor;
+    }
+
     needSwitchBuffer() {
         return this.frame === 0 || this.frame > this.interpolateFrames;
     }
 
-    bufferSwitched() {
+    bufferSwitched(particles, aheadBufferEntry) {
+        const buffer = aheadBufferEntry?.buffer;
+        if (!buffer) {
+            console.warn(`${performance.now().toFixed(0)} No available ahead buffer, interpolation may be inconsistent`);
+        }
+
+        for (let i = 0; i < this.settings.particleCount; i++) {
+            this._deltas[i].x = buffer ? buffer[i * 4] - particles[i].x : particles[i].velX;
+            this._deltas[i].y = buffer ? buffer[i * 4 + 1] - particles[i].y : particles[i].velY;
+        }
+
         this.frame = 0;
         this.interpolateFrames = this._getInterpolateFramesCount();
     }

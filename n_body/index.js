@@ -67,50 +67,40 @@ function switchBuffer() {
         return false;
     }
 
-    const {buffer} = buffers[0];
-    const nextBuffer = buffers.length > 1 ? buffers[1].buffer : null;
-    if (SettingsInstance.enableDFRI && !nextBuffer) {
-        console.warn(`${performance.now().toFixed(0)} No available ahead buffer, interpolation may be inconsistent`);
-    }
-
+    const bufferEntry = buffers.shift();
+    const data = bufferEntry.buffer;
     for (let i = 0; i < SettingsInstance.particleCount; i++) {
-        Particles[i].x = buffer[i * 4];
-        Particles[i].y = buffer[i * 4 + 1];
-        Particles[i].velX = buffer[i * 4 + 2];
-        Particles[i].velY = buffer[i * 4 + 3];
-
-        if (SettingsInstance.enableDFRI) {
-            Deltas[i].x = nextBuffer ? nextBuffer[i * 4] - Particles[i].x : Particles[i].velX;
-            Deltas[i].y = nextBuffer ? nextBuffer[i * 4 + 1] - Particles[i].y : Particles[i].velY;
-        }
+        Particles[i].x = data[i * 4];
+        Particles[i].y = data[i * 4 + 1];
+        Particles[i].velX = data[i * 4 + 2];
+        Particles[i].velY = data[i * 4 + 3];
     }
 
-    if (SettingsInstance.debug) DebugInstance.importTreeDebugData(buffers[0].treeDebug);
+    if (SettingsInstance.debug) DebugInstance.importTreeDebugData(bufferEntry.treeDebug);
 
-    if (buffers.length > 0) {
-        buffers.shift();
-        PhysicsWorker.postMessage({type: "ack", buffer: buffer}, [buffer.buffer]);
-        requestNextStep();
-    }
+    PhysicsWorker.postMessage({type: "ack", buffer: data}, [data.buffer]);
+    requestNextStep();
 
     return true;
 }
 
 function render(timestamp) {
     if (ready) {
-        const t = performance.now();
         if (SettingsInstance.enableDFRI) {
             if (DFRIHelperInstance.needSwitchBuffer()) {
                 const success = switchBuffer();
                 if (success) {
-                    DFRIHelperInstance.bufferSwitched();
+                    DFRIHelperInstance.bufferSwitched(Particles, buffers[0]);
                 }
             }
-
-            DFRIHelperInstance.render(Particles, Deltas);
         } else {
             switchBuffer();
-            Renderer.render(Particles, Deltas, 0);
+        }
+
+        if (SettingsInstance.enableDFRI) {
+            DFRIHelperInstance.render(Particles);
+        } else {
+            Renderer.render(Particles);
         }
 
         if (SettingsInstance.debug) DebugInstance.drawTreeDebug();

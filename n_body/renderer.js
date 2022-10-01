@@ -2,6 +2,7 @@ export class CanvasRenderer {
     constructor(canvas, settings) {
         this._hueAngle = 0;
         this._maxSpeed = 0;
+        this._coordinateTransformer = null;
         this.stats = {renderTime: 0};
 
         this.settings = settings;
@@ -51,21 +52,26 @@ export class CanvasRenderer {
         this.yOffset += yDelta * this.dpr;
     }
 
-    render(particles, deltas, timeFactor) {
+    render(particles) {
         const t = performance.now();
         this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
         for (let i = 0; i < this.pixels.length; i++) {
             this.pixels[i] = 0;
         }
 
+        const pos = {x: 0, y: 0};
         for (let i = 0; i < particles.length; i++) {
             const particle = particles[i];
-            const delta = deltas[i];
-
             this._maxSpeed = Math.max(this._maxSpeed, Math.abs(particle.velX), Math.abs(particle.velY));
 
-            const x = this.xOffset + (particle.x + delta.x * timeFactor) * this.scale;
-            const y = this.yOffset + (particle.y + delta.y * timeFactor) * this.scale;
+            pos.x = particle.x;
+            pos.y = particle.y;
+            if (this._coordinateTransformer) {
+                this._coordinateTransformer(i, particle, pos);
+            }
+
+            const x = this.xOffset + pos.x * this.scale;
+            const y = this.yOffset + pos.y * this.scale;
 
             if (x < 0 || x > this.canvasWidth || y < 0 || y > this.canvasHeight) {
                 continue;
@@ -116,6 +122,10 @@ export class CanvasRenderer {
             width * this.scale, height * this.scale
         );
         this.ctx.stroke();
+    }
+
+    setCoordinateTransformer(fn) {
+        this._coordinateTransformer = fn;
     }
 }
 
