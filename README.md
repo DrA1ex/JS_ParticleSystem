@@ -39,7 +39,7 @@ small scale.
 _50,000 particles forms a Galaxy-like
 image_ ([demo](https://dra1ex.github.io/JS_ParticleSystem/n_body?particle_count=50000&dpr=1&particle_init=bang&blend=1))
 
-<img width="691" alt="image" src="https://user-images.githubusercontent.com/1194059/193060048-2f9dd976-e675-42f2-aef1-1f381a807ced.png">
+<img height="400" alt="image" src="https://user-images.githubusercontent.com/1194059/193401669-acc131b5-9aa6-4ddb-b2b2-582986dc7320.png"> <img height="400" alt="image" src="https://user-images.githubusercontent.com/1194059/193060048-2f9dd976-e675-42f2-aef1-1f381a807ced.png">
 
 
 Since an accurate calculation of the gravitational interaction would be too difficult, some optimizations were used. All
