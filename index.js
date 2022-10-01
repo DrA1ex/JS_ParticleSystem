@@ -8,22 +8,25 @@ const PARTICLE_CNT = ~~params.particle_count || (isMobile ? 100000 : 200000);
 const FPS = ~~params.fps || 60;
 const G = Number.parseFloat(params.g) || 9;
 const Resistance = Number.parseFloat(params.resistance) || 0.99;
+const UseDPR = params.dpr ? Number.parseInt(params.dpr) : true;
 
 const canvas = document.getElementById("canvas");
 
 const rect = canvas.getBoundingClientRect();
+const dpr = UseDPR ? window.devicePixelRatio : 1;
 
 const CanvasWidth = rect.width;
 const CanvasHeight = rect.height;
 
 canvas.style.width = CanvasWidth + "px";
 canvas.style.height = CanvasHeight + "px";
-canvas.width = CanvasWidth;
-canvas.height = CanvasHeight;
+canvas.width = CanvasWidth * dpr;
+canvas.height = CanvasHeight * dpr;
 
 const ctx = canvas.getContext('2d');
+ctx.scale(dpr, dpr);
 
-const imageData = ctx.createImageData(CanvasWidth, CanvasHeight);
+const imageData = ctx.createImageData(CanvasWidth * dpr, CanvasHeight * dpr);
 const imageWidth = imageData.width;
 const pixels = new Uint32Array(imageData.data.buffer);
 
@@ -85,6 +88,12 @@ function animateParticle(particle, g, position) {
         particle.y += CanvasHeight;
 }
 
+function calculatePhysics() {
+    for (let i = 0; i < Particles.length; i++) {
+        animateParticle(Particles[i], G, MousePosition);
+    }
+}
+
 function render() {
     ctx.clearRect(0, 0, CanvasWidth, CanvasHeight);
 
@@ -94,12 +103,11 @@ function render() {
 
     for (let i = 0; i < Particles.length; i++) {
         const p = Particles[i];
-        animateParticle(p, G, MousePosition);
 
         const xVelToColor = 125 + Math.floor(p.velX * 20);
         const yVelToColor = 125 + Math.floor(p.velY * 20);
         const overSpeedColor = Math.max(0, xVelToColor + yVelToColor - 255 * 2);
-        const index = (Math.floor(p.x) + Math.floor(p.y) * imageWidth);
+        const index = (Math.floor(p.x * dpr) + Math.floor(p.y * dpr) * imageWidth);
         pixels[index] = 0xff000000 | (xVelToColor & 0xff) << 16 | (yVelToColor & 0xff) << 8 | overSpeedColor & 0xff;
     }
     ctx.putImageData(imageData, 0, 0);
@@ -114,14 +122,18 @@ function render() {
 const refreshTime = 1000 / FPS;
 let lastStepTime = 0;
 
-function step(timestamp) {
-    if (timestamp >= lastStepTime + refreshTime) {
-        lastStepTime = timestamp;
-        render();
-    }
+function step() {
+    calculatePhysics()
 
-    requestAnimationFrame(step)
+    requestAnimationFrame((timestamp) => {
+        if (timestamp >= lastStepTime + refreshTime) {
+            lastStepTime = timestamp;
+            render();
+        }
+
+        setTimeout(step, 0);
+    });
 }
 
 init();
-requestAnimationFrame(step);
+step();
