@@ -8,7 +8,7 @@ const PARTICLE_CNT = ~~params.particle_count || (isMobile ? 100000 : 200000);
 const FPS = ~~params.fps || 60;
 const G = Number.parseFloat(params.g) || 9;
 const Resistance = Number.parseFloat(params.resistance) || 0.99;
-const UseDPR = params.dpr ? Number.parseInt(params.dpr) : true;
+const UseDPR = params.dpr ? Number.parseInt(params.dpr) : false;
 
 const canvas = document.getElementById("canvas");
 
