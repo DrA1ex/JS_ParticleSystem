@@ -70,6 +70,7 @@ class Leaf {
         this.length = data.length;
         this.children = [];
         this.boundaryRect = rect || BoundaryRect.fromData(data);
+        this.mass = data.reduce((p, c) => p + c.mass, 0);
 
         this.index = this.tree._getIndex();
     }

@@ -2,6 +2,7 @@ import {CanvasRenderer, InteractionHandler} from "./renderer.js";
 import {Debug} from "./debug.js";
 import {Settings} from "./settings.js";
 import {DFRIHelper} from "./utils.js";
+import {ITEM_SIZE} from "./worker.js";
 
 const SettingsInstance = Settings.fromQueryParams();
 const Renderer = new CanvasRenderer(document.getElementById("canvas"), SettingsInstance);
@@ -20,7 +21,7 @@ PhysicsWorker.onmessage = function (e) {
 
 const Particles = new Array(SettingsInstance.particleCount);
 for (let i = 0; i < SettingsInstance.particleCount; i++) {
-    Particles[i] = {x: 0, y: 0, velX: 0, velY: 0};
+    Particles[i] = {x: 0, y: 0, velX: 0, velY: 0, mass: 0};
 }
 
 const AheadBuffers = [];
@@ -67,10 +68,11 @@ function prepareNextStep() {
     const bufferEntry = AheadBuffers.shift();
     const data = bufferEntry.buffer;
     for (let i = 0; i < SettingsInstance.particleCount; i++) {
-        Particles[i].x = data[i * 4];
-        Particles[i].y = data[i * 4 + 1];
-        Particles[i].velX = data[i * 4 + 2];
-        Particles[i].velY = data[i * 4 + 3];
+        Particles[i].x = data[i * ITEM_SIZE];
+        Particles[i].y = data[i * ITEM_SIZE + 1];
+        Particles[i].velX = data[i * ITEM_SIZE + 2];
+        Particles[i].velY = data[i * ITEM_SIZE + 3];
+        Particles[i].mass = data[i * ITEM_SIZE + 4];
     }
 
     if (SettingsInstance.debug) DebugInstance.importTreeDebugData(bufferEntry.treeDebug);

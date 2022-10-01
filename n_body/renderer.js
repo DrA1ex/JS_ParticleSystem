@@ -1,15 +1,13 @@
-export class CanvasRenderer {
+export class RendererBase {
     constructor(canvas, settings) {
-        this._hueAngle = 0;
-        this._maxSpeed = 0;
-        this._coordinateTransformer = null;
+        this.coordinateTransformer = null;
         this.stats = {renderTime: 0};
 
         this.settings = settings;
         this.canvas = canvas;
         this.dpr = settings.useDpr ? (settings.dprRate || window.devicePixelRatio) : 1;
 
-        const rect = canvas.getBoundingClientRect();
+        const rect = this.canvas.getBoundingClientRect();
 
         this.canvasWidth = rect.width * this.dpr;
         this.canvasHeight = rect.height * this.dpr;
@@ -22,16 +20,8 @@ export class CanvasRenderer {
         this.xOffset = (this.canvasWidth - this.settings.worldWidth * this.scale) / 2;
         this.yOffset = (this.canvasHeight - this.settings.worldHeight * this.scale) / 2;
 
-        canvas.style.width = rect.width + "px";
-        canvas.style.height = rect.height + "px";
-        canvas.width = this.canvasWidth;
-        canvas.height = this.canvasHeight;
-
-        this.ctx = canvas.getContext('2d');
-        this.ctx.lineWidth = this.dpr;
-
-        this.renderImageData = this.ctx.createImageData(this.canvasWidth, this.canvasHeight);
-        this.pixels = new Uint32Array(this.renderImageData.data.buffer);
+        this.canvas.style.width = rect.width + "px";
+        this.canvas.style.height = rect.height + "px";
     }
 
     scaleCentered(factor) {
@@ -52,6 +42,34 @@ export class CanvasRenderer {
         this.yOffset += yDelta * this.dpr;
     }
 
+    setCoordinateTransformer(fn) {
+        this.coordinateTransformer = fn;
+    }
+
+    render(particles) {
+        throw new Error("Not implemented");
+    }
+
+    drawWorldRect(x, y, width, height) {
+        throw new Error("Not implemented");
+    }
+}
+
+export class CanvasRenderer extends RendererBase {
+    constructor(canvas, settings) {
+        super(canvas, settings);
+        this._hueAngle = 0;
+
+        this.canvas.width = this.canvasWidth;
+        this.canvas.height = this.canvasHeight;
+
+        this.ctx = canvas.getContext('2d');
+        this.ctx.lineWidth = this.dpr;
+
+        this.renderImageData = this.ctx.createImageData(this.canvasWidth, this.canvasHeight);
+        this.pixels = new Uint32Array(this.renderImageData.data.buffer);
+    }
+
     render(particles) {
         const t = performance.now();
         this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
@@ -62,12 +80,11 @@ export class CanvasRenderer {
         const pos = {x: 0, y: 0};
         for (let i = 0; i < particles.length; i++) {
             const particle = particles[i];
-            this._maxSpeed = Math.max(this._maxSpeed, Math.abs(particle.velX), Math.abs(particle.velY));
 
             pos.x = particle.x;
             pos.y = particle.y;
-            if (this._coordinateTransformer) {
-                this._coordinateTransformer(i, particle, pos);
+            if (this.coordinateTransformer) {
+                this.coordinateTransformer(i, particle, pos);
             }
 
             const x = this.xOffset + pos.x * this.scale;
@@ -77,11 +94,12 @@ export class CanvasRenderer {
                 continue;
             }
 
-            const xVelToColor = Math.floor(255 * (0.5 + particle.velX / this._maxSpeed / 2));
-            const yVelToColor = Math.floor(255 * (0.5 + particle.velY / this._maxSpeed / 2));
-            const index = (Math.floor(x) + Math.floor(y) * this.canvasWidth);
-            const color = 0xff000088 | xVelToColor << 16 | yVelToColor << 8;
+            const mass = Math.floor(particle.mass / (this.settings.particleMass + 1) * 64) & 0xff;
+            const xVelToColor = 192 + Math.sign(particle.velX) * 63;
+            const yVelToColor = 192 + Math.sign(particle.velY) * 63;
+            const color = 0xff000000 | xVelToColor << 16 | yVelToColor << 8 | mass;
 
+            const index = (Math.floor(x) + Math.floor(y) * this.canvasWidth);
             if (this.settings.enableBlending && this.pixels[index]) {
                 this.pixels[index] = this._blendColors(this.pixels[index], color);
             } else {
@@ -122,10 +140,6 @@ export class CanvasRenderer {
             width * this.scale, height * this.scale
         );
         this.ctx.stroke();
-    }
-
-    setCoordinateTransformer(fn) {
-        this._coordinateTransformer = fn;
     }
 }
 

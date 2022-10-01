@@ -74,6 +74,7 @@ Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 - *segment_divider* - Spatial subdivision factor while segmentation (default: __2__)
 - *segment_max_count* - Max particle count in segment, larger values increase accuracy (default: __32__)
 - *g* - Attraction force (default: __1__)
+- *particle_mass* - Particle mass variance (default: __0__)
 - *min_distance* - Minimal distance (pixels) to process interactions (default: __10__)
 - *resistance* - Resistance of environment, *1* - means no resistance (default: __1__)
 - *dpr* - Enable drawing according to Device Pixel Ratio (default: __0__)

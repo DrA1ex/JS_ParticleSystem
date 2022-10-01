@@ -1,5 +1,7 @@
 import {ParticleInitializer, PhysicsEngine} from "./physics.js";
 
+export const ITEM_SIZE = 5;
+
 let Settings;
 let Particles;
 let PhysicsEngineInstance;
@@ -31,7 +33,7 @@ function init(data) {
     Particles = ParticleInitializer.initialize(Settings);
 
     for (let i = 0; i < Settings.bufferCount; i++) {
-        Buffers.push(new Float32Array(Settings.particleCount * 4));
+        Buffers.push(new Float32Array(Settings.particleCount * ITEM_SIZE));
     }
 }
 
@@ -53,10 +55,11 @@ function step(data) {
 
     const buffer = Buffers.shift();
     for (let i = 0; i < Settings.particleCount; i++) {
-        buffer[i * 4] = Particles[i].x;
-        buffer[i * 4 + 1] = Particles[i].y;
-        buffer[i * 4 + 2] = Particles[i].velX;
-        buffer[i * 4 + 3] = Particles[i].velY;
+        buffer[i * ITEM_SIZE] = Particles[i].x;
+        buffer[i * ITEM_SIZE + 1] = Particles[i].y;
+        buffer[i * ITEM_SIZE + 2] = Particles[i].velX;
+        buffer[i * ITEM_SIZE + 3] = Particles[i].velY;
+        buffer[i * ITEM_SIZE + 4] = Particles[i].mass;
     }
 
     postMessage({

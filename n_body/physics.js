@@ -1,10 +1,11 @@
 import {SpatialTree} from "./tree.js";
 import {ParticleInitType} from "./settings.js";
+import {bmRandom} from "./utils.js";
 
 /**
  * @typedef {{x: number, y: number}} PositionVector
  * @typedef {{velX: number, velY: number}} VelocityVector
- * @typedef {{x: number, y: number, velX: number, velY: number}} Particle
+ * @typedef {{x: number, y: number, velX: number, velY: number, mass: number}} Particle
  */
 
 export class ParticleInitializer {
@@ -14,6 +15,12 @@ export class ParticleInitializer {
      */
     static initialize(settings) {
         const particles = new Array(settings.particleCount);
+        for (let i = 0; i < settings.particleCount; i++) {
+            particles[i] = {
+                x: 0, y: 0, velX: 0, velY: 0,
+                mass: 1 + bmRandom() * settings.particleMass
+            }
+        }
 
         switch (settings.particleInitType) {
             case ParticleInitType.uniform:
@@ -80,11 +87,8 @@ export class ParticleInitializer {
         let angle = 0;
         for (let i = 0; i < particleCount; i++) {
             const r = (radius + (Math.random() - 0.5) * wiggle)
-            particles[i] = {
-                x: centerX + Math.cos(angle) * r,
-                y: centerY + Math.sin(angle) * r,
-                velX: 0, velY: 0
-            };
+            particles[i].x = centerX + Math.cos(angle) * r;
+            particles[i].y = centerY + Math.sin(angle) * r;
 
             angle += step;
         }
@@ -99,11 +103,8 @@ export class ParticleInitializer {
         const {particleCount, worldWidth, worldHeight} = settings;
 
         for (let i = 0; i < particleCount; i++) {
-            particles[i] = {
-                x: Math.random() * worldWidth,
-                y: Math.random() * worldHeight,
-                velX: 0, velY: 0
-            };
+            particles[i].x = Math.random() * worldWidth;
+            particles[i].y = Math.random() * worldHeight
         }
     }
 
@@ -118,11 +119,11 @@ export class ParticleInitializer {
         const radius = Math.min(worldWidth, worldHeight) / 20;
         this._circleInitializerBase(particles, settings, radius, radius / 2);
 
-        const initialVelocity = Math.sqrt(settings.gravity) * 1.5;
+        const initialVelocity = Math.sqrt(settings.gravity) / (1 + settings.particleMass) * 1.5;
         for (let i = 0; i < particleCount; i++) {
             const angle = Math.random() * Math.PI * 2;
-            particles[i].velX = Math.cos(angle) * initialVelocity;
-            particles[i].velY = Math.sin(angle) * initialVelocity;
+            particles[i].velX = Math.cos(angle) * initialVelocity * particles[i].mass;
+            particles[i].velY = Math.sin(angle) * initialVelocity * particles[i].mass;
         }
     }
 }
@@ -194,7 +195,7 @@ export class PhysicsEngine {
                 for (let j = 0; j < blocks.length; j++) {
                     if (i === j) continue;
 
-                    const g = this.settings.particleGravity * blocks[j].length;
+                    const g = this.settings.particleGravity * blocks[j].mass;
                     this._calculateForce(blockCenter, blocks[j].boundaryRect.center(), g, iForce);
                 }
 
@@ -203,14 +204,14 @@ export class PhysicsEngine {
         } else {
             for (let i = 0; i < leaf.length; i++) {
                 const attractor = leaf.data[i];
-                attractor.velX += pForce[0];
-                attractor.velY += pForce[1];
+                attractor.velX += pForce[0] / attractor.mass;
+                attractor.velY += pForce[1] / attractor.mass;
 
                 for (let j = 0; j < leaf.length; j++) {
                     if (i === j) continue;
 
                     const particle = leaf.data[j];
-                    this._calculateForce(particle, attractor, this.settings.particleGravity, particle);
+                    this._calculateForce(particle, attractor, this.settings.particleGravity * attractor.mass, particle);
                 }
             }
         }
@@ -220,7 +221,7 @@ export class PhysicsEngine {
      * @param {PositionVector} p1
      * @param {PositionVector} p2
      * @param {number} g
-     * @param {VelocityVector|[number,number]} out
+     * @param {Particle|[number,number]} out
      * @private
      */
     _calculateForce(p1, p2, g, out) {
@@ -234,8 +235,8 @@ export class PhysicsEngine {
             force = -g / distSquare;
 
             if (out.velX !== undefined) {
-                out.velX += dx * force;
-                out.velY += dy * force;
+                out.velX += dx * force / out.mass;
+                out.velY += dy * force / out.mass;
             } else {
                 out[0] += dx * force;
                 out[1] += dy * force;
@@ -255,7 +256,7 @@ export class PhysicsEngine {
     }
 
     _calcTreeStats(tree) {
-        const flopsPerOp = 12;
+        const flopsPerOp = 14;
         let flops = 0;
 
         function _processLeaf(parent) {

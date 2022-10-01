@@ -1,3 +1,15 @@
+import {ITEM_SIZE} from "./worker.js";
+
+export function bmRandom() {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random(); //Converting [0,1) to (0,1)
+    while (v === 0) v = Math.random();
+    let num = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    num = num / 10.0 + 0.5; // Translate to 0 -> 1
+    if (num > 1 || num < 0) return bmRandom() // resample between 0 and 1
+    return num
+}
+
 export class DataSmoother {
     constructor(count, dropFirstCount = 0, filter = false) {
         this.count = count;
@@ -109,8 +121,8 @@ export class DFRIHelper {
         }
 
         for (let i = 0; i < this.settings.particleCount; i++) {
-            this._deltas[i].x = buffer ? buffer[i * 4] - particles[i].x : particles[i].velX;
-            this._deltas[i].y = buffer ? buffer[i * 4 + 1] - particles[i].y : particles[i].velY;
+            this._deltas[i].x = buffer ? buffer[i * ITEM_SIZE] - particles[i].x : particles[i].velX;
+            this._deltas[i].y = buffer ? buffer[i * ITEM_SIZE + 1] - particles[i].y : particles[i].velY;
         }
 
         this.frame = 0;

@@ -21,6 +21,7 @@ export class Settings {
     resistance = 1;
     gravity = 1;
     particleGravity = null;
+    particleMass = 0;
     minInteractionDistance = 0.01;
     minInteractionDistanceSq = null;
 
@@ -107,6 +108,7 @@ export class Settings {
             DFRIMaxFrames: _int("dfri_max"),
             particleInitType: ParticleInitType[_string("particle_init")],
             particleCount: _int("particle_count"),
+            particleMass: _int("particle_mass"),
             resistance: _float("resistance"),
             gravity: _float("g"),
             minInteractionDistance: _int("min_distance"),
