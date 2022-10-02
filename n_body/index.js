@@ -1,8 +1,9 @@
-import {CanvasRenderer, InteractionHandler} from "./renderer.js";
-import {Debug} from "./debug.js";
-import {Settings} from "./settings.js";
-import {DFRIHelper} from "./utils.js";
-import {ITEM_SIZE} from "./worker.js";
+import {InteractionHandler} from "./render/base.js";
+import {CanvasRenderer} from "./render/canvas.js";
+import {Debug} from "./utils/debug.js";
+import {Settings} from "./utils/settings.js";
+import {DFRIHelper} from "./utils/dfri.js";
+import {ITEM_SIZE} from "./backend/worker.js";
 
 const SettingsInstance = Settings.fromQueryParams();
 const Renderer = new CanvasRenderer(document.getElementById("canvas"), SettingsInstance);
@@ -12,7 +13,7 @@ const DebugInstance = new Debug(Renderer, SettingsInstance);
 const InteractionHandlerInstance = new InteractionHandler(Renderer, SettingsInstance);
 InteractionHandlerInstance.enable();
 
-const PhysicsWorker = new Worker("./worker.js", {type: "module"});
+const PhysicsWorker = new Worker("./backend/worker.js", {type: "module"});
 PhysicsWorker.onmessage = function (e) {
     if (e.data.type === "data") {
         onData(e.data);

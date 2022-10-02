@@ -1,4 +1,4 @@
-import {DataSmoother} from "./utils.js";
+import {DataSmoother} from "./smoother.js";
 
 export class Debug {
     depth = 0;

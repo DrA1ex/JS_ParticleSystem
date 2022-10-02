@@ -1,6 +1,6 @@
 import {SpatialTree} from "./tree.js";
-import {ParticleInitType} from "./settings.js";
-import {bmRandom} from "./utils.js";
+import {ParticleInitType} from "../utils/settings.js";
+import {bmRandom} from "../utils/common.js";
 
 /**
  * @typedef {{x: number, y: number}} PositionVector

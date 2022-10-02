@@ -1,4 +1,4 @@
-import {ParticleInitializer, PhysicsEngine} from "./physics.js";
+import {ParticleInitializer, PhysicsEngine} from "../simulation/physics.js";
 
 export const ITEM_SIZE = 5;
 
