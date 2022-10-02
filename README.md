@@ -1,6 +1,6 @@
 # Simulation of Galaxy Birth (Classical mechanics simulation)
 
-<img width="640" alt="Simulation gif" src="https://user-images.githubusercontent.com/1194059/192136681-ccd9e0e9-1395-48f5-a2fe-9851505dbf9c.gif">
+[<img width="480" alt="Simulation gif" src="https://user-images.githubusercontent.com/1194059/193450370-278ae448-c71b-4282-9045-2f8097a3f6cf.gif">](https://user-images.githubusercontent.com/1194059/193450143-20287770-4cfe-4665-99cf-6c78dbcfe32b.png) 
 
 ## N-Body Simulation
 
