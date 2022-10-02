@@ -8,6 +8,7 @@ export class CanvasRenderer extends RendererBase {
     constructor(canvas, settings) {
         super(canvas, settings);
         this._hueAngle = 0;
+        this._maxSpeed = 0;
 
         this.ctx = canvas.getContext('2d');
         this.ctx.lineWidth = this.dpr;
@@ -43,9 +44,10 @@ export class CanvasRenderer extends RendererBase {
                 continue;
             }
 
-            const mass = Math.floor(particle.mass / (this.settings.particleMass + 1) * 64) & 0xff;
-            const xVelToColor = 192 + Math.sign(particle.velX) * 63;
-            const yVelToColor = 192 + Math.sign(particle.velY) * 63;
+            this._maxSpeed = Math.max(this._maxSpeed, Math.abs(particle.velX), Math.abs(particle.velY));
+            const mass = 128 + Math.floor(particle.mass / (this.settings.particleMass + 1) * 64);
+            const xVelToColor = Math.floor(255 * (0.5 + particle.velX / this._maxSpeed / 2));
+            const yVelToColor = Math.floor(255 * (0.5 + particle.velY / this._maxSpeed / 2));
             const color = 0xff000000 | xVelToColor << 16 | yVelToColor << 8 | mass;
 
             const index = (Math.floor(x) + Math.floor(y) * this.canvasWidth);
