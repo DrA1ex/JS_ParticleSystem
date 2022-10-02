@@ -47,6 +47,7 @@ Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 - *particle_mass* - Particle mass variance (default: __0__)
 - *min_distance* - Minimal distance (pixels) to process interactions (default: __10__)
 - *resistance* - Resistance of environment, *1* - means no resistance (default: __1__)
+- *render* - Configure renderer type: __canvas__, __webgl2__ (default: __canvas__ for mobile, __webgl__ for desktop)
 - *dpr* - Enable drawing according to Device Pixel Ratio (default: __0__)
 - *dpr_rate* - Custom Device Pixel Ratio, *0* - means use default (default: __0__)
 - *dfri* - Enable Dynamic Frame Rate Interpolation (boosts framerate) (default: __1__)

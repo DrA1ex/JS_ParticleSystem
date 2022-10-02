@@ -67,7 +67,7 @@ export class Debug {
     }
 
     drawTreeDebug() {
-        this.renderer.ctx.strokeStyle = "#00ff00";
+        this.renderer.setDrawStyle("#00ff00", null)
         for (let i = 0; i < this.treeDebugData.length; i++) {
             const data = this.treeDebugData[i];
             this.renderer.drawWorldRect(data.x, data.y, data.width, data.height);

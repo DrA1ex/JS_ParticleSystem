@@ -5,12 +5,18 @@ export const ParticleInitType = {
     disk: 3
 }
 
+export const RenderType = {
+    canvas: "canvas",
+    webgl2: "webgl2"
+}
+
 export class Settings {
+    isMobile = false;
+    render = null;
     enableFilter = false;
     enableBlending = true;
     enableDFRI = true;
     DFRIMaxFrames = 120;
-    isMobile = false;
     useDpr = false;
     dprRate = 0;
     fps = 60;
@@ -40,6 +46,10 @@ export class Settings {
             if (value !== null && this.hasOwnProperty(key)) {
                 this[key] = value;
             }
+        }
+
+        if (!this.render) {
+            this.render = this.isMobile ? RenderType.canvas : RenderType.webgl2;
         }
 
         if (!this.particleCount) {
@@ -100,6 +110,7 @@ export class Settings {
 
         return new Settings({
             isMobile: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.orientation !== undefined,
+            render: _string("render"),
             useDpr: _bool("dpr"),
             dprRate: _float("dpr_rate"),
             enableFilter: _bool("filter"),

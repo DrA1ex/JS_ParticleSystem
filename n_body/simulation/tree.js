@@ -1,3 +1,5 @@
+const EPSILON = 0.1e-6;
+
 class BoundaryRect {
     constructor(left, top, right, bottom) {
         this.left = left;
@@ -119,11 +121,19 @@ export class SpatialTree {
 
         for (let x = 0; x < this.divideFactor; x++) {
             for (let y = 0; y < this.divideFactor; y++) {
-                const left = boundary.left + x * xStep
-                const top = boundary.top + y * yStep;
+                let left = boundary.left + x * xStep
+                let top = boundary.top + y * yStep;
                 const filterRect = new BoundaryRect(left, top, left + xStep, top + yStep);
 
+                if (x + 1 === this.divideFactor) {
+                    filterRect.right += EPSILON;
+                }
+                if (y + 1 === this.divideFactor) {
+                    filterRect.bottom += EPSILON;
+                }
+
                 const rectData = current.filterByRect(filterRect);
+
                 if (rectData.length > 0) {
                     const leaf = current.appendChild(rectData, filterRect);
                     this._populate(leaf);

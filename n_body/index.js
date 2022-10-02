@@ -1,12 +1,20 @@
 import {InteractionHandler} from "./render/base.js";
+import {RenderType, Settings} from "./utils/settings.js";
 import {CanvasRenderer} from "./render/canvas.js";
+import {Webgl2Renderer} from "./render/webgl/render.js";
 import {Debug} from "./utils/debug.js";
-import {Settings} from "./utils/settings.js";
 import {DFRIHelper} from "./utils/dfri.js";
 import {ITEM_SIZE} from "./backend/worker.js";
 
+const RenderTypeMapping = {
+    [RenderType.canvas]: CanvasRenderer,
+    [RenderType.webgl2]: Webgl2Renderer,
+    default: Webgl2Renderer
+}
+
 const SettingsInstance = Settings.fromQueryParams();
-const Renderer = new CanvasRenderer(document.getElementById("canvas"), SettingsInstance);
+const RendererClass = RenderTypeMapping[SettingsInstance.render] || RenderTypeMapping.default;
+const Renderer = new RendererClass(document.getElementById("canvas"), SettingsInstance);
 const DFRIHelperInstance = new DFRIHelper(Renderer, SettingsInstance);
 const DebugInstance = new Debug(Renderer, SettingsInstance);
 
@@ -62,7 +70,9 @@ function prepareNextStep() {
     }
 
     if (AheadBuffers.length === 0) {
-        console.warn(`${performance.now().toFixed(0)} Next buffer not ready. Frames may be dropped`);
+        if (SettingsInstance.enableDFRI) {
+            console.warn(`${performance.now().toFixed(0)} Next buffer not ready. Frames may be dropped`);
+        }
         return;
     }
 
@@ -81,7 +91,7 @@ function prepareNextStep() {
     PhysicsWorker.postMessage({type: "ack", buffer: data}, [data.buffer]);
     requestNextStep();
 
-    if (DFRIHelperInstance.needSwitchBuffer()) {
+    if (SettingsInstance.enableDFRI && DFRIHelperInstance.needSwitchBuffer()) {
         DFRIHelperInstance.bufferSwitched(Particles, AheadBuffers[0]);
     }
 }

@@ -78,6 +78,16 @@ export class RendererBase {
 
     /**
      * @abstract
+     * @param {string|null} stroke
+     * @param {string|null} fill
+     * @return {void}
+     */
+    setDrawStyle(stroke, fill) {
+        throw new Error("Not implemented");
+    }
+
+    /**
+     * @abstract
      * @param {number} x
      * @param {number} y
      * @param {number} width

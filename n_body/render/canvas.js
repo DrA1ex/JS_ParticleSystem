@@ -22,7 +22,7 @@ export class CanvasRenderer extends RendererBase {
      */
     render(particles) {
         const t = performance.now();
-        this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+
         for (let i = 0; i < this._pixels.length; i++) {
             this._pixels[i] = 0;
         }
@@ -91,5 +91,14 @@ export class CanvasRenderer extends RendererBase {
             width * this.scale, height * this.scale
         );
         this.ctx.stroke();
+    }
+
+    setDrawStyle(stroke, fill) {
+        if (stroke) {
+            this.ctx.strokeStyle = stroke;
+        }
+        if (fill) {
+            this.ctx.fillStyle = fill;
+        }
     }
 }
