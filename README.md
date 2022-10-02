@@ -1,33 +1,6 @@
-# Newtons's Gravity Law simulation
+# Simulation of Galaxy Birth (Classical mechanics simulation)
 
 <img width="640" alt="Simulation gif" src="https://user-images.githubusercontent.com/1194059/192136681-ccd9e0e9-1395-48f5-a2fe-9851505dbf9c.gif">
-
-# 1-Body Simulation
-
-This is not a something like simulation of a galaxy, since in a galaxy all bodies interact with each other. The
-simulation roughly visualizes how ultralight bodies would interact with one supermassive body.
-
-The advantage of this type of simulation is the simplicity of calculations: O(N^2). Because only one body actually
-attracts all the particles we can simulate hundreds of thousands of particles in the browser in real time.
-
-For a real N-Body simulation, it would be necessary to calculate the interaction of each particle with each other. For
-1000 particles this would require 1,000,000 operations.
-
-But with some optimization it is achievable! See implementation of N-Body simulation in the next section.
-
-_1-Body Visualization frame with 1,000,000 particles_
-
-<img width="1080" alt="image" src="https://user-images.githubusercontent.com/1194059/192269216-d1ed71f0-a3cb-48cc-9d3f-33126291c91e.png">
-
-Demo: https://dra1ex.github.io/JS_ParticleSystem/
-
-### Parameters:
-
-- *particle_count* - Count of particles to simulate (default: __100000__ for mobile, __200000__ for desktop)
-- *fps* - Refresh rate in frames per second (default: __60__)
-- *dpr* - Enable drawing according to Device Pixel Ratio (default: __0__)
-- *g* - Attraction force of mouse pointer (default: __9__)
-- *resistance* - Resistance of environment, *1* - means no resistance (default: __0.99__)
 
 ## N-Body Simulation
 
@@ -40,10 +13,7 @@ small scale.
 _50,000 particles forms a Galaxy-like
 image_ ([Try it yourself](https://dra1ex.github.io/JS_ParticleSystem/n_body?particle_count=50000&dpr=1&particle_init=bang&blend=1))
 
-<img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193401669-acc131b5-9aa6-4ddb-b2b2-582986dc7320.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193060048-2f9dd976-e675-42f2-aef1-1f381a807ced.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193402299-c9728ea3-b29d-4174-a4d1-3930c85cd863.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193402786-c9d376cf-5170-47e0-974d-c31bd3710558.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193416793-244cf9ba-1218-455b-abf8-da453f3bc14e.png">
-
-
-
+<img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193401669-acc131b5-9aa6-4ddb-b2b2-582986dc7320.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193060048-2f9dd976-e675-42f2-aef1-1f381a807ced.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193402299-c9728ea3-b29d-4174-a4d1-3930c85cd863.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193402786-c9d376cf-5170-47e0-974d-c31bd3710558.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193416793-244cf9ba-1218-455b-abf8-da453f3bc14e.png">  <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193448692-4b9f5cd5-cd43-4bb8-8c93-2809b5666e98.png">
 
 Since an accurate calculation of the gravitational interaction would be too difficult, some optimizations were used. All
 particles are divided into hierarchical segments, thus creating a Spatial Tree.
@@ -86,3 +56,31 @@ Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 - *blend* - Enable color blending (default: __1__)
 - *stats* - Display statistics (default: __1__)
 - *debug* - Debug mode (default: __0__)
+
+
+# 1-Body Simulation
+
+This is not a something like simulation of a galaxy, since in a galaxy all bodies interact with each other. The
+simulation roughly visualizes how ultralight bodies would interact with one supermassive body.
+
+The advantage of this type of simulation is the simplicity of calculations: O(N^2). Because only one body actually
+attracts all the particles we can simulate hundreds of thousands of particles in the browser in real time.
+
+For a real N-Body simulation, it would be necessary to calculate the interaction of each particle with each other. For
+1000 particles this would require 1,000,000 operations.
+
+But with some optimization it is achievable! See implementation of N-Body simulation in the next section.
+
+_1-Body Visualization frame with 1,000,000 particles_
+
+<img width="1080" alt="image" src="https://user-images.githubusercontent.com/1194059/192269216-d1ed71f0-a3cb-48cc-9d3f-33126291c91e.png">
+
+Demo: https://dra1ex.github.io/JS_ParticleSystem/
+
+### Parameters:
+
+- *particle_count* - Count of particles to simulate (default: __100000__ for mobile, __200000__ for desktop)
+- *fps* - Refresh rate in frames per second (default: __60__)
+- *dpr* - Enable drawing according to Device Pixel Ratio (default: __0__)
+- *g* - Attraction force of mouse pointer (default: __9__)
+- *resistance* - Resistance of environment, *1* - means no resistance (default: __0.99__)
