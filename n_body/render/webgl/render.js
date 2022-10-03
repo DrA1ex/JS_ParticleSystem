@@ -82,6 +82,11 @@ export class Webgl2Renderer extends RendererBase {
         this.gl.viewport(0, 0, this.canvasWidth, this.canvasHeight);
         this.gl.clearColor(0, 0, 0, 1);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+
+        if (this.settings.enableBlending) {
+            this.gl.enable(GL.BLEND);
+            this.gl.blendFunc(GL.SRC_COLOR, GL.ONE);
+        }
     }
 
     initDebugCanvas() {
