@@ -11,8 +11,8 @@ export const RenderType = {
 }
 
 const SERIALIZABLE_PROPS = [
-    "render", "useDpr", "dprRate", "enableFilter", "enableBlending", "enableDFRI", "DFRIMaxFrames",
-    "particleInitType", "particleCount", "particleMass", "resistance", "gravity", "minInteractionDistance",
+    "render", "enableFilter", "enableBlending", "enableDFRI", "DFRIMaxFrames",
+    "particleCount", "resistance", "gravity", "minInteractionDistance",
     "segmentDivider", "segmentMaxCount", "bufferCount",
 ];
 
@@ -23,7 +23,7 @@ export class Settings {
     enableBlending = true;
     enableDFRI = true;
     DFRIMaxFrames = 120;
-    useDpr = false;
+    useDpr = null;
     dprRate = 0;
     fps = 60;
 
@@ -58,6 +58,10 @@ export class Settings {
 
         if (!this.render) {
             this.render = this.isMobile ? RenderType.canvas : RenderType.webgl2;
+        }
+
+        if (!this.useDpr) {
+            this.useDpr = this.isMobile ? false : this.render === RenderType.webgl2
         }
 
         if (!this.particleCount) {

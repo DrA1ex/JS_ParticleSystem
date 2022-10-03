@@ -32,10 +32,10 @@ export class Application {
     }
 
     init(state = null) {
-        if (state?.renderer) {
-            this.renderer.scale = state.renderer.scale ?? this.renderer.scale;
-            this.renderer.xOffset = state.renderer.offset.left ?? this.renderer.xOffset;
-            this.renderer.yOffset = state.renderer.offset.top ?? this.renderer.yOffset;
+        if (state?.renderer?.scale) {
+            this.renderer.scale = state.renderer.scale * this.renderer.dpr;
+            this.renderer.xOffset = state.renderer.offset.left * this.renderer.dpr;
+            this.renderer.yOffset = state.renderer.offset.top * this.renderer.dpr;
         }
 
         this.particles = new Array(this.settings.particleCount);
@@ -148,7 +148,10 @@ export class Application {
             particles: this.particles.map(p => [p.x, p.y, p.velX, p.velY, p.mass]),
             renderer: {
                 scale: this.renderer.scale,
-                offset: {left: this.renderer.xOffset, top: this.renderer.yOffset}
+                offset: {
+                    left: this.renderer.xOffset / this.renderer.dpr,
+                    top: this.renderer.yOffset / this.renderer.dpr
+                }
             }
         }
 
