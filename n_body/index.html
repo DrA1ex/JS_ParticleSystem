@@ -2,6 +2,27 @@
 <head>
     <title>N-Body Gravity Simulation</title>
     <style>
+        .icon-btn {
+            background: transparent;
+            border: none;
+            padding: 0.4em;
+            margin: 0;
+        }
+
+        .icon-btn > img {
+            height: 2em;
+            width: 2em;
+        }
+
+        .icon-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+        }
+
+        .icon-btn:active {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
         #wait {
             position: absolute;
             top: 50%;
@@ -42,8 +63,11 @@
 </head>
 <body style="background: black; margin: 0">
 <canvas id="canvas" style="width: 100%; height: 100%;"></canvas>
-<span id="hint">Drag & Zoom</span>
 <span id="wait">Waiting data...</span>
+<span id="hint">Drag & Zoom</span>
+<button id="download_btn" class="icon-btn" style="position: absolute; right: 8px; bottom: 8px;">
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAABmJLR0QA/wD/AP+gvaeTAAABHUlEQVRoge2X2wqCQBRFJfoGk/7/R8KnCLpAZH3N6uVIZl7mpp7qLJCgZvbsxWhqlhluADvgsHSPaBCmXmc19QJzYSLaMBFtmIg2TEQbJqINE9HGoAjulKEFgNJ1kWARnz6JcqYhxbvEXBn/cY18EyaiDRPRhonUAEfgDBQBcwvgAuxje4wtNHojkiIAVZdMX4ZIVPLzKbbHII4iOXCVoQ9gO5YBbBpz7u05i4jIuF6ZdoavxKwiMrZTppkRIjG7iIz/kOFFkERIjyQBvF/E9Set77z+4RYRkXnNnWnitROxPZIEdMgEScT2SBIgp9lNDu8bZqoeqd7uciCPzFheJAUuPeyhURsmog0T0YaJaMNEtLF2GaThMWWMn9mRJw6riSpkxe5hAAAAAElFTkSuQmCC">
+</button>
 </body>
 <script type="module" src="index.js"></script>
 

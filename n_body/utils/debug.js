@@ -59,6 +59,7 @@ export class Debug {
             `- tree building: ${this.treeTime.toFixed(1)} ms`,
             `- physics calc: ${this.physicsTime.toFixed(1)} ms`,
             `- render: ${this.renderTime.toFixed(1)} ms`,
+            `renderer: ${this.renderer.constructor.name} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
         ].filter(v => v).join("\n");
     }
 

@@ -2,6 +2,30 @@ import {ParticleInitializer, PhysicsEngine} from "../simulation/physics.js";
 
 export const ITEM_SIZE = 5;
 
+export class WorkerBackend {
+    constructor() {
+        this._worker = new Worker("./backend/worker.js", {type: "module"});
+    }
+
+    init(onDataFn, settings, particles = null) {
+        this._worker.onmessage = function (e) {
+            if (e.data.type === "data") {
+                onDataFn(e.data);
+            }
+        }
+
+        this._worker.postMessage({type: "init", settings, state: particles});
+    }
+
+    freeBuffer(buffer) {
+        this._worker.postMessage({type: "ack", buffer}, [buffer.buffer]);
+    }
+
+    requestNextStep() {
+        this._worker.postMessage({type: "step", timestamp: performance.now()});
+    }
+}
+
 let Settings;
 let Particles;
 let PhysicsEngineInstance;
@@ -26,11 +50,23 @@ onmessage = function (e) {
 }
 
 function init(data) {
-    const {settings} = data;
+    const {settings, state} = data;
 
     Settings = settings;
     PhysicsEngineInstance = new PhysicsEngine(Settings);
     Particles = ParticleInitializer.initialize(Settings);
+
+    if (state && state.length > 0) {
+        const size = Math.min(state.length, Settings.particleCount);
+        for (let i = 0; i < size; i++) {
+            const [x, y, velX, velY, mass] = state[i];
+            Particles[i].x = x;
+            Particles[i].y = y;
+            Particles[i].velX = velX;
+            Particles[i].velY = velY;
+            Particles[i].mass = mass;
+        }
+    }
 
     for (let i = 0; i < Settings.bufferCount; i++) {
         Buffers.push(new Float32Array(Settings.particleCount * ITEM_SIZE));

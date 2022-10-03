@@ -10,6 +10,12 @@ export const RenderType = {
     webgl2: "webgl2"
 }
 
+const SERIALIZABLE_PROPS = [
+    "render", "useDpr", "dprRate", "enableFilter", "enableBlending", "enableDFRI", "DFRIMaxFrames",
+    "particleInitType", "particleCount", "particleMass", "resistance", "gravity", "minInteractionDistance",
+    "segmentDivider", "segmentMaxCount", "bufferCount",
+];
+
 export class Settings {
     isMobile = false;
     render = null;
@@ -21,7 +27,9 @@ export class Settings {
     dprRate = 0;
     fps = 60;
 
+    particleInitTypeCode = null;
     particleInitType = ParticleInitType.circle;
+
     particleCount = null;
 
     resistance = 1;
@@ -56,11 +64,26 @@ export class Settings {
             this.particleCount = this.isMobile ? 10000 : 20000;
         }
 
+        if (this.particleInitTypeCode) {
+            this.particleInitType = ParticleInitType[this.particleInitTypeCode] ?? this.particleInitTypeCode;
+        }
+
         this.particleGravity = this.gravity / this.particleCount;
         this.minInteractionDistanceSq = Math.pow(this.minInteractionDistance, 2);
     }
 
-    static fromQueryParams() {
+    serialize() {
+        const result = {};
+        for (const [key, value] of Object.entries(this)) {
+            if (SERIALIZABLE_PROPS.includes(key)) {
+                result[key] = value;
+            }
+        }
+
+        return result;
+    }
+
+    static fromQueryParams(defaults = null) {
         const urlSearchParams = new URLSearchParams(window.location.search);
         const queryParams = Object.fromEntries(urlSearchParams.entries());
 
@@ -108,7 +131,7 @@ export class Settings {
             return null;
         }
 
-        return new Settings({
+        const configFromParams = {
             isMobile: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.orientation !== undefined,
             render: _string("render"),
             useDpr: _bool("dpr"),
@@ -117,7 +140,7 @@ export class Settings {
             enableBlending: _bool("blend"),
             enableDFRI: _bool("dfri"),
             DFRIMaxFrames: _int("dfri_max"),
-            particleInitType: ParticleInitType[_string("particle_init")],
+            particleInitTypeCode: _string("particle_init"),
             particleCount: _int("particle_count"),
             particleMass: _int("particle_mass"),
             resistance: _float("resistance"),
@@ -128,6 +151,36 @@ export class Settings {
             bufferCount: _int("buffers"),
             debug: _bool("debug"),
             stats: _bool("stats")
-        });
+        };
+
+        if (defaults) {
+            for (const [key, value] of Object.entries(defaults)) {
+                if (SERIALIZABLE_PROPS.includes(key) && configFromParams[key] === null) {
+                    configFromParams[key] = value;
+                }
+            }
+        }
+
+        return new Settings(configFromParams);
+    }
+
+    static async loadState() {
+        const urlSearchParams = new URLSearchParams(window.location.search);
+        const queryParams = Object.fromEntries(urlSearchParams.entries());
+
+        if (queryParams.state) {
+            try {
+                const data = await fetch(queryParams.state);
+                if (data.ok) {
+                    return data.json();
+                }
+
+                console.error(`Download failed. Code ${data.status}: ${data.statusText}`);
+            } catch (e) {
+                console.error("Unable to load state", e);
+            }
+        }
+
+        return null;
     }
 }

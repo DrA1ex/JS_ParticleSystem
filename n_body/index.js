@@ -1,132 +1,23 @@
-import {InteractionHandler} from "./render/base.js";
 import {RenderType, Settings} from "./utils/settings.js";
 import {CanvasRenderer} from "./render/canvas.js";
 import {Webgl2Renderer} from "./render/webgl/render.js";
-import {Debug} from "./utils/debug.js";
-import {DFRIHelper} from "./utils/dfri.js";
-import {ITEM_SIZE} from "./backend/worker.js";
+import {WorkerBackend} from "./backend/worker.js";
+import {Application} from "./app.js";
+
+
+const state = await Settings.loadState();
+const SettingsInstance = Settings.fromQueryParams(state?.settings);
 
 const RenderTypeMapping = {
     [RenderType.canvas]: CanvasRenderer,
     [RenderType.webgl2]: Webgl2Renderer,
     default: Webgl2Renderer
 }
-
-const SettingsInstance = Settings.fromQueryParams();
 const RendererClass = RenderTypeMapping[SettingsInstance.render] || RenderTypeMapping.default;
 const Renderer = new RendererClass(document.getElementById("canvas"), SettingsInstance);
-const DFRIHelperInstance = new DFRIHelper(Renderer, SettingsInstance);
-const DebugInstance = new Debug(Renderer, SettingsInstance);
 
-const InteractionHandlerInstance = new InteractionHandler(Renderer, SettingsInstance);
-InteractionHandlerInstance.enable();
+const WorkerBackendInstance = new WorkerBackend();
+const ApplicationInstance = new Application(SettingsInstance, Renderer, WorkerBackendInstance);
 
-const PhysicsWorker = new Worker("./backend/worker.js", {type: "module"});
-PhysicsWorker.onmessage = function (e) {
-    if (e.data.type === "data") {
-        onData(e.data);
-    }
-}
-
-const Particles = new Array(SettingsInstance.particleCount);
-for (let i = 0; i < SettingsInstance.particleCount; i++) {
-    Particles[i] = {x: 0, y: 0, velX: 0, velY: 0, mass: 0};
-}
-
-const AheadBuffers = [];
-let pendingBufferCount = 0;
-
-const refreshTime = 1000 / SettingsInstance.fps;
-let lastRenderTime = performance.now() - refreshTime;
-let ready = false;
-
-function onData(data) {
-    DFRIHelperInstance.postStepTime(performance.now() - data.timestamp);
-
-    if (!ready) {
-        const e = document.getElementById("wait");
-        e.style.display = "none";
-        ready = true;
-    }
-
-    AheadBuffers.push({buffer: data.buffer, treeDebug: data.treeDebug});
-    pendingBufferCount -= 1;
-
-    if (AheadBuffers.length + pendingBufferCount < SettingsInstance.bufferCount) {
-        requestNextStep();
-    }
-
-    if (SettingsInstance.stats) DebugInstance.importPhysicsStats(data);
-}
-
-function requestNextStep() {
-    pendingBufferCount += 1;
-    PhysicsWorker.postMessage({type: "step", timestamp: performance.now()});
-}
-
-function prepareNextStep() {
-    if (!DFRIHelperInstance.needSwitchBuffer()) {
-        return;
-    }
-
-    if (AheadBuffers.length === 0) {
-        if (SettingsInstance.enableDFRI) {
-            console.warn(`${performance.now().toFixed(0)} Next buffer not ready. Frames may be dropped`);
-        }
-        return;
-    }
-
-    const bufferEntry = AheadBuffers.shift();
-    const data = bufferEntry.buffer;
-    for (let i = 0; i < SettingsInstance.particleCount; i++) {
-        Particles[i].x = data[i * ITEM_SIZE];
-        Particles[i].y = data[i * ITEM_SIZE + 1];
-        Particles[i].velX = data[i * ITEM_SIZE + 2];
-        Particles[i].velY = data[i * ITEM_SIZE + 3];
-        Particles[i].mass = data[i * ITEM_SIZE + 4];
-    }
-
-    if (SettingsInstance.debug) DebugInstance.importTreeDebugData(bufferEntry.treeDebug);
-
-    PhysicsWorker.postMessage({type: "ack", buffer: data}, [data.buffer]);
-    requestNextStep();
-
-    if (SettingsInstance.enableDFRI && DFRIHelperInstance.needSwitchBuffer()) {
-        DFRIHelperInstance.bufferSwitched(Particles, AheadBuffers[0]);
-    }
-}
-
-function render(timestamp) {
-    if (!ready) {
-        lastRenderTime = timestamp;
-        requestAnimationFrame(render);
-        return;
-    }
-
-    prepareNextStep();
-    if (SettingsInstance.enableDFRI) {
-        DFRIHelperInstance.render(Particles);
-    } else {
-        Renderer.render(Particles);
-    }
-
-    if (SettingsInstance.debug) DebugInstance.drawTreeDebug();
-
-    const elapsed = timestamp - lastRenderTime;
-    DFRIHelperInstance.postRenderTime(elapsed);
-    if (SettingsInstance.stats) {
-        DebugInstance.renderTime = Renderer.stats.renderTime;
-        DebugInstance.bufferCount = AheadBuffers.length;
-        DebugInstance.interpolateFrames = DFRIHelperInstance.interpolateFrames;
-        DebugInstance.postFrameTime(elapsed);
-        DebugInstance.drawStats();
-    }
-
-    lastRenderTime = timestamp;
-    requestAnimationFrame(render);
-}
-
-PhysicsWorker.postMessage({type: "init", settings: SettingsInstance});
-
-requestNextStep();
-requestAnimationFrame(render);
+ApplicationInstance.init(state);
+ApplicationInstance.run();
