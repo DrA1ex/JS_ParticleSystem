@@ -172,7 +172,7 @@ export class Settings {
             try {
                 const data = await fetch(queryParams.state);
                 if (data.ok) {
-                    return data.json();
+                    return await data.json();
                 }
 
                 console.error(`Download failed. Code ${data.status}: ${data.statusText}`);
