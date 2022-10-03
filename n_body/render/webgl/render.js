@@ -38,7 +38,7 @@ export class Webgl2Renderer extends RendererBase {
     constructor(canvas, settings) {
         super(canvas, settings);
 
-        this.gl = canvas.getContext("webgl2");
+        this.gl = canvas.getContext("webgl2", {alpha: false});
         this._stateConfig = {};
 
         this._positionBufferData = new Float32Array(this.settings.particleCount * 2);
@@ -80,7 +80,7 @@ export class Webgl2Renderer extends RendererBase {
         }], this._stateConfig);
 
         this.gl.viewport(0, 0, this.canvasWidth, this.canvasHeight);
-        this.gl.clearColor(0, 0, 0, 0);
+        this.gl.clearColor(0, 0, 0, 1);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
     }
 
