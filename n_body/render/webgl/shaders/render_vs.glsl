@@ -18,7 +18,7 @@ void main() {
     gl_Position = vec4(translated_pos * vec2(1, -1.0), 0, 1);
     gl_PointSize = point_size * mass;
 
-    vec2 translated_velocity = 0.5 + velocity / max_speed / 2.0;
-    float translated_mass = 0.5 + mass / max_mass * 0.25;
-    color = vec3(translated_mass, translated_velocity.yx);
+    vec2 translated_velocity = 0.5 + velocity / max_speed * 0.5;
+    float translated_mass = 0.25 + mass / max_mass * 0.25;
+    color = vec3(translated_velocity.x, translated_mass, translated_velocity.y);
 }

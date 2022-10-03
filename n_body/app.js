@@ -147,7 +147,7 @@ export class Application {
             settings: this.settings.serialize(),
             particles: this.particles.map(p => [p.x, p.y, p.velX, p.velY, p.mass]),
             renderer: {
-                scale: this.renderer.scale,
+                scale: this.renderer.scale / this.renderer.dpr,
                 offset: {
                     left: this.renderer.xOffset / this.renderer.dpr,
                     top: this.renderer.yOffset / this.renderer.dpr

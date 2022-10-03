@@ -45,13 +45,13 @@ export class CanvasRenderer extends RendererBase {
             }
 
             this._maxSpeed = Math.max(this._maxSpeed, Math.abs(particle.velX), Math.abs(particle.velY));
-            const mass = 128 + Math.floor(particle.mass / (this.settings.particleMass + 1) * 64);
-            const xVelToColor = Math.floor(255 * (0.5 + particle.velX / this._maxSpeed / 2));
-            const yVelToColor = Math.floor(255 * (0.5 + particle.velY / this._maxSpeed / 2));
-            const color = 0xff000000 | xVelToColor << 16 | yVelToColor << 8 | mass;
+            const mass = Math.floor(255 * (0.25 + particle.mass / (this.settings.particleMass + 1) * 0.25));
+            const xVelToColor = Math.floor(255 * (0.5 + particle.velX / this._maxSpeed * 0.5));
+            const yVelToColor = Math.floor(255 * (0.5 + particle.velY / this._maxSpeed * 0.5));
+            const color = 0xff000000 | xVelToColor << 16 | mass << 8 | yVelToColor;
 
             const index = (Math.floor(x) + Math.floor(y) * this.canvasWidth);
-            if (this.settings.enableBlending && this._pixels[index]) {
+            if (this.settings.enableBlending) {
                 this._pixels[index] = this._blendColors(this._pixels[index], color);
             } else {
                 this._pixels[index] = color;
@@ -77,11 +77,11 @@ export class CanvasRenderer extends RendererBase {
             topG = top >> 8 & 0xff,
             topB = top & 0xff
 
-        const r = Math.min(255, Math.max(0, Math.floor((topR < 128) ? (bottomR + 2 * topR - 255) : (bottomR + topR))));
-        const g = Math.min(255, Math.max(0, Math.floor((topG < 128) ? (bottomG + 2 * topG - 255) : (bottomG + topG))));
-        const b = Math.min(255, Math.max(0, Math.floor((topB < 128) ? (bottomB + 2 * topB - 255) : (bottomB + topB))));
+        const r = Math.floor(Math.min(255, Math.max(0, topR * topR / 255 + bottomR)));
+        const g = Math.floor(Math.min(255, Math.max(0, topG * topG / 255 + bottomG)));
+        const b = Math.floor(Math.min(255, Math.max(0, topB * topB / 255 + bottomB)));
 
-        return 0xff000000 | r << 16 | g << 8 | ~~b;
+        return 0xff000000 | r << 16 | g << 8 | b;
     }
 
     drawWorldRect(x, y, width, height) {
