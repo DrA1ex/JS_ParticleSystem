@@ -145,7 +145,7 @@ export class Application {
     exportState() {
         const data = {
             settings: this.settings.serialize(),
-            particles: Particles.map(p => [p.x, p.y, p.velX, p.velY, p.mass]),
+            particles: this.particles.map(p => [p.x, p.y, p.velX, p.velY, p.mass]),
             renderer: {
                 scale: this.renderer.scale,
                 offset: {left: this.renderer.xOffset, top: this.renderer.yOffset}
