@@ -57,6 +57,8 @@ Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 - *blend* - Enable color blending (default: __1__)
 - *stats* - Display statistics (default: __1__)
 - *debug* - Debug mode (default: __0__)
+- *debug_tree* - Draw tree segments (default: __1__)
+- *debug_velocity* - Draw particles velocity vector (default: __0__)
 - *state* - Url to exported system state (default: __none__)
 
 

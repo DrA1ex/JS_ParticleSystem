@@ -93,16 +93,30 @@ export class RendererBase {
 
     /**
      * @abstract
+     * @return {CanvasRenderingContext2D}
+     */
+    getDebugDrawingContext() {
+        throw new Error("Not implemented");
+    }
+
+    /**
      * @param {string|null} stroke
      * @param {string|null} fill
      * @return {void}
      */
     setDrawStyle(stroke, fill) {
-        throw new Error("Not implemented");
+        if (this._errorIfNotDebug()) return;
+        const ctx = this.getDebugDrawingContext();
+
+        if (stroke) {
+            ctx.strokeStyle = stroke;
+        }
+        if (fill) {
+            ctx.fillStyle = fill;
+        }
     }
 
     /**
-     * @abstract
      * @param {number} x
      * @param {number} y
      * @param {number} width
@@ -110,7 +124,41 @@ export class RendererBase {
      * @return {void}
      */
     drawWorldRect(x, y, width, height) {
-        throw new Error("Not implemented");
+        if (this._errorIfNotDebug()) return;
+        const ctx = this.getDebugDrawingContext();
+
+        ctx.beginPath()
+        ctx.rect(
+            this.xOffset + x * this.scale, this.yOffset + y * this.scale,
+            width * this.scale, height * this.scale
+        );
+        ctx.stroke();
+    }
+
+    /**
+     * @param {number} x1
+     * @param {number} y1
+     * @param {number} x2
+     * @param {number} y2
+     * @return {void}
+     */
+    drawWorldLine(x1, y1, x2, y2) {
+        if (this._errorIfNotDebug()) return;
+        const ctx = this.getDebugDrawingContext();
+
+        ctx.beginPath();
+        ctx.moveTo(this.xOffset + x1 * this.scale, this.yOffset + y1 * this.scale);
+        ctx.lineTo(this.xOffset + x2 * this.scale, this.yOffset + y2 * this.scale);
+        ctx.stroke();
+    }
+
+    _errorIfNotDebug() {
+        if (!this.settings.debug) {
+            console.error("Allowed only in debug mode");
+            return true;
+        }
+
+        return false;
     }
 }
 

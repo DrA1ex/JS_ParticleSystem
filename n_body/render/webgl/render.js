@@ -105,6 +105,7 @@ export class Webgl2Renderer extends RendererBase {
 
         this.debugCanvas = debugCanvas;
         this.debugCtx = this.debugCanvas.getContext("2d");
+        this.debugCtx.lineWidth = this.dpr;
     }
 
     render(particles) {
@@ -162,31 +163,7 @@ export class Webgl2Renderer extends RendererBase {
         ], this._stateConfig)
     }
 
-    drawWorldRect(x, y, width, height) {
-        if (!this.settings.debug) {
-            console.error("Allowed only in debug mode");
-            return;
-        }
-
-        this.debugCtx.beginPath()
-        this.debugCtx.rect(
-            this.xOffset + x * this.scale, this.yOffset + y * this.scale,
-            width * this.scale, height * this.scale
-        );
-        this.debugCtx.stroke();
-    }
-
-    setDrawStyle(stroke, fill) {
-        if (!this.settings.debug) {
-            console.error("Allowed only in debug mode");
-            return;
-        }
-
-        if (stroke) {
-            this.debugCtx.strokeStyle = stroke;
-        }
-        if (fill) {
-            this.debugCtx.fillStyle = fill;
-        }
+    getDebugDrawingContext() {
+        return this.debugCtx;
     }
 }

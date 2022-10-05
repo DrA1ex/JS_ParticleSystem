@@ -80,21 +80,7 @@ export class CanvasRenderer extends RendererBase {
         return 0xff000000 | r << 16 | g << 8 | b;
     }
 
-    drawWorldRect(x, y, width, height) {
-        this.ctx.beginPath()
-        this.ctx.rect(
-            this.xOffset + x * this.scale, this.yOffset + y * this.scale,
-            width * this.scale, height * this.scale
-        );
-        this.ctx.stroke();
-    }
-
-    setDrawStyle(stroke, fill) {
-        if (stroke) {
-            this.ctx.strokeStyle = stroke;
-        }
-        if (fill) {
-            this.ctx.fillStyle = fill;
-        }
+    getDebugDrawingContext() {
+        return this.ctx;
     }
 }

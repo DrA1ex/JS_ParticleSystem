@@ -44,6 +44,8 @@ export class Settings {
     segmentMaxCount = 32;
 
     debug = false;
+    debugTree = null;
+    debugVelocity = false;
     stats = true;
 
     worldWidth = 1920;
@@ -61,7 +63,7 @@ export class Settings {
             this.render = this.isMobile ? RenderType.canvas : RenderType.webgl2;
         }
 
-        if (!this.useDpr) {
+        if (this.useDpr === null) {
             this.useDpr = this.render === RenderType.webgl2;
         }
 
@@ -71,6 +73,10 @@ export class Settings {
 
         if (this.particleInitTypeCode) {
             this.particleInitType = ParticleInitType[this.particleInitTypeCode] ?? this.particleInitTypeCode;
+        }
+
+        if (this.debugTree === null) {
+            this.debugTree = this.debug;
         }
 
         this.particleGravity = this.gravity / this.particleCount;
@@ -155,6 +161,8 @@ export class Settings {
             segmentMaxCount: _int("segment_max_count"),
             bufferCount: _int("buffers"),
             debug: _bool("debug"),
+            debugTree: _bool("debug_tree"),
+            debugVelocity: _bool("debug_velocity"),
             stats: _bool("stats")
         };
 

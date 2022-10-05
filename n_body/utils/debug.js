@@ -75,6 +75,14 @@ export class Debug {
         }
     }
 
+    drawVelocityDebug(particles) {
+        this.renderer.setDrawStyle("#ff00e5", null);
+        for (let i = 0; i < this.settings.particleCount; i++) {
+            const p = particles[i];
+            this.renderer.drawWorldLine(p.x, p.y, p.x + p.velX * 10, p.y + p.velY * 10);
+        }
+    }
+
     importPhysicsStats(physics) {
         this.physicsTime = physics.stats.physicsTime;
         this.treeTime = physics.stats.treeTime;
