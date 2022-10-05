@@ -2,27 +2,7 @@ import {BackendBase, BackendImpl, WorkerHandler} from "./base.js";
 
 export class WorkerBackend extends BackendBase {
     constructor() {
-        super();
-
-        this._worker = new Worker("./backend/worker.js", {type: "module"});
-    }
-
-    init(onDataFn, settings, particles = null) {
-        this._worker.onmessage = function (e) {
-            if (e.data.type === "data") {
-                onDataFn(e.data);
-            }
-        }
-
-        this._worker.postMessage({type: "init", settings, state: particles});
-    }
-
-    freeBuffer(buffer) {
-        this._worker.postMessage({type: "ack", buffer}, [buffer.buffer]);
-    }
-
-    requestNextStep() {
-        this._worker.postMessage({type: "step", timestamp: performance.now()});
+        super("./backend/gpgpu.js");
     }
 }
 

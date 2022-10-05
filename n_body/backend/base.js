@@ -9,28 +9,41 @@ export const ITEM_SIZE = 5;
 
 export class BackendBase {
     /**
-     * @abstract
+     * @param {string} workerPath
+     */
+    constructor(workerPath) {
+        this._worker = new Worker(workerPath, {type: "module"});
+    }
+
+    /**
      * @param {function(StepResult):void} onDataFn
      * @param {Settings} settings
      * @param {Particle[]=null} particles
      * @return {void}
      */
     init(onDataFn, settings, particles = null) {
+        this._worker.onmessage = function (e) {
+            if (e.data.type === "data") {
+                onDataFn(e.data);
+            }
+        }
+
+        this._worker.postMessage({type: "init", settings, state: particles});
     }
 
     /**
-     * @abstract
      * @param {Float32Array} buffer
      * @return {void}
      */
     freeBuffer(buffer) {
+        this._worker.postMessage({type: "ack", buffer}, [buffer.buffer]);
     }
 
     /**
-     * @abstract
      * @return {void}
      */
     requestNextStep() {
+        this._worker.postMessage({type: "step", timestamp: performance.now()});
     }
 }
 
