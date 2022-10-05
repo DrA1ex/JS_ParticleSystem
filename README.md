@@ -45,7 +45,7 @@ Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 - *segment_max_count* - Max particle count in segment, larger values increase accuracy (default: __32__)
 - *g* - Attraction force (default: __1__)
 - *particle_mass* - Particle mass variance (default: __0__)
-- *min_distance* - Minimal distance (pixels) to process interactions (default: __10__)
+- *min_distance* - Minimal distance (pixels) to process interactions (default: __0.01__)
 - *resistance* - Resistance of environment, *1* - means no resistance (default: __1__)
 - *render* - Configure renderer type: __canvas__, __webgl2__ (default: __canvas__ for mobile, __webgl__ for desktop)
 - *dpr* - Enable drawing according to Device Pixel Ratio (default: __0__)
