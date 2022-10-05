@@ -1,4 +1,4 @@
-import {ITEM_SIZE} from "../backend/worker.js";
+import {ITEM_SIZE} from "../backend/base.js";
 import {DataSmoother} from "./smoother.js";
 
 export class DFRIHelper {

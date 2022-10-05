@@ -1,9 +1,9 @@
-import {ParticleInitializer, PhysicsEngine} from "../simulation/physics.js";
+import {BackendBase, BackendImpl} from "./base.js";
 
-export const ITEM_SIZE = 5;
-
-export class WorkerBackend {
+export class WorkerBackend extends BackendBase {
     constructor() {
+        super();
+
         this._worker = new Worker("./backend/worker.js", {type: "module"});
     }
 
@@ -26,107 +26,86 @@ export class WorkerBackend {
     }
 }
 
-let Settings;
-let Particles;
-let PhysicsEngineInstance;
+class WorkerBackendImpl extends BackendImpl {
+    constructor() {
+        super();
 
-const Buffers = [];
+        this._particleForces = [];
+    }
+
+    init(settings, state) {
+        super.init(settings, state);
+
+        if (this.settings.debug && this.settings.debugForce) {
+            this._particleForces = new Array(this.settings.particleCount);
+            for (let i = 0; i < this._particleForces.length; i++) {
+                this._particleForces[i] = {forceX: 0, forceY: 0};
+            }
+        }
+    }
+
+    step(timestamp) {
+        this._beforeStep();
+
+        const data = super.step(timestamp);
+        if (!data) {
+            return null;
+        }
+
+        return {
+            ...data,
+            forceDebug: this._getCalculatedForces()
+        }
+    }
+
+    _beforeStep() {
+        if (this.settings.debug && this.settings.debugForce) {
+            for (let i = 0; i < this.settings.particleCount; i++) {
+                this.particles[i].forceX = 0;
+                this.particles[i].forceY = 0;
+            }
+        }
+    }
+
+    _getCalculatedForces() {
+        if (this.settings.debug && this.settings.debugForce) {
+            for (let i = 0; i < this.settings.particleCount; i++) {
+                this._particleForces[i] = {
+                    forceX: this.particles[i].forceX,
+                    forceY: this.particles[i].forceY
+                }
+            }
+        }
+
+        return this._particleForces;
+    }
+}
+
+const Backend = new WorkerBackendImpl();
 
 onmessage = function (e) {
     const {type} = e.data;
     switch (type) {
-        case "init":
-            init(e.data);
+        case "init": {
+            const {settings, state} = e.data;
+            Backend.init(settings, state);
+        }
             break;
 
-        case "ack":
-            ack(e.data);
+        case "ack": {
+            const {buffer} = e.data;
+            Backend.ack(buffer);
+        }
             break;
 
-        case "step":
-            step(e.data);
-            break;
-    }
-}
+        case "step": {
+            const {timestamp} = e.data;
 
-function init(data) {
-    const {settings, state} = data;
-
-    Settings = settings;
-    PhysicsEngineInstance = new PhysicsEngine(Settings);
-    Particles = ParticleInitializer.initialize(Settings);
-
-    if (state && state.length > 0) {
-        const size = Math.min(state.length, Settings.particleCount);
-        for (let i = 0; i < size; i++) {
-            const [x, y, velX, velY, mass] = state[i];
-            Particles[i].x = x;
-            Particles[i].y = y;
-            Particles[i].velX = velX;
-            Particles[i].velY = velY;
-            Particles[i].mass = mass;
-        }
-    }
-
-    for (let i = 0; i < Settings.bufferCount; i++) {
-        Buffers.push(new Float32Array(Settings.particleCount * ITEM_SIZE));
-    }
-}
-
-function ack(data) {
-    if (Buffers.length < Settings.bufferCount) {
-        Buffers.push(data.buffer);
-    } else {
-        console.error("Unexpected ack: buffers already fulfilled");
-    }
-}
-
-function step(data) {
-    if (Buffers.length === 0) {
-        console.error("Unexpected step: buffer is not ready");
-        return;
-    }
-
-    if (Settings.debug && Settings.debugForce) {
-        for (let i = 0; i < Settings.particleCount; i++) {
-            Particles[i].forceX = 0;
-            Particles[i].forceY = 0;
-        }
-    }
-
-    const tree = PhysicsEngineInstance.step(Particles);
-
-    const buffer = Buffers.shift();
-    for (let i = 0; i < Settings.particleCount; i++) {
-        buffer[i * ITEM_SIZE] = Particles[i].x;
-        buffer[i * ITEM_SIZE + 1] = Particles[i].y;
-        buffer[i * ITEM_SIZE + 2] = Particles[i].velX;
-        buffer[i * ITEM_SIZE + 3] = Particles[i].velY;
-        buffer[i * ITEM_SIZE + 4] = Particles[i].mass;
-    }
-
-    let forceDebug = null
-    if (Settings.debug && Settings.debugForce) {
-        forceDebug = new Array(Settings.particleCount);
-        for (let i = 0; i < Settings.particleCount; i++) {
-            forceDebug[i] = {forceX: Particles[i].forceX, forceY: Particles[i].forceY}
-        }
-    }
-
-    postMessage({
-        type: "data",
-        timestamp: data.timestamp,
-        buffer: buffer,
-        treeDebug: Settings.debug && Settings.debugTree ? tree.getDebugData() : [],
-        forceDebug: Settings.debug && Settings.debugForce ? forceDebug : [],
-        stats: {
-            physicsTime: PhysicsEngineInstance.stats.physicsTime,
-            treeTime: PhysicsEngineInstance.stats.treeTime,
-            tree: {
-                flops: PhysicsEngineInstance.stats.tree.flops,
-                depth: PhysicsEngineInstance.stats.tree.depth,
-                segmentCount: PhysicsEngineInstance.stats.tree.segmentCount
+            const data = Backend.step(timestamp);
+            if (data) {
+                postMessage({type: "data", ...data,}, [data.buffer.buffer]);
             }
         }
-    }, [buffer.buffer]);
+            break;
+    }
 }

@@ -1,7 +1,7 @@
 import {InteractionHandler} from "./render/base.js";
 import {Debug} from "./utils/debug.js";
 import {DFRIHelper} from "./utils/dfri.js";
-import {ITEM_SIZE} from "./backend/worker.js";
+import {ITEM_SIZE} from "./backend/base.js";
 import * as FileUtils from "./utils/file.js";
 
 export class Application {
