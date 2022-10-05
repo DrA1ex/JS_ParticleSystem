@@ -89,42 +89,11 @@ export class BackendImpl {
     }
 
     /**
-     *
+     * @abstract
      * @param {number} timestamp
      * @return {?StepResult}
      */
     step(timestamp) {
-        if (this.buffers.length === 0) {
-            console.error("Unexpected step: buffer is not ready");
-            return null;
-        }
-
-        const tree = this.physicalEngine.step(this.particles);
-
-        const buffer = this.buffers.shift();
-        for (let i = 0; i < this.settings.particleCount; i++) {
-            buffer[i * ITEM_SIZE] = this.particles[i].x;
-            buffer[i * ITEM_SIZE + 1] = this.particles[i].y;
-            buffer[i * ITEM_SIZE + 2] = this.particles[i].velX;
-            buffer[i * ITEM_SIZE + 3] = this.particles[i].velY;
-            buffer[i * ITEM_SIZE + 4] = this.particles[i].mass;
-        }
-
-        return {
-            timestamp: timestamp,
-            buffer: buffer,
-            treeDebug: this.settings.debugTree ? tree.getDebugData() : [],
-            forceDebug: [],
-            stats: {
-                physicsTime: this.physicalEngine.stats.physicsTime,
-                treeTime: this.physicalEngine.stats.treeTime,
-                tree: {
-                    flops: this.physicalEngine.stats.tree.flops,
-                    depth: this.physicalEngine.stats.tree.depth,
-                    segmentCount: this.physicalEngine.stats.tree.segmentCount
-                }
-            }
-        }
     }
 }
 
