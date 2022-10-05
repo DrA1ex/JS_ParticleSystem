@@ -46,7 +46,7 @@ export class Settings {
     debug = false;
     debugTree = null;
     debugVelocity = false;
-    debugForce = false;
+    debugForce = null;
     stats = true;
 
     worldWidth = 1920;
@@ -76,12 +76,17 @@ export class Settings {
             this.particleInitType = ParticleInitType[this.particleInitTypeCode] ?? this.particleInitTypeCode;
         }
 
-        if (this.debugTree === null) {
-            this.debugTree = this.debug;
-        }
-
-        if (this.debugForce === null) {
-            this.debugForce = this.debugVelocity;
+        if (!this.debug) {
+            this.debugTree = false;
+            this.debugVelocity = false;
+            this.debugForce = false;
+        } else {
+            if (this.debugTree === null) {
+                this.debugTree = this.debug;
+            }
+            if (this.debugForce === null) {
+                this.debugForce = this.debugVelocity;
+            }
         }
 
         this.particleGravity = this.gravity / this.particleCount;

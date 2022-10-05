@@ -2,7 +2,7 @@ import {BackendBase, BackendImpl, WorkerHandler} from "./base.js";
 
 export class WorkerBackend extends BackendBase {
     constructor() {
-        super("./backend/gpgpu.js");
+        super("./backend/worker.js");
     }
 }
 
@@ -16,7 +16,7 @@ class WorkerBackendImpl extends BackendImpl {
     init(settings, state) {
         super.init(settings, state);
 
-        if (this.settings.debug && this.settings.debugForce) {
+        if (this.settings.debugForce) {
             this._particleForces = new Array(this.settings.particleCount);
             for (let i = 0; i < this._particleForces.length; i++) {
                 this._particleForces[i] = {forceX: 0, forceY: 0};
@@ -39,7 +39,7 @@ class WorkerBackendImpl extends BackendImpl {
     }
 
     _beforeStep() {
-        if (this.settings.debug && this.settings.debugForce) {
+        if (this.settings.debugForce) {
             for (let i = 0; i < this.settings.particleCount; i++) {
                 this.particles[i].forceX = 0;
                 this.particles[i].forceY = 0;
@@ -48,7 +48,7 @@ class WorkerBackendImpl extends BackendImpl {
     }
 
     _getCalculatedForces() {
-        if (this.settings.debug && this.settings.debugForce) {
+        if (this.settings.debugForce) {
             for (let i = 0; i < this.settings.particleCount; i++) {
                 this._particleForces[i] = {
                     forceX: this.particles[i].forceX,

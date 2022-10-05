@@ -300,7 +300,7 @@ export class PhysicsEngine {
                 this._calculateLeaf(blocks[i], iForce);
             }
         } else {
-            const accumulateForce = this.settings.debug && this.settings.debugForce;
+            const accumulateForce = this.settings.debugForce;
             for (let i = 0; i < leaf.length; i++) {
                 const attractor = leaf.data[i];
                 attractor.velX += pForce[0] / attractor.mass;

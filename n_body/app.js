@@ -100,8 +100,8 @@ export class Application {
             this.particles[i].mass = data[i * ITEM_SIZE + 4];
         }
 
-        if (this.settings.debug && this.settings.debugTree) this._debug.importTreeDebugData(bufferEntry.treeDebug);
-        if (this.settings.debug && this.settings.debugForce) this._debug.importForceDebugData(bufferEntry.forceDebug);
+        if (this.settings.debugTree) this._debug.importTreeDebugData(bufferEntry.treeDebug);
+        if (this.settings.debugForce) this._debug.importForceDebugData(bufferEntry.forceDebug);
 
         this.backend.freeBuffer(data);
         this.requestNextStep();
@@ -130,10 +130,8 @@ export class Application {
             this.renderer.render(this.particles);
         }
 
-        if (this.settings.debug) {
-            if (this.settings.debugTree) this._debug.drawTreeDebug();
-            if (this.settings.debugForce || this.settings.debugVelocity) this._debug.drawVelocityDebug(this.particles);
-        }
+        if (this.settings.debugTree) this._debug.drawTreeDebug();
+        if (this.settings.debugForce || this.settings.debugVelocity) this._debug.drawVelocityDebug(this.particles);
 
         const elapsed = timestamp - this.lastRenderTime;
         this._dfriHelper.postRenderTime(elapsed);

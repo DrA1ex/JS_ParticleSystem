@@ -113,7 +113,7 @@ export class BackendImpl {
         return {
             timestamp: timestamp,
             buffer: buffer,
-            treeDebug: this.settings.debug && this.settings.debugTree ? tree.getDebugData() : [],
+            treeDebug: this.settings.debugTree ? tree.getDebugData() : [],
             forceDebug: [],
             stats: {
                 physicsTime: this.physicalEngine.stats.physicsTime,
