@@ -166,7 +166,7 @@ export class Settings {
             particleMass: _int("particle_mass"),
             resistance: _float("resistance"),
             gravity: _float("g"),
-            minInteractionDistance: _int("min_distance"),
+            minInteractionDistance: _float("min_distance"),
             segmentDivider: _int("segment_divider"),
             segmentMaxCount: _int("segment_max_count"),
             bufferCount: _int("buffers"),
