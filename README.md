@@ -40,7 +40,7 @@ Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 ### Parameters:
 
 - *particle_count* - Count of particles to simulate (default: __10000__ for mobile, __20000__ for desktop)
-- *particle_init* - Particle initialization, values: __circle__, __disk__, __bang__, __uniform__ (default: __circle__)
+- *particle_init* - Particle initialization, values: __circle__, __disk__, __bang__, __uniform__, __rotation__, __collision__ (default: __circle__)
 - *segment_divider* - Spatial subdivision factor while segmentation (default: __2__)
 - *segment_max_count* - Max particle count in segment, larger values increase accuracy (default: __32__)
 - *g* - Attraction force (default: __1__)

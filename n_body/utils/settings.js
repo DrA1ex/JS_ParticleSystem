@@ -2,7 +2,9 @@ export const ParticleInitType = {
     circle: 0,
     uniform: 1,
     bang: 2,
-    disk: 3
+    disk: 3,
+    rotation: 4,
+    collision: 5
 }
 
 export const RenderType = {
@@ -11,8 +13,7 @@ export const RenderType = {
 }
 
 const SERIALIZABLE_PROPS = [
-    "render", "enableFilter", "enableBlending", "enableDFRI", "DFRIMaxFrames",
-    "particleCount", "resistance", "gravity", "minInteractionDistance",
+    "render", "enableFilter", "enableBlending", "particleCount", "resistance", "gravity", "minInteractionDistance",
     "segmentDivider", "segmentMaxCount", "bufferCount",
 ];
 
