@@ -61,7 +61,7 @@ export class Settings {
         }
 
         if (!this.useDpr) {
-            this.useDpr = this.isMobile ? false : this.render === RenderType.webgl2
+            this.useDpr = this.render === RenderType.webgl2;
         }
 
         if (!this.particleCount) {

@@ -31,14 +31,14 @@ export class RendererBase {
         const yDiff = this.canvasHeight / this.settings.worldHeight;
 
         this.scale = Math.min(xDiff, yDiff);
-
-        this.xOffset = (this.canvasWidth - this.settings.worldWidth * this.scale) / 2;
-        this.yOffset = (this.canvasHeight - this.settings.worldHeight * this.scale) / 2;
+        this.setCenterRelativeOffset(0, 0);
 
         this.canvas.style.width = rect.width + "px";
         this.canvas.style.height = rect.height + "px";
         this.canvas.width = this.canvasWidth;
         this.canvas.height = this.canvasHeight;
+
+        this._hueAngle = 0;
     }
 
     scaleCentered(factor) {
@@ -59,6 +59,18 @@ export class RendererBase {
         this.yOffset += yDelta * this.dpr;
     }
 
+    centeredRelativeOffset() {
+        return {
+            xCenterOffset: (this.xOffset - this.canvasWidth / 2 + this.settings.worldWidth * this.scale / 2) / this.canvasWidth,
+            yCenterOffset: (this.yOffset - this.canvasHeight / 2 + this.settings.worldHeight * this.scale / 2) / this.canvasHeight
+        };
+    }
+
+    setCenterRelativeOffset(x, y) {
+        this.xOffset = (this.canvasWidth - this.settings.worldWidth * this.scale) / 2 + x * this.canvasWidth;
+        this.yOffset = (this.canvasHeight - this.settings.worldHeight * this.scale) / 2 + y * this.canvasHeight;
+    }
+
     /**
      *
      * @param {function(index: number, particle: Particle, out: PositionVector): void} fn
@@ -73,7 +85,10 @@ export class RendererBase {
      * @return {void}
      */
     render(particles) {
-        throw new Error("Not implemented");
+        if (this.settings.enableFilter) {
+            this.canvas.style.filter = `brightness(2) hue-rotate(${this._hueAngle % 360}deg)`;
+            this._hueAngle += 0.2;
+        }
     }
 
     /**

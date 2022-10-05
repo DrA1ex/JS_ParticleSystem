@@ -34,8 +34,11 @@ export class Application {
     init(state = null) {
         if (state?.renderer?.scale) {
             this.renderer.scale = state.renderer.scale * this.renderer.dpr;
-            this.renderer.xOffset = state.renderer.offset.left * this.renderer.dpr;
-            this.renderer.yOffset = state.renderer.offset.top * this.renderer.dpr;
+        }
+
+        if (state?.renderer?.relativeOffset) {
+            const {xCenterOffset: x, yCenterOffset: y} = state.renderer.relativeOffset;
+            this.renderer.setCenterRelativeOffset(x, y);
         }
 
         this.particles = new Array(this.settings.particleCount);
@@ -148,10 +151,7 @@ export class Application {
             particles: this.particles.map(p => [p.x, p.y, p.velX, p.velY, p.mass]),
             renderer: {
                 scale: this.renderer.scale / this.renderer.dpr,
-                offset: {
-                    left: this.renderer.xOffset / this.renderer.dpr,
-                    top: this.renderer.yOffset / this.renderer.dpr
-                }
+                relativeOffset: this.renderer.centeredRelativeOffset()
             }
         }
 

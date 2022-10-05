@@ -22,6 +22,7 @@ export class CanvasRenderer extends RendererBase {
      */
     render(particles) {
         const t = performance.now();
+        super.render(particles);
 
         for (let i = 0; i < this._pixels.length; i++) {
             this._pixels[i] = 0;
@@ -59,11 +60,6 @@ export class CanvasRenderer extends RendererBase {
         }
 
         this.ctx.putImageData(this._renderImageData, 0, 0);
-
-        if (this.settings.enableFilter) {
-            this.canvas.style.filter = `brightness(2) hue-rotate(${this._hueAngle % 360}deg)`;
-            this._hueAngle += 0.2;
-        }
 
         this.stats.renderTime = performance.now() - t;
     }
