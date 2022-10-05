@@ -366,7 +366,7 @@ export class PhysicsEngine {
 
         function _processLeaf(parent) {
             if (parent.children.length === 0) {
-                flops += Math.pow(parent.data.length * flopsPerOp, 2);
+                flops += Math.pow(parent.data.length, 2) * flopsPerOp;
                 return;
             }
 
@@ -374,7 +374,7 @@ export class PhysicsEngine {
                 _processLeaf(parent.children[i]);
             }
 
-            flops += Math.pow(parent.children.length * flopsPerOp, 2);
+            flops += Math.pow(parent.children.length, 2) * flopsPerOp;
         }
 
         _processLeaf(tree.root);
