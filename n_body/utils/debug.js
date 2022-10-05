@@ -12,6 +12,7 @@ export class Debug {
     physicsTime = 0;
     renderTime = 0;
     treeDebugData = [];
+    forceDebugData = [];
 
     constructor(renderer, settings) {
         this.renderer = renderer;
@@ -76,10 +77,21 @@ export class Debug {
     }
 
     drawVelocityDebug(particles) {
-        this.renderer.setDrawStyle("#ff00e5", null);
-        for (let i = 0; i < this.settings.particleCount; i++) {
-            const p = particles[i];
-            this.renderer.drawWorldLine(p.x, p.y, p.x + p.velX * 10, p.y + p.velY * 10);
+        if (this.settings.debugVelocity) {
+            this.renderer.setDrawStyle("#ff00e5", null);
+            for (let i = 0; i < this.settings.particleCount; i++) {
+                const p = particles[i];
+                this.renderer.drawWorldLine(p.x, p.y, p.x + p.velX * 5, p.y + p.velY * 5);
+            }
+        }
+
+        if (this.settings.debugForce) {
+            this.renderer.setDrawStyle("#ff9900", null);
+            for (let i = 0; i < this.forceDebugData.length; i++) {
+                const p = particles[i];
+                const {forceX, forceY} = this.forceDebugData[i];
+                this.renderer.drawWorldLine(p.x, p.y, p.x + forceX * 50, p.y + forceY * 50);
+            }
         }
     }
 
@@ -93,5 +105,9 @@ export class Debug {
 
     importTreeDebugData(data) {
         this.treeDebugData = data;
+    }
+
+    importForceDebugData(data) {
+        this.forceDebugData = data;
     }
 }

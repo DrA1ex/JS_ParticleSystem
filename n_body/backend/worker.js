@@ -87,6 +87,13 @@ function step(data) {
         return;
     }
 
+    if (Settings.debug && Settings.debugForce) {
+        for (let i = 0; i < Settings.particleCount; i++) {
+            Particles[i].forceX = 0;
+            Particles[i].forceY = 0;
+        }
+    }
+
     const tree = PhysicsEngineInstance.step(Particles);
 
     const buffer = Buffers.shift();
@@ -98,11 +105,20 @@ function step(data) {
         buffer[i * ITEM_SIZE + 4] = Particles[i].mass;
     }
 
+    let forceDebug = null
+    if (Settings.debug && Settings.debugForce) {
+        forceDebug = new Array(Settings.particleCount);
+        for (let i = 0; i < Settings.particleCount; i++) {
+            forceDebug[i] = {forceX: Particles[i].forceX, forceY: Particles[i].forceY}
+        }
+    }
+
     postMessage({
         type: "data",
         timestamp: data.timestamp,
         buffer: buffer,
-        treeDebug: Settings.debug ? tree.getDebugData() : [],
+        treeDebug: Settings.debug && Settings.debugTree ? tree.getDebugData() : [],
+        forceDebug: Settings.debug && Settings.debugForce ? forceDebug : [],
         stats: {
             physicsTime: PhysicsEngineInstance.stats.physicsTime,
             treeTime: PhysicsEngineInstance.stats.treeTime,

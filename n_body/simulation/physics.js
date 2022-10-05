@@ -300,6 +300,7 @@ export class PhysicsEngine {
                 this._calculateLeaf(blocks[i], iForce);
             }
         } else {
+            const accumulateForce = this.settings.debug && this.settings.debugForce;
             for (let i = 0; i < leaf.length; i++) {
                 const attractor = leaf.data[i];
                 attractor.velX += pForce[0] / attractor.mass;
@@ -309,7 +310,7 @@ export class PhysicsEngine {
                     if (i === j) continue;
 
                     const particle = leaf.data[j];
-                    this._calculateForce(particle, attractor, this.settings.particleGravity * attractor.mass, particle);
+                    this._calculateForce(particle, attractor, this.settings.particleGravity * attractor.mass, particle, accumulateForce);
                 }
             }
         }
@@ -320,9 +321,10 @@ export class PhysicsEngine {
      * @param {PositionVector} p2
      * @param {number} g
      * @param {Particle|[number,number]} out
+     * @param {boolean=false} accumulateForce
      * @private
      */
-    _calculateForce(p1, p2, g, out) {
+    _calculateForce(p1, p2, g, out, accumulateForce = false) {
         const dx = p1.x - p2.x,
             dy = p1.y - p2.y;
 
@@ -335,6 +337,11 @@ export class PhysicsEngine {
             if (out.velX !== undefined) {
                 out.velX += dx * force / out.mass;
                 out.velY += dy * force / out.mass;
+
+                if (accumulateForce) {
+                    out.forceX += dx * force / out.mass;
+                    out.forceY += dy * force / out.mass;
+                }
             } else {
                 out[0] += dx * force;
                 out[1] += dy * force;

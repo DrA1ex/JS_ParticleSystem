@@ -13,7 +13,7 @@ export const RenderType = {
 }
 
 const SERIALIZABLE_PROPS = [
-    "render", "enableFilter", "enableBlending", "particleCount", "resistance", "gravity", "minInteractionDistance",
+    "enableFilter", "enableBlending", "particleCount", "resistance", "gravity", "minInteractionDistance",
     "segmentDivider", "segmentMaxCount", "bufferCount",
 ];
 
@@ -46,6 +46,7 @@ export class Settings {
     debug = false;
     debugTree = null;
     debugVelocity = false;
+    debugForce = false;
     stats = true;
 
     worldWidth = 1920;
@@ -77,6 +78,10 @@ export class Settings {
 
         if (this.debugTree === null) {
             this.debugTree = this.debug;
+        }
+
+        if (this.debugForce === null) {
+            this.debugForce = this.debugVelocity;
         }
 
         this.particleGravity = this.gravity / this.particleCount;
@@ -163,6 +168,7 @@ export class Settings {
             debug: _bool("debug"),
             debugTree: _bool("debug_tree"),
             debugVelocity: _bool("debug_velocity"),
+            debugForce: _bool("debug_force"),
             stats: _bool("stats")
         };
 

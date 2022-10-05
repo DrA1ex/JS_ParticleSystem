@@ -68,7 +68,7 @@ export class Application {
             this.ready = true;
         }
 
-        this.aheadBuffers.push({buffer: data.buffer, treeDebug: data.treeDebug});
+        this.aheadBuffers.push({buffer: data.buffer, treeDebug: data.treeDebug, forceDebug: data.forceDebug});
         this.pendingBufferCount -= 1;
 
         if (this.aheadBuffers.length + this.pendingBufferCount < this.settings.bufferCount) {
@@ -101,6 +101,7 @@ export class Application {
         }
 
         if (this.settings.debug && this.settings.debugTree) this._debug.importTreeDebugData(bufferEntry.treeDebug);
+        if (this.settings.debug && this.settings.debugForce) this._debug.importForceDebugData(bufferEntry.forceDebug);
 
         this.backend.freeBuffer(data);
         this.requestNextStep();
@@ -129,8 +130,10 @@ export class Application {
             this.renderer.render(this.particles);
         }
 
-        if (this.settings.debug && this.settings.debugTree) this._debug.drawTreeDebug();
-        if (this.settings.debug && this.settings.debugVelocity) this._debug.drawVelocityDebug(this.particles);
+        if (this.settings.debug) {
+            if (this.settings.debugTree) this._debug.drawTreeDebug();
+            if (this.settings.debugForce || this.settings.debugVelocity) this._debug.drawVelocityDebug(this.particles);
+        }
 
         const elapsed = timestamp - this.lastRenderTime;
         this._dfriHelper.postRenderTime(elapsed);
