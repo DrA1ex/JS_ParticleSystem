@@ -14,19 +14,16 @@ export class Debug {
     treeDebugData = [];
     forceDebugData = [];
 
-    constructor(renderer, settings) {
+    constructor(renderer, backend, settings) {
         this.renderer = renderer;
+        this.backend = backend;
         this.settings = settings;
 
         this.frameRateSmoother = new DataSmoother(this.settings.fps, 3, true);
 
         if (settings.stats) {
             const div = document.createElement("div");
-            div.style.position = "absolute";
-            div.style.bottom = "4px";
-            div.style.left = "4px";
-            div.style.color = "white";
-            div.style.pointerEvents = "none";
+            div.id = "stats";
 
             document.body.appendChild(div);
             this.infoElem = div;
@@ -61,6 +58,7 @@ export class Debug {
             `- physics calc: ${this.physicsTime.toFixed(1)} ms`,
             `- render: ${this.renderTime.toFixed(1)} ms`,
             `renderer: ${this.renderer.constructor.name} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
+            `backend: ${this.backend.constructor.name}, block size: ${this.settings.segmentMaxCount}`,
         ].filter(v => v).join("\n");
     }
 

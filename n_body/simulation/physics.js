@@ -271,7 +271,7 @@ export class PhysicsEngine {
 
     /**
      * @param {SpatialTree} tree
-     * @private
+     * @protected
      */
     _calculateTree(tree) {
         return this._calculateLeaf(tree.root, [0, 0]);
@@ -281,37 +281,58 @@ export class PhysicsEngine {
      *
      * @param {Leaf} leaf
      * @param {[number, number]} pForce
-     * @private
+     * @protected
      */
     _calculateLeaf(leaf, pForce) {
         const blocks = leaf.children;
         if (blocks.length > 0) {
-            for (let i = 0; i < blocks.length; i++) {
-                const blockCenter = blocks[i].boundaryRect.center();
-                const iForce = pForce.slice();
-
-                for (let j = 0; j < blocks.length; j++) {
-                    if (i === j) continue;
-
-                    const g = this.settings.particleGravity * blocks[j].mass;
-                    this._calculateForce(blockCenter, blocks[j].boundaryRect.center(), g, iForce);
-                }
-
-                this._calculateLeaf(blocks[i], iForce);
-            }
+            this._calculateLeafBlock(leaf, pForce);
         } else {
-            const accumulateForce = this.settings.debugForce;
-            for (let i = 0; i < leaf.length; i++) {
-                const attractor = leaf.data[i];
-                attractor.velX += pForce[0] / attractor.mass;
-                attractor.velY += pForce[1] / attractor.mass;
+            this._calculateLeafData(leaf, pForce);
+        }
+    }
 
-                for (let j = 0; j < leaf.length; j++) {
-                    if (i === j) continue;
+    /**
+     *
+     * @param {Leaf} leaf
+     * @param {[number, number]} pForce
+     * @protected
+     */
+    _calculateLeafBlock(leaf, pForce) {
+        const blocks = leaf.children;
+        for (let i = 0; i < blocks.length; i++) {
+            const blockCenter = blocks[i].boundaryRect.center();
+            const iForce = pForce.slice();
 
-                    const particle = leaf.data[j];
-                    this._calculateForce(particle, attractor, this.settings.particleGravity * attractor.mass, particle, accumulateForce);
-                }
+            for (let j = 0; j < blocks.length; j++) {
+                if (i === j) continue;
+
+                const g = this.settings.particleGravity * blocks[j].mass;
+                this._calculateForce(blockCenter, blocks[j].boundaryRect.center(), g, iForce);
+            }
+
+            this._calculateLeaf(blocks[i], iForce);
+        }
+    }
+
+    /**
+     *
+     * @param {Leaf} leaf
+     * @param {[number, number]} pForce
+     * @protected
+     */
+    _calculateLeafData(leaf, pForce) {
+        const accumulateForce = this.settings.debugForce;
+        for (let i = 0; i < leaf.length; i++) {
+            const attractor = leaf.data[i];
+            attractor.velX += pForce[0] / attractor.mass;
+            attractor.velY += pForce[1] / attractor.mass;
+
+            for (let j = 0; j < leaf.length; j++) {
+                if (i === j) continue;
+
+                const particle = leaf.data[j];
+                this._calculateForce(particle, attractor, this.settings.particleGravity * attractor.mass, particle, accumulateForce);
             }
         }
     }

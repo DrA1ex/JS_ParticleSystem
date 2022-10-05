@@ -1,7 +1,8 @@
-import {RenderType, Settings} from "./utils/settings.js";
+import {BackendType, RenderType, Settings} from "./utils/settings.js";
 import {CanvasRenderer} from "./render/canvas.js";
 import {Webgl2Renderer} from "./render/webgl/render.js";
 import {WorkerBackend} from "./backend/worker.js";
+import {GPUBackend} from "./backend/gpgpu.js";
 import {Application} from "./app.js";
 
 
@@ -16,8 +17,14 @@ const RenderTypeMapping = {
 const RendererClass = RenderTypeMapping[SettingsInstance.render] || RenderTypeMapping.default;
 const Renderer = new RendererClass(document.getElementById("canvas"), SettingsInstance);
 
-const WorkerBackendInstance = new WorkerBackend();
-const ApplicationInstance = new Application(SettingsInstance, Renderer, WorkerBackendInstance);
+const BackendTypeMapping = {
+    [BackendType.worker]: WorkerBackend,
+    [BackendType.gpgpu]: GPUBackend,
+    default: WorkerBackend,
+}
+const BackendClass = BackendTypeMapping[SettingsInstance.backend] || BackendTypeMapping.default;
+const BackendInstance = new BackendClass();
 
+const ApplicationInstance = new Application(SettingsInstance, Renderer, BackendInstance);
 ApplicationInstance.init(state);
 ApplicationInstance.run();

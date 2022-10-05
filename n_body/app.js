@@ -27,7 +27,7 @@ export class Application {
         this.refreshTime = 1000 / this.settings.fps;
 
         this._dfriHelper = new DFRIHelper(this.renderer, this.settings);
-        this._debug = new Debug(this.renderer, this.settings);
+        this._debug = new Debug(this.renderer, this.backend, this.settings);
         this._canvasInteraction = new InteractionHandler(this.renderer, this.settings);
     }
 
@@ -48,8 +48,7 @@ export class Application {
 
         document.getElementById("download_btn").onclick = this.exportState.bind(this);
 
-        this.backend.init(this.onData.bind(this), this.settings, state?.particles);
-        this.requestNextStep();
+        this.backend.init(this.onData.bind(this), this.requestNextStep.bind(this), this.settings, state?.particles);
 
         this.lastRenderTime = performance.now() - this.refreshTime;
         this._canvasInteraction.enable();

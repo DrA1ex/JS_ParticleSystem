@@ -12,6 +12,11 @@ export const RenderType = {
     webgl2: "webgl2"
 }
 
+export const BackendType = {
+    worker: "worker",
+    gpgpu: "gpgpu"
+}
+
 const SERIALIZABLE_PROPS = [
     "enableFilter", "enableBlending", "particleCount", "resistance", "gravity", "minInteractionDistance",
     "segmentDivider", "segmentMaxCount", "bufferCount",
@@ -20,6 +25,7 @@ const SERIALIZABLE_PROPS = [
 export class Settings {
     isMobile = false;
     render = null;
+    backend = BackendType.worker;
     enableFilter = false;
     enableBlending = true;
     enableDFRI = true;
@@ -41,7 +47,7 @@ export class Settings {
     minInteractionDistanceSq = null;
 
     segmentDivider = 2;
-    segmentMaxCount = 32;
+    segmentMaxCount = null;
 
     debug = false;
     debugTree = null;
@@ -74,6 +80,14 @@ export class Settings {
 
         if (this.particleInitTypeCode) {
             this.particleInitType = ParticleInitType[this.particleInitTypeCode] ?? this.particleInitTypeCode;
+        }
+
+        if (!this.segmentMaxCount) {
+            this.segmentMaxCount = this.backend === BackendType.gpgpu ? 128 : 32;
+        }
+
+        if (this.backend === BackendType.gpgpu) {
+            this.segmentMaxCount *= this.segmentMaxCount;
         }
 
         if (!this.debug) {
@@ -155,6 +169,7 @@ export class Settings {
         const configFromParams = {
             isMobile: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.orientation !== undefined,
             render: _string("render"),
+            backend: _string("backend"),
             useDpr: _bool("dpr"),
             dprRate: _float("dpr_rate"),
             enableFilter: _bool("filter"),

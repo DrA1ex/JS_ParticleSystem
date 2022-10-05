@@ -1,4 +1,5 @@
-import {BackendBase, BackendImpl, ITEM_SIZE, WorkerHandler} from "./base.js";
+import {BackendBase, BackendImpl, WorkerHandler} from "./base.js";
+import {PhysicsEngine} from "../simulation/physics.js";
 
 export class WorkerBackend extends BackendBase {
     constructor() {
@@ -8,12 +9,12 @@ export class WorkerBackend extends BackendBase {
 
 class WorkerBackendImpl extends BackendImpl {
     constructor() {
-        super();
+        super(PhysicsEngine);
 
         this._particleForces = [];
     }
 
-    init(settings, state) {
+    async init(settings, state) {
         super.init(settings, state);
 
         if (this.settings.debugForce) {
@@ -25,40 +26,20 @@ class WorkerBackendImpl extends BackendImpl {
     }
 
     step(timestamp) {
-        if (this.buffers.length === 0) {
-            console.error("Unexpected step: buffer is not ready");
-            return null;
-        }
-
         this._beforeStep();
-        const tree = this.physicalEngine.step(this.particles);
 
-        const buffer = this.buffers.shift();
-        for (let i = 0; i < this.settings.particleCount; i++) {
-            buffer[i * ITEM_SIZE] = this.particles[i].x;
-            buffer[i * ITEM_SIZE + 1] = this.particles[i].y;
-            buffer[i * ITEM_SIZE + 2] = this.particles[i].velX;
-            buffer[i * ITEM_SIZE + 3] = this.particles[i].velY;
-            buffer[i * ITEM_SIZE + 4] = this.particles[i].mass;
+        const data = super.step(timestamp);
+        if (data) {
+            data.forceDebug = this._getCalculatedForces();
+            return data
         }
 
-        return {
-            timestamp: timestamp,
-            buffer: buffer,
-            treeDebug: this.settings.debugTree ? tree.getDebugData() : [],
-            forceDebug: this._getCalculatedForces(),
-            stats: {
-                physicsTime: this.physicalEngine.stats.physicsTime,
-                treeTime: this.physicalEngine.stats.treeTime,
-                tree: {
-                    flops: this.physicalEngine.stats.tree.flops,
-                    depth: this.physicalEngine.stats.tree.depth,
-                    segmentCount: this.physicalEngine.stats.tree.segmentCount
-                }
-            }
-        }
+        return null;
     }
 
+    /**
+     * @protected
+     */
     _beforeStep() {
         if (this.settings.debugForce) {
             for (let i = 0; i < this.settings.particleCount; i++) {
@@ -68,6 +49,9 @@ class WorkerBackendImpl extends BackendImpl {
         }
     }
 
+    /**
+     * @protected
+     */
     _getCalculatedForces() {
         if (this.settings.debugForce) {
             for (let i = 0; i < this.settings.particleCount; i++) {

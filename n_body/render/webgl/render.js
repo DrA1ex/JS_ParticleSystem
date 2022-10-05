@@ -11,13 +11,22 @@ const CONFIGURATION = [
         vs: RenderVertexShaderSource,
         fs: RenderFragmentShaderSource,
         attributes: [
-            {name: "position", buffer: true},
-            {name: "velocity", buffer: true},
-            {name: "mass", buffer: true}
+            {name: "position"},
+            {name: "velocity"},
+            {name: "mass"}
+        ],
+        buffers: [
+            {name: "position", usageHint: GL.STREAM_DRAW},
+            {name: "velocity", usageHint: GL.STREAM_DRAW},
+            {name: "mass", usageHint: GL.STREAM_DRAW}
         ],
         uniforms: [
-            {name: "resolution"}, {name: "point_size"}, {name: "offset"}, {name: "scale"},
-            {name: "max_mass"}, {name: "max_speed"},
+            {type: "uniform2f", name: "resolution"},
+            {type: "uniform1f", name: "point_size"},
+            {type: "uniform1f", name: "scale"},
+            {type: "uniform2f", name: "offset"},
+            {type: "uniform1f", name: "max_mass"},
+            {type: "uniform1f", name: "max_speed"},
         ],
         vertexArrays: [{
             name: "particle", entries: [
@@ -26,7 +35,6 @@ const CONFIGURATION = [
                 {name: "mass", type: GL.FLOAT, size: 1},
             ]
         }],
-        transformFeedbacks: []
     }
 ]
 
@@ -55,29 +63,17 @@ export class Webgl2Renderer extends RendererBase {
     initWebgl() {
         WebglUtils.createFromConfig(this.gl, CONFIGURATION, this._stateConfig);
 
-        WebglUtils.loadDataFromConfig(this.gl, [{
+        WebglUtils.loadDataFromConfig(this.gl, this._stateConfig, [{
             program: "render",
-            uniforms: [{
-                type: "uniform1f", name: "point_size",
-                values: [this.dpr]
-            }, {
-                type: "uniform1f", name: "max_mass",
-                values: [this.settings.particleMass + 1]
-            }, {
-                type: "uniform1f", name: "max_speed",
-                values: [this._maxSpeed]
-            }, {
-                type: "uniform1f", name: "scale",
-                values: [this.scale]
-            }, {
-                type: "uniform2f", name: "offset",
-                values: [this.xOffset, this.yOffset]
-            }, {
-                type: "uniform2f", name: "resolution",
-                values: [this.canvasWidth, this.canvasHeight]
-            }],
+            uniforms: [
+                {name: "point_size", values: [this.dpr]},
+                {name: "max_mass", values: [this.settings.particleMass + 1]},
+                {name: "max_speed", values: [this._maxSpeed]},
+                {name: "scale", values: [this.scale]},
+                {name: "offset", values: [this.xOffset, this.yOffset]},
+                {name: "resolution", values: [this.canvasWidth, this.canvasHeight]}],
             buffers: []
-        }], this._stateConfig);
+        }]);
 
         this.gl.viewport(0, 0, this.canvasWidth, this.canvasHeight);
         this.gl.clearColor(0, 0, 0, 1);
@@ -148,19 +144,19 @@ export class Webgl2Renderer extends RendererBase {
             }
         }
 
-        WebglUtils.loadDataFromConfig(this.gl, [
+        WebglUtils.loadDataFromConfig(this.gl, this._stateConfig, [
             {
                 program: "render", uniforms: [
-                    {type: "uniform1f", name: "scale", values: [this.scale]},
-                    {type: "uniform1f", name: "max_speed", values: [this._maxSpeed]},
-                    {type: "uniform2f", name: "offset", values: [this.xOffset, this.yOffset]}
+                    {name: "scale", values: [this.scale]},
+                    {name: "max_speed", values: [this._maxSpeed]},
+                    {name: "offset", values: [this.xOffset, this.yOffset]}
                 ], buffers: [
-                    {name: "position", data: this._positionBufferData, usageHint: GL.STREAM_DRAW},
-                    {name: "velocity", data: this._velocityBufferData, usageHint: GL.STREAM_DRAW},
-                    {name: "mass", data: this._massBufferData, usageHint: GL.STREAM_DRAW},
+                    {name: "position", data: this._positionBufferData},
+                    {name: "velocity", data: this._velocityBufferData},
+                    {name: "mass", data: this._massBufferData},
                 ]
             }
-        ], this._stateConfig)
+        ])
     }
 
     getDebugDrawingContext() {
