@@ -1,4 +1,4 @@
-import {BackendBase, BackendImpl} from "./base.js";
+import {BackendBase, BackendImpl, WorkerHandler} from "./base.js";
 
 export class WorkerBackend extends BackendBase {
     constructor() {
@@ -82,30 +82,6 @@ class WorkerBackendImpl extends BackendImpl {
 }
 
 const Backend = new WorkerBackendImpl();
+const WorkerHandlerInstance = new WorkerHandler(Backend);
 
-onmessage = function (e) {
-    const {type} = e.data;
-    switch (type) {
-        case "init": {
-            const {settings, state} = e.data;
-            Backend.init(settings, state);
-        }
-            break;
-
-        case "ack": {
-            const {buffer} = e.data;
-            Backend.ack(buffer);
-        }
-            break;
-
-        case "step": {
-            const {timestamp} = e.data;
-
-            const data = Backend.step(timestamp);
-            if (data) {
-                postMessage({type: "data", ...data,}, [data.buffer.buffer]);
-            }
-        }
-            break;
-    }
-}
+onmessage = WorkerHandlerInstance.handleMessage.bind(WorkerHandlerInstance);

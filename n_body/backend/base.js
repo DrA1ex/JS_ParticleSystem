@@ -114,3 +114,37 @@ export class BackendImpl {
         }
     }
 }
+
+export class WorkerHandler {
+    constructor(backend) {
+        this.backend = backend;
+    }
+
+    handleMessage(e) {
+        const {type} = e.data;
+        switch (type) {
+            case "init": {
+                const {settings, state} = e.data;
+                this.backend.init(settings, state);
+            }
+                break;
+
+            case "ack": {
+                const {buffer} = e.data;
+                this.backend.ack(buffer);
+            }
+                break;
+
+            case "step": {
+                const {timestamp} = e.data;
+
+                const data = this.backend.step(timestamp);
+                if (data) {
+                    postMessage({type: "data", ...data,}, [data.buffer.buffer]);
+                }
+            }
+                break;
+        }
+    }
+
+}
