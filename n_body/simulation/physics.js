@@ -191,7 +191,7 @@ export class ParticleInitializer {
     }) {
         const {particleCount, worldWidth, worldHeight, gravity, particleMass} = settings;
 
-        const size = particleCount / circleCount;
+        const size = Math.ceil(particleCount / circleCount);
         const centerX = worldWidth / 2;
         const centerY = worldHeight / 2;
         const radius = Math.min(worldWidth, worldHeight) / radiusDivider;
@@ -202,7 +202,7 @@ export class ParticleInitializer {
 
         for (let i = 0; i < circleCount; i++) {
             const start = i * size;
-            const end = start + size;
+            const end = Math.min(start + size, particleCount);
             const x = centerX + Math.cos(angle) * radius;
             const y = centerY + Math.sin(angle) * radius;
 
