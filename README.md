@@ -37,6 +37,66 @@ _Visualization of 500,000 particles (click image to open YouTube video)_
 
 Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
 
+### Renderer
+Supported render engines:
+##### `сanvas`
+Use HMTL5 Canvas to render particles. In order to reduce the delay, rendering through the ImageBuffer is used. 
+The render performs well on mobile platforms, but loses a lot in performance at high resolutions.
+Also, Canvas does not support dynamic particle size, so particles can be difficult to see on screens with a high pixel density.
+
+_Demo links_:
+
+- With _enabled_ device pixel rate: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?render=canvas&dpr=1)
+- With _disabled_ device pixel rate: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?render=canvas&dpr=0)
+
+
+##### `webgl2`
+Use WebGL 2.0 to render particles. This rendering method allows to effectively display many particles in high resolution.
+Render works well on screens with high pixel density and maintain dynamic particle size. May not work on older browser versions and on older mobile devices. Rendering is very fast, so this render type is recommended for screens with high refresh rates.
+
+_Demo links_:
+
+- With _enabled_ device pixel rate: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?render=webgl2&dpr=1)
+- With _disabled_ device pixel rate: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?render=webgl2&dpr=0)
+ 
+### Backend
+Supported backends:
+
+##### `worker`
+A web worker is used to calculate physics. All calculations are done separately from the main thread, so even with heavy simulation configurations, rendering will still be at a high frame rate. This method of calculation is well suited for mobile platforms or systems with basic integrated graphics.
+The calculation is done entirely by the CPU, so don't expect high performance in tasks like N-Body simulation.
+Performance can be influenced through the `segmentation_max_count` parameter. Decreasing the value also reduces the computational complexity, but degrades the accuracy of the simulation.
+
+_Demos with different segment max sizes_:
+- Max segment size `8`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&segment_max_count=8)
+- Max segment size `32`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&segment_max_count=32)
+- Max segment size `128`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&segment_max_count=128)
+- Max segment size `256`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&segment_max_count=256)
+
+Increasing `segmentation_max_count` significantly degrades performance, but improves calculation accuracy.
+_Simulation demo links with maximum accuracy_:
+- Max segment size `1024`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&particle_count=1024&segment_max_count=1024)
+- Max segment size `2048`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&particle_count=2048&segment_max_count=2048)
+- Max segment size `4096`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&particle_count=4096&segment_max_count=4096)
+
+
+##### `gpgpu`
+GPGPU is used for calculation (General-purpose computing on graphics processing units). All calculations are performed in a separate worker, but on the GPU. Due to the high parallelization of calculations, it is possible to achieve significant acceleration for complex simulation configurations. This method most likely will not work on mobile platforms, but it will work well on desktops with discrete graphics cards.
+In this calculation method, `segmentation_max_count` parameter is interpreted as the size of the side of the 2D texture, i.e. value 128 actually means `128*128=16348` segment size. This method allows to simulate gravity with maximum accuracy and with a large number of particles.
+Unfortunately, on small segment sizes, the method works inefficiently and works worse than `worker` backend.
+
+_Demos with different segment max sizes_:
+- Max segment size `64*64` and `32k` particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=32768&segment_max_count=64)
+- Max segment size `128*128` and `131k` particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=131072&segment_max_count=128)
+- Max segment size `256*256` and `262k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=262144&segment_max_count=256)
+
+Increasing `segmentation_max_count` also degrades performance for GPGPU, but allows to simulate much more particles with max accuracy.
+_Simulation demo links with maximum accuracy_:
+- Max segment size `96*96`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=9216&segment_max_count=96)
+- Max segment size `128*128`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=16384&segment_max_count=128)
+- Max segment size `176*176`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=30976&segment_max_count=176)
+- Max segment size `256*256`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=65536&segment_max_count=256)
+
 ### Parameters:
 
 - *particle_count* - Count of particles to simulate (default: __10000__ for mobile, __20000__ for desktop)
