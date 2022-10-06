@@ -46,7 +46,7 @@ export class Webgl2Renderer extends RendererBase {
     constructor(canvas, settings) {
         super(canvas, settings);
 
-        this.gl = canvas.getContext("webgl2", {alpha: false});
+        this.gl = canvas.getContext("webgl2");
         this._stateConfig = {};
 
         this._positionBufferData = new Float32Array(this.settings.particleCount * 2);

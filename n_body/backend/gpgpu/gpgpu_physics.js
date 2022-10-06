@@ -134,7 +134,7 @@ export class GPUPhysicsEngine extends PhysicsEngine {
         this.gl.bindTransformFeedback(GL.TRANSFORM_FEEDBACK, null);
 
         this.gl.bindBuffer(GL.ARRAY_BUFFER, this._stateConfig.calc.buffers["out_velocity"]);
-        this.gl.getBufferSubData(GL.ARRAY_BUFFER, 0, this._outVelocityData);
+        this.gl.getBufferSubData(GL.ARRAY_BUFFER, 0, this._outVelocityData, 0, leaf.length * 2);
 
         for (let i = 0; i < leaf.length; i++) {
             const p = leaf.data[i];

@@ -38,7 +38,7 @@ export class Debug {
             {unit: "K", exp: 1e3},
         ]
         let flopsUnit = "";
-        let flops = this.flops;
+        let flops = this.flops / 1000 * this.physicsTime;
         for (let i = 0; i < flopsUnits.length; i++) {
             if (flops >= flopsUnits[i].exp) {
                 flops /= flopsUnits[i].exp;

@@ -13,11 +13,12 @@ in float mass;
 out vec2 out_velocity;
 
 vec2 calculateForce(vec2 p1, vec2 p2, float g) {
-    float force = 0.0;
     vec2 deltaPos =  p1 - p2;
 
     vec2 squareDelta = deltaPos * deltaPos;
     float distSquare = squareDelta.x + squareDelta.y;
+
+    float force;
     if (distSquare >= min_dist_square)
     {
         force = -g / distSquare;
