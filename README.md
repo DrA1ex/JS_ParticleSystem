@@ -35,7 +35,33 @@ _Visualization of 500,000 particles (click image to open YouTube video)_
 
 [<img width="720" alt="image" src="https://user-images.githubusercontent.com/1194059/192136192-65606492-466a-40fe-9274-204b1b446349.png">](https://youtu.be/kHLjrGTBi-o)
 
-Real-time in-browser demo: https://dra1ex.github.io/JS_ParticleSystem/n_body
+### Demo
+You can combine different [parameters](https://github.com/DrA1ex/JS_ParticleSystem#parameters), [renderer](https://github.com/DrA1ex/JS_ParticleSystem#renderer) and [backend](https://github.com/DrA1ex/JS_ParticleSystem#backend).
+To change parameter just add it to url as query parameter, e.g.: [`/?particle_count=10000&particle_init=bang`](https://dra1ex.github.io/JS_ParticleSystem/n_body?particle_count=10000&particle_init=bang)
+
+_Different initializers:_
+- circle initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=circle)
+- uniform initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=uniform)
+- bang initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=bang)
+- rotation initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=rotation)
+- collision initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=collision)
+
+_Different gravity forces:_
+- rotation initializer with `x1000` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=rotation&g=1000)
+- collision initializer with `x1000` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=collision&g=1000)
+
+_Different resistance:_
+- bang initializer with `0.99` resistance and `x100` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=bang&resistance=0.99&g=100)
+- collision initializer with `0.995` resistance and `x100` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=collision&resistance=0.995&g=100)
+
+_Particle mass variation:_
+- Mass variation `3` and `x0.5` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_mass=3&g=0.5)
+- Mass variation `5` with accurate gpgpu simulation: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_mass=5&backend=gpgpu&segment_max_count=64&particle_count=4096)
+- Mass vartiation `10` with accurate big gpgpu simulation: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=16384&segment_max_count=128&particle_init=uniform&particle_mass=10)
+
+_Debug mode:_
+- Spatial tree: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?debug=1&debug_tree=1&g=10&dfri=0)
+- Speed and momentum vectors: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=5&particle_init=rotation&segment_max_count=5&g=200&debug=1&debug_tree=0&debug_velocity=1)
 
 ### Renderer
 Supported render engines:
