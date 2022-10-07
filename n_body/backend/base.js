@@ -149,7 +149,13 @@ export class WorkerHandler {
         this.backend = backend;
     }
 
-    async handleMessage(e) {
+    handleMessage(e) {
+        this._handleMessage(e).catch(e => setTimeout(() => {
+            throw new Error(e.message)
+        }));
+    }
+
+    async _handleMessage(e) {
         const {type} = e.data;
         switch (type) {
             case "init": {

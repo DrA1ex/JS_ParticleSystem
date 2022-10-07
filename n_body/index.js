@@ -1,10 +1,14 @@
+addEventListener("error", (event) => {
+    alert(event.message);
+});
+
+
 import {BackendType, RenderType, Settings} from "./utils/settings.js";
 import {CanvasRenderer} from "./render/canvas.js";
 import {Webgl2Renderer} from "./render/webgl/render.js";
 import {WorkerBackend} from "./backend/worker.js";
 import {GPUBackend} from "./backend/gpgpu.js";
 import {Application} from "./app.js";
-
 
 const state = await Settings.loadState();
 const SettingsInstance = Settings.fromQueryParams(state?.settings);
