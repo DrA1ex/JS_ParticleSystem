@@ -6,9 +6,9 @@ export class RendererBase {
     canvasWidth;
     canvasHeight;
 
-    scale;
-    xOffset;
-    yOffset;
+    scale = 1;
+    xOffset = 0;
+    yOffset = 0;
 
     /**
      * @param {HTMLCanvasElement} canvas
@@ -41,22 +41,27 @@ export class RendererBase {
         this._hueAngle = 0;
     }
 
+    /**
+     * @param {number}  factor
+     * @return {void}
+     */
     scaleCentered(factor) {
         const newScale = Math.max(0.01, this.scale * factor);
         if (this.scale === newScale) {
             return;
         }
 
-        const delta = newScale - this.scale;
-
-        this.xOffset -= (this.canvasWidth / 2 - this.xOffset) / this.scale * delta;
-        this.yOffset -= (this.canvasHeight / 2 - this.yOffset) / this.scale * delta;
         this.scale = newScale;
     }
 
+    /**
+     * @param {number}  xDelta
+     * @param {number}  yDelta
+     * @return {void}
+     */
     move(xDelta, yDelta) {
-        this.xOffset += xDelta * this.dpr;
-        this.yOffset += yDelta * this.dpr;
+        this.xOffset += xDelta * this.dpr / this.scale;
+        this.yOffset += yDelta * this.dpr / this.scale;
     }
 
     centeredRelativeOffset() {
@@ -67,8 +72,9 @@ export class RendererBase {
     }
 
     setCenterRelativeOffset(x, y) {
-        this.xOffset = (this.canvasWidth - this.settings.worldWidth * this.scale) / 2 + x * this.canvasWidth;
-        this.yOffset = (this.canvasHeight - this.settings.worldHeight * this.scale) / 2 + y * this.canvasHeight;
+        const newX = x * this.canvasWidth;
+        const newY = y * this.canvasHeight;
+        this.move(newX - this.xOffset, newY - this.yOffset);
     }
 
     /**
@@ -77,6 +83,9 @@ export class RendererBase {
      */
     setCoordinateTransformer(fn) {
         this.coordinateTransformer = fn;
+    }
+
+    rotate(xDelta, yDelta) {
     }
 
     /**
@@ -172,6 +181,7 @@ export class InteractionHandler {
         ontouchstart: this._onTouchStart.bind(this),
         ontouchend: this._onTouchEnd.bind(this),
         ontouchmove: this._onTouchMove.bind(this),
+        oncontextmenu: () => false,
     }
 
     constructor(renderer, settings) {
@@ -179,6 +189,7 @@ export class InteractionHandler {
         this.settings = settings;
 
         this._pressed = false;
+        this._rotation = false;
         this._pinched = false;
         this._initPos = {x: 0, y: 0};
         this._initDistance = 0;
@@ -211,6 +222,24 @@ export class InteractionHandler {
         this._initPos = point;
     }
 
+    _beginRotationInteraction(point) {
+        this._pressed = false;
+        this._rotation = true;
+        this._pinched = false;
+        this._initPos = point;
+    }
+
+    _endRotationInteraction() {
+        this._rotation = false;
+    }
+
+    _interactionRotate(point) {
+        const xDiff = Math.PI * (point.x - this._initPos.x) / 360;
+        const yDiff = Math.PI * (point.y - this._initPos.y) / 360;
+        this.renderer.rotate(yDiff, xDiff);
+        this._initPos = point;
+    }
+
     _beginPinchInteraction(point1, point2) {
         this._pinched = true;
         this._pressed = false;
@@ -238,29 +267,33 @@ export class InteractionHandler {
     }
 
     _onMouseDown(e) {
-        if (e.button !== 0) {
-            return;
+        const point = {x: e.clientX, y: e.clientY};
+        if (e.button === 0 && !e.ctrlKey) {
+            this._beginDragInteraction(point);
+        } else {
+            this._beginRotationInteraction(point);
         }
 
-        this._beginDragInteraction({x: e.clientX, y: e.clientY})
         e.preventDefault();
+        e.stopPropagation();
     }
 
     _onMouseUp(e) {
-        if (e.button !== 0) {
-            return;
-        }
+        if (this._pressed) this._endDragInteraction();
+        if (this._rotation) this._endRotationInteraction();
 
-        this._endDragInteraction();
         e.preventDefault();
+        e.stopPropagation();
     }
 
     _onMouseMove(e) {
-        if (!this._pressed) {
-            return;
+        const point = {x: e.clientX, y: e.clientY}
+        if (this._pressed) {
+            this._interactionDrag(point);
+        } else if (this._rotation) {
+            this._interactionRotate(point);
         }
 
-        this._interactionDrag({x: e.clientX, y: e.clientY});
         e.preventDefault();
     }
 

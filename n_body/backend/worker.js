@@ -20,7 +20,7 @@ class WorkerBackendImpl extends BackendImpl {
         if (this.settings.debugForce) {
             this._particleForces = new Array(this.settings.particleCount);
             for (let i = 0; i < this._particleForces.length; i++) {
-                this._particleForces[i] = {forceX: 0, forceY: 0};
+                this._particleForces[i] = {forceX: 0, forceY: 0, forceZ: 0};
             }
         }
     }
@@ -45,6 +45,7 @@ class WorkerBackendImpl extends BackendImpl {
             for (let i = 0; i < this.settings.particleCount; i++) {
                 this.particles[i].forceX = 0;
                 this.particles[i].forceY = 0;
+                this.particles[i].forceZ = 0;
             }
         }
     }
@@ -57,7 +58,8 @@ class WorkerBackendImpl extends BackendImpl {
             for (let i = 0; i < this.settings.particleCount; i++) {
                 this._particleForces[i] = {
                     forceX: this.particles[i].forceX,
-                    forceY: this.particles[i].forceY
+                    forceY: this.particles[i].forceY,
+                    forceZ: this.particles[i].forceZ
                 }
             }
         }

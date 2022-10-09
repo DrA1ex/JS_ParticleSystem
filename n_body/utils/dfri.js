@@ -56,6 +56,7 @@ export class DFRIHelper {
     _transformParticlePosition(index, particle, out) {
         out.x = particle.x + this._deltas[index].x * this._currentFactor;
         out.y = particle.y + this._deltas[index].y * this._currentFactor;
+        out.z = particle.z + this._deltas[index].z * this._currentFactor;
     }
 
     needSwitchBuffer() {
@@ -71,6 +72,7 @@ export class DFRIHelper {
         for (let i = 0; i < this.settings.particleCount; i++) {
             this._deltas[i].x = buffer ? buffer[i * ITEM_SIZE] - particles[i].x : particles[i].velX;
             this._deltas[i].y = buffer ? buffer[i * ITEM_SIZE + 1] - particles[i].y : particles[i].velY;
+            this._deltas[i].z = buffer ? buffer[i * ITEM_SIZE + 2] - particles[i].z : particles[i].velz;
         }
 
         this.frame = 0;

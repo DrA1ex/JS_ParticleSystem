@@ -1,6 +1,6 @@
 import {ParticleInitType} from "../utils/settings.js";
 
-export class Particle_initializer {
+export class ParticleInitializer {
     /**
      * @param {Settings} settings
      * @returns {Particle[]}
@@ -18,7 +18,8 @@ export class Particle_initializer {
             }
 
             particles[i] = {
-                x: 0, y: 0, velX: 0, velY: 0,
+                x: 0, y: 0, z: 0,
+                velX: 0, velY: 0, velZ: 0,
                 mass: 1 + addMass
             }
         }
@@ -50,9 +51,9 @@ export class Particle_initializer {
 
             case ParticleInitType.collision:
                 this._multiCircleInitializerBase(particles, settings, {
-                    gravityMul: 0.05,
-                    radiusDivider: 3,
-                    subRadiusDivider: 20,
+                    gravityMul: 0.5,
+                    radiusDivider: 2,
+                    subRadiusDivider: 10,
                     startAngle: Math.PI / 6,
                     velocityAngle: Math.PI - Math.PI / 6 + Math.PI / 12,
                     circleCount: 2,
@@ -92,7 +93,7 @@ export class Particle_initializer {
         const {worldWidth, worldHeight} = settings;
 
         const radius = Math.min(worldWidth, worldHeight) / 4;
-        this._circleCenteredInitializer(particles, settings, radius, radius * 1.9);
+        this._circleCenteredInitializer(particles, settings, radius, radius * 1.8);
     }
 
     /**
@@ -101,21 +102,23 @@ export class Particle_initializer {
      * @param {number} count
      * @param {number} centerX
      * @param {number} centerY
+     * @param {number} centerZ
      * @param {number} radius
      * @param {number} wiggle
      * @private
      */
-    static _circleInitializerBase(particles, {offset, count, centerX, centerY, radius, wiggle}) {
-        const step = Math.PI * 2 / count;
-
+    static _circleInitializerBase(particles, {offset, count, centerX, centerY, centerZ = 0, radius, wiggle}) {
         const end = Math.min(offset + count, particles.length);
-        let angle = 0;
         for (let i = offset; i < end; i++) {
             const r = (radius + (Math.random() - 0.5) * wiggle)
-            particles[i].x = centerX + Math.cos(angle) * r;
-            particles[i].y = centerY + Math.sin(angle) * r;
+            const u = Math.random();
+            const v = Math.random();
+            const theta = 2 * Math.PI * u;
+            const phi = Math.acos(2 * v - 1);
 
-            angle += step;
+            particles[i].x = centerX + (r * Math.sin(phi) * Math.cos(theta));
+            particles[i].y = centerY + (r * Math.sin(phi) * Math.sin(theta));
+            particles[i].z = centerZ + (r * Math.cos(phi));
         }
     }
 
@@ -148,10 +151,12 @@ export class Particle_initializer {
      */
     static _uniformInitializer(particles, settings) {
         const {particleCount, worldWidth, worldHeight} = settings;
+        const worldDepth = Math.max(worldHeight, worldWidth);
 
         for (let i = 0; i < particleCount; i++) {
             particles[i].x = Math.random() * worldWidth;
             particles[i].y = Math.random() * worldHeight
+            particles[i].z = (Math.random() - 0.5) * worldDepth
         }
     }
 
@@ -168,9 +173,16 @@ export class Particle_initializer {
 
         const initialVelocity = Math.sqrt(gravity) / (1 + particleMass) * 1.5;
         for (let i = 0; i < particleCount; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            particles[i].velX = Math.cos(angle) * initialVelocity * particles[i].mass;
-            particles[i].velY = Math.sin(angle) * initialVelocity * particles[i].mass;
+            const u = Math.random();
+            const v = Math.random();
+            const theta = 2 * Math.PI * u;
+            const phi = Math.acos(2 * v - 1);
+
+            const velocity = initialVelocity / particles[i].mass;
+            particles[i].velX = Math.sin(phi) * Math.cos(theta) * velocity;
+            particles[i].velY = Math.sin(phi) * Math.sin(theta) * velocity;
+            particles[i].velZ = Math.cos(phi) * velocity;
+
         }
     }
 

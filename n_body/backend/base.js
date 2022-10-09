@@ -1,11 +1,11 @@
-import {Particle_initializer} from "../simulation/particle_initializer.js";
+import {ParticleInitializer} from "../simulation/particle_initializer.js";
 
 /**
  * @typedef {{physicsTime:number, treeTime: number, tree: {flops: number, depth: number, segmentCount: number}}} StepStatistics
  * @typedef {{timestamp: number, buffer: Float32Array, treeDebug: Array, forceDebug: Array, stats: StepStatistics}} StepResult
  */
 
-export const ITEM_SIZE = 5;
+export const ITEM_SIZE = 7;
 
 export class BackendBase {
     /**
@@ -71,16 +71,24 @@ export class BackendImpl {
     init(settings, state) {
         this.settings = settings;
         this.physicalEngine = new this.physicalEngineClass(this.settings);
-        this.particles = Particle_initializer.initialize(this.settings);
+        this.particles = ParticleInitializer.initialize(this.settings);
 
         if (state && state.length > 0) {
             const size = Math.min(state.length, this.settings.particleCount);
             for (let i = 0; i < size; i++) {
-                const [x, y, velX, velY, mass] = state[i];
+                let x, y, z = 0, velX, velY, velZ = 0, mass
+                if (state[i].length === 7) {
+                    [x, y, z, velX, velY, velZ, mass] = state[i];
+                } else {
+                    [x, y, velX, velY, mass] = state[i];
+                }
+
                 this.particles[i].x = x;
                 this.particles[i].y = y;
+                this.particles[i].z = z;
                 this.particles[i].velX = velX;
                 this.particles[i].velY = velY;
+                this.particles[i].velZ = velZ;
                 this.particles[i].mass = mass;
             }
         }
@@ -137,9 +145,11 @@ export class BackendImpl {
         for (let i = 0; i < this.settings.particleCount; i++) {
             buffer[i * ITEM_SIZE] = this.particles[i].x;
             buffer[i * ITEM_SIZE + 1] = this.particles[i].y;
-            buffer[i * ITEM_SIZE + 2] = this.particles[i].velX;
-            buffer[i * ITEM_SIZE + 3] = this.particles[i].velY;
-            buffer[i * ITEM_SIZE + 4] = this.particles[i].mass;
+            buffer[i * ITEM_SIZE + 2] = this.particles[i].z;
+            buffer[i * ITEM_SIZE + 3] = this.particles[i].velX;
+            buffer[i * ITEM_SIZE + 4] = this.particles[i].velY;
+            buffer[i * ITEM_SIZE + 5] = this.particles[i].velZ;
+            buffer[i * ITEM_SIZE + 6] = this.particles[i].mass;
         }
     }
 }

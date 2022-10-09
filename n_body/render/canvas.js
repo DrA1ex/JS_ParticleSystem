@@ -38,8 +38,8 @@ export class CanvasRenderer extends RendererBase {
                 this.coordinateTransformer(i, particle, pos);
             }
 
-            const x = this.xOffset + pos.x * this.scale;
-            const y = this.yOffset + pos.y * this.scale;
+            const x = (this.xOffset + -this.settings.worldWidth / 2 + pos.x) * this.scale + this.canvasWidth / 2;
+            const y = (this.yOffset + -this.settings.worldHeight / 2 + pos.y) * this.scale + this.canvasHeight / 2;
 
             if (x < 0 || x > this.canvasWidth || y < 0 || y > this.canvasHeight) {
                 continue;

@@ -18,13 +18,13 @@ const CONFIGURATION1 = [{
     ],
     uniforms: [
         {name: "gravity", type: "uniform1f"},
-        {name: "p_force", type: "uniform2f"},
+        {name: "p_force", type: "uniform3f"},
         {name: "min_dist_square", type: "uniform1f"},
         {name: "count", type: "uniform1i"},
     ],
     vertexArrays: [{
         name: "particle", entries: [
-            {name: "position", type: GL.FLOAT, size: 2},
+            {name: "position", type: GL.FLOAT, size: 3},
             {name: "mass", type: GL.FLOAT, size: 1},
         ]
     }],
@@ -32,8 +32,8 @@ const CONFIGURATION1 = [{
         name: "particles_tex",
         width: null,
         height: null,
-        format: GL.RGB,
-        internalFormat: GL.RGB32F,
+        format: GL.RGBA,
+        internalFormat: GL.RGBA32F,
         type: GL.FLOAT,
         params: {
             min: GL.NEAREST,
@@ -61,11 +61,11 @@ export class GPUPhysicsEngine extends PhysicsEngine {
 
         this._stateConfig = {};
 
-        this._positionBufferData = new Float32Array(this.settings.segmentMaxCount * 2);
+        this._positionBufferData = new Float32Array(this.settings.segmentMaxCount * 3);
         this._massBufferData = new Float32Array(this.settings.segmentMaxCount);
 
-        this._outVelocityData = new Float32Array(this.settings.segmentMaxCount * 2);
-        this._particleTexData = new Float32Array(this.settings.segmentMaxCount * 3);
+        this._outVelocityData = new Float32Array(this.settings.segmentMaxCount * 3);
+        this._particleTexData = new Float32Array(this.settings.segmentMaxCount * 4);
 
         await this.initGl();
     }
@@ -84,7 +84,7 @@ export class GPUPhysicsEngine extends PhysicsEngine {
             program: "calc",
             uniforms: [
                 {name: "gravity", values: [this.settings.particleGravity]},
-                {name: "p_force", values: [0, 0]},
+                {name: "p_force", values: [0, 0, 0]},
                 {name: "min_dist_square", values: [this.settings.minInteractionDistanceSq]},
             ],
             buffers: [
@@ -102,13 +102,15 @@ export class GPUPhysicsEngine extends PhysicsEngine {
         for (let i = 0; i < leaf.length; i++) {
             const p = leaf.data[i];
 
-            this._positionBufferData[i * 2] = p.x;
-            this._positionBufferData[i * 2 + 1] = p.y;
+            this._positionBufferData[i * 3] = p.x;
+            this._positionBufferData[i * 3 + 1] = p.y;
+            this._positionBufferData[i * 3 + 2] = p.z;
             this._massBufferData[i] = p.mass;
 
-            this._particleTexData[i * 3] = p.x;
-            this._particleTexData[i * 3 + 1] = p.y;
-            this._particleTexData[i * 3 + 2] = p.mass;
+            this._particleTexData[i * 4] = p.x;
+            this._particleTexData[i * 4 + 1] = p.y;
+            this._particleTexData[i * 4 + 2] = p.z;
+            this._particleTexData[i * 4 + 3] = p.mass;
         }
 
         WebglUtils.loadDataFromConfig(this.gl, this._stateConfig, [{
@@ -134,12 +136,13 @@ export class GPUPhysicsEngine extends PhysicsEngine {
         this.gl.bindTransformFeedback(GL.TRANSFORM_FEEDBACK, null);
 
         this.gl.bindBuffer(GL.ARRAY_BUFFER, this._stateConfig.calc.buffers["out_velocity"]);
-        this.gl.getBufferSubData(GL.ARRAY_BUFFER, 0, this._outVelocityData, 0, leaf.length * 2);
+        this.gl.getBufferSubData(GL.ARRAY_BUFFER, 0, this._outVelocityData, 0, leaf.length * 3);
 
         for (let i = 0; i < leaf.length; i++) {
             const p = leaf.data[i];
-            p.velX += this._outVelocityData[i * 2];
-            p.velY += this._outVelocityData[i * 2 + 1];
+            p.velX += this._outVelocityData[i * 3];
+            p.velY += this._outVelocityData[i * 3 + 1];
+            p.velZ += this._outVelocityData[i * 3 + 2];
         }
     }
 }

@@ -43,7 +43,7 @@ export class Application {
 
         this.particles = new Array(this.settings.particleCount);
         for (let i = 0; i < this.settings.particleCount; i++) {
-            this.particles[i] = {x: 0, y: 0, velX: 0, velY: 0, mass: 0};
+            this.particles[i] = {x: 0, y: 0, z: 0, velX: 0, velZ: 0, velY: 0, mass: 0};
         }
 
         document.getElementById("download_btn").onclick = this.exportState.bind(this);
@@ -98,9 +98,11 @@ export class Application {
         for (let i = 0; i < this.settings.particleCount; i++) {
             this.particles[i].x = data[i * ITEM_SIZE];
             this.particles[i].y = data[i * ITEM_SIZE + 1];
-            this.particles[i].velX = data[i * ITEM_SIZE + 2];
-            this.particles[i].velY = data[i * ITEM_SIZE + 3];
-            this.particles[i].mass = data[i * ITEM_SIZE + 4];
+            this.particles[i].z = data[i * ITEM_SIZE + 2];
+            this.particles[i].velX = data[i * ITEM_SIZE + 3];
+            this.particles[i].velY = data[i * ITEM_SIZE + 4];
+            this.particles[i].velZ = data[i * ITEM_SIZE + 5];
+            this.particles[i].mass = data[i * ITEM_SIZE + 6];
         }
 
         if (this.settings.debugTree) this._debug.importTreeDebugData(bufferEntry.treeDebug);
@@ -153,7 +155,7 @@ export class Application {
     exportState() {
         const data = {
             settings: this.settings.serialize(),
-            particles: this.particles.map(p => [p.x, p.y, p.velX, p.velY, p.mass]),
+            particles: this.particles.map(p => [p.x, p.y, p.z, p.velX, p.velY, p.velZ, p.mass]),
             renderer: {
                 scale: this.renderer.scale / this.renderer.dpr,
                 relativeOffset: this.renderer.centeredRelativeOffset()

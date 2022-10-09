@@ -18,7 +18,7 @@ export const BackendType = {
 }
 
 const SERIALIZABLE_PROPS = [
-    "enableFilter", "enableBlending", "particleCount", "resistance", "gravity", "minInteractionDistance",
+    "enableFilter", "enableBlending", "particleCount", "resistance", "gravity", "minInteractionDistance", "particleMass"
 ];
 
 export class Settings {
