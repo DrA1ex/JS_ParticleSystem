@@ -24,7 +24,7 @@ vec2 calculateForce(vec2 p1, vec2 p2, float g) {
         force = -g / distSquare;
     }
 
-    return deltaPos * force / mass;
+    return deltaPos * force;
 }
 
 void main() {
@@ -38,5 +38,5 @@ void main() {
         force += calculateForce(position, atractor.xy, gravity * atractor.z);
     }
 
-    out_velocity = (p_force + force) / mass;
+    out_velocity = (p_force + force);
 }

@@ -1,6 +1,6 @@
 import {ParticleInitType} from "../utils/settings.js";
 
-export class ParticleInitializer {
+export class Particle_initializer {
     /**
      * @param {Settings} settings
      * @returns {Particle[]}
@@ -9,13 +9,11 @@ export class ParticleInitializer {
         const particles = new Array(settings.particleCount);
         for (let i = 0; i < settings.particleCount; i++) {
             let addMass = 0;
-            if (i > 0) {
-                for (let j = 0; j < settings.massDistribution.length; j++) {
-                    const [k, mass] = settings.massDistribution[j];
-                    if (i % k === 0) {
-                        addMass = mass;
-                        break;
-                    }
+            for (let j = 0; j < settings.massDistribution.length; j++) {
+                const [k, mass] = settings.massDistribution[j];
+                if (i % k === 0) {
+                    addMass = mass;
+                    break;
                 }
             }
 
@@ -94,7 +92,7 @@ export class ParticleInitializer {
         const {worldWidth, worldHeight} = settings;
 
         const radius = Math.min(worldWidth, worldHeight) / 4;
-        this._circleCenteredInitializer(particles, settings, radius, radius * 2);
+        this._circleCenteredInitializer(particles, settings, radius, radius * 1.9);
     }
 
     /**

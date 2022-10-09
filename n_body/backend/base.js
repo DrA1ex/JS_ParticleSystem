@@ -1,4 +1,4 @@
-import {ParticleInitializer} from "../simulation/particleInitializer.js";
+import {Particle_initializer} from "../simulation/particle_initializer.js";
 
 /**
  * @typedef {{physicsTime:number, treeTime: number, tree: {flops: number, depth: number, segmentCount: number}}} StepStatistics
@@ -71,7 +71,7 @@ export class BackendImpl {
     init(settings, state) {
         this.settings = settings;
         this.physicalEngine = new this.physicalEngineClass(this.settings);
-        this.particles = ParticleInitializer.initialize(this.settings);
+        this.particles = Particle_initializer.initialize(this.settings);
 
         if (state && state.length > 0) {
             const size = Math.min(state.length, this.settings.particleCount);

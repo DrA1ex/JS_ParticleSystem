@@ -105,8 +105,8 @@ export class PhysicsEngine {
         const accumulateForce = this.settings.debugForce;
         for (let i = 0; i < leaf.length; i++) {
             const attractor = leaf.data[i];
-            attractor.velX += pForce[0] / attractor.mass;
-            attractor.velY += pForce[1] / attractor.mass;
+            attractor.velX += pForce[0];
+            attractor.velY += pForce[1];
 
             for (let j = 0; j < leaf.length; j++) {
                 if (i === j) continue;
@@ -136,7 +136,6 @@ export class PhysicsEngine {
             force = -g / distSquare;
 
             if (out.velX !== undefined) {
-                force /= out.mass;
                 out.velX += dx * force;
                 out.velY += dy * force;
 

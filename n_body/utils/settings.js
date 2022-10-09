@@ -105,11 +105,10 @@ export class Settings {
 
         this.particleMass = Math.pow(2, this.particleMassFactor);
 
-        const k = Math.floor(this.particleCount / 100);
         this.massDistribution = [
-            [5 * k, this.particleMass],
-            [4 * k, this.particleMass / 3],
-            [3 * k, this.particleMass / 9],
+            [Math.floor(1 / 0.001), this.particleMass],
+            [Math.floor(1 / 0.005), this.particleMass / 3],
+            [Math.floor(1 / 0.01), this.particleMass / 9],
         ]
 
         let totalMass = this.particleCount;
