@@ -20,6 +20,7 @@ export class Debug {
         this.settings = settings;
 
         this.frameRateSmoother = new DataSmoother(this.settings.fps, 3, true);
+        this.flopsSmoother = new DataSmoother(this.settings.fps, 0, true);
 
         if (settings.stats) {
             const div = document.createElement("div");
@@ -38,7 +39,7 @@ export class Debug {
             {unit: "K", exp: 1e3},
         ]
         let flopsUnit = "";
-        let flops = this.flops / 1000 * this.physicsTime;
+        let flops = this.flops || 0;
         for (let i = 0; i < flopsUnits.length; i++) {
             if (flops >= flopsUnits[i].exp) {
                 flops /= flopsUnits[i].exp;
@@ -64,6 +65,10 @@ export class Debug {
 
     postFrameTime(elapsed) {
         this.elapsed = this.frameRateSmoother.postValue(elapsed)
+    }
+
+    postFlops(flops) {
+        this.flops = this.flopsSmoother.postValue(flops);
     }
 
     drawTreeDebug() {
@@ -96,9 +101,10 @@ export class Debug {
     importPhysicsStats(physics) {
         this.physicsTime = physics.stats.physicsTime;
         this.treeTime = physics.stats.treeTime;
-        this.flops = physics.stats.tree.flops;
         this.depth = physics.stats.tree.depth;
         this.segmentCount = physics.stats.tree.segmentCount;
+
+        this.postFlops(physics.stats.tree.flops);
     }
 
     importTreeDebugData(data) {
