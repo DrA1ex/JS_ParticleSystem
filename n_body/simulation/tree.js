@@ -216,9 +216,9 @@ export class SpatialTree {
     _collectLeafDebugData(leaf, out) {
         const rect = leaf.boundaryBox;
         out.push({
-            x: rect.left, y: rect.top,
-            width: rect.width, height: rect.height,
-            count: leaf.length, depth: leaf.depth
+            x: rect.left, y: rect.top, z: rect.far,
+            width: rect.width, height: rect.height, depth: rect.depth,
+            count: leaf.length, level: leaf.depth
         });
 
         for (let i = 0; i < leaf.children.length; i++) {

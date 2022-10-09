@@ -75,7 +75,7 @@ export class Debug {
         this.renderer.setDrawStyle("#00ff00", null)
         for (let i = 0; i < this.treeDebugData.length; i++) {
             const data = this.treeDebugData[i];
-            this.renderer.drawWorldRect(data.x, data.y, data.width, data.height);
+            this.renderer.drawWorldRect(data.x, data.y, data.z, data.width, data.height, data.depth);
         }
     }
 
@@ -84,7 +84,11 @@ export class Debug {
             this.renderer.setDrawStyle("#ff00e5", null);
             for (let i = 0; i < this.settings.particleCount; i++) {
                 const p = particles[i];
-                this.renderer.drawWorldLine(p.x, p.y, p.x + p.velX * 5, p.y + p.velY * 5);
+                this.renderer.drawWorldLine(
+                    p.x, p.x + p.velX * 5,
+                    p.y, p.y + p.velY * 5,
+                    p.z, p.z + p.velZ * 5
+                );
             }
         }
 
@@ -92,8 +96,12 @@ export class Debug {
             this.renderer.setDrawStyle("#ff9900", null);
             for (let i = 0; i < this.forceDebugData.length; i++) {
                 const p = particles[i];
-                const {forceX, forceY} = this.forceDebugData[i];
-                this.renderer.drawWorldLine(p.x, p.y, p.x + forceX * 50, p.y + forceY * 50);
+                const {forceX, forceY, forceZ} = this.forceDebugData[i];
+                this.renderer.drawWorldLine(
+                    p.x, p.x + forceX * 500,
+                    p.y, p.y + forceY * 500,
+                    p.z, p.z + forceZ * 500
+                );
             }
         }
     }

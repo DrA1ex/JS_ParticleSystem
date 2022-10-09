@@ -38,9 +38,6 @@ const CONFIGURATION = [
 ]
 
 export class Webgl2Renderer extends RendererBase {
-    xRotation = 0;
-    yRotation = 0;
-
     /**
      * @param {HTMLCanvasElement} canvas
      * @param {Settings} settings
@@ -97,14 +94,15 @@ export class Webgl2Renderer extends RendererBase {
         debugCanvas.style.pointerEvents = "none";
         debugCanvas.style.width = this.canvas.style.width;
         debugCanvas.style.height = this.canvas.style.height;
-        debugCanvas.width = this.canvasWidth;
-        debugCanvas.height = this.canvasHeight;
+        debugCanvas.width = this.canvasWidth / this.dpr;
+        debugCanvas.height = this.canvasHeight / this.dpr;
 
         document.body.appendChild(debugCanvas);
 
         this.debugCanvas = debugCanvas;
         this.debugCtx = this.debugCanvas.getContext("2d");
         this.debugCtx.lineWidth = this.dpr;
+        this.debugCtx.scale(1 / this.dpr, 1 / this.dpr);
     }
 
     render(particles) {
@@ -163,6 +161,15 @@ export class Webgl2Renderer extends RendererBase {
         matrix = m4.zRotate(matrix, Math.PI);
         matrix = m4.translate(matrix, -this.settings.worldWidth / 2, -this.settings.worldHeight / 2, 0);
 
+
+        let m = m4.translation(this.canvasWidth / 2, this.canvasHeight / 2, 0);
+        m = m4.scale(m, this.scale, this.scale, this.scale);
+        m = m4.translate(m, this.xOffset, this.yOffset, 0);
+        m = m4.yRotate(m, -this.yRotation);
+        m = m4.xRotate(m, this.xRotation);
+        m = m4.translate(m, -this.settings.worldWidth / 2, -this.settings.worldHeight / 2, 0);
+        this.lastMatrix = m;
+
         WebglUtils.loadDataFromConfig(this.gl, this._stateConfig, [
             {
                 program: "render", uniforms: [
@@ -175,25 +182,6 @@ export class Webgl2Renderer extends RendererBase {
                 ]
             }
         ])
-    }
-
-    rotate(xDelta, yDelta) {
-        let newX = this.xRotation + xDelta;
-        if (Math.abs(newX) > Math.PI * 2) {
-            newX -= Math.sign(newX) * Math.PI * 2;
-        }
-        this.xRotation = newX;
-
-        if (Math.abs(newX) > Math.PI) {
-            yDelta = -yDelta;
-        }
-
-        let newY = this.yRotation + yDelta;
-        if (Math.abs(newX) > Math.PI * 2) {
-            newY -= Math.sign(newY) * Math.PI * 2;
-        }
-
-        this.yRotation = newY;
     }
 
     getDebugDrawingContext() {

@@ -233,4 +233,13 @@ export class m4 {
                 (tmp_20 * m12 + tmp_23 * m22 + tmp_17 * m02)),
         ];
     }
+
+    static transformPoint(lhs, mtx) {
+        return [
+            (lhs.x * mtx[0 * 4 + 0]) + (lhs.y * mtx[1 * 4 + 0]) + (lhs.z * mtx[2 * 4 + 0]) + (1 * mtx[3 * 4 + 0]),
+            (lhs.x * mtx[0 * 4 + 1]) + (lhs.y * mtx[1 * 4 + 1]) + (lhs.z * mtx[2 * 4 + 1]) + (1 * mtx[3 * 4 + 1]),
+            (lhs.x * mtx[0 * 4 + 2]) + (lhs.y * mtx[1 * 4 + 2]) + (lhs.z * mtx[2 * 4 + 2]) + (1 * mtx[3 * 4 + 2]),
+            (lhs.x * mtx[0 * 4 + 3]) + (lhs.y * mtx[1 * 4 + 3]) + (lhs.z * mtx[2 * 4 + 3]) + (1 * mtx[3 * 4 + 3])
+        ];
+    }
 }

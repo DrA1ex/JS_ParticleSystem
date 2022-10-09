@@ -1,4 +1,5 @@
 import {RendererBase} from "./base.js";
+import {m4} from "../utils/m4.js";
 
 export class CanvasRenderer extends RendererBase {
     /**
@@ -15,6 +16,8 @@ export class CanvasRenderer extends RendererBase {
 
         this._renderImageData = this.ctx.createImageData(this.canvasWidth, this.canvasHeight);
         this._pixels = new Uint32Array(this._renderImageData.data.buffer);
+
+        this._matrix = null;
     }
 
     /**
@@ -24,23 +27,32 @@ export class CanvasRenderer extends RendererBase {
         const t = performance.now();
         super.render(particles);
 
+
+        let matrix = m4.translation(this.canvasWidth / 2, this.canvasHeight / 2, 0);
+        matrix = m4.scale(matrix, this.scale, this.scale, this.scale);
+        matrix = m4.yRotate(matrix, -this.yRotation);
+        matrix = m4.xRotate(matrix, this.xRotation);
+        matrix = m4.translate(matrix, this.xOffset, this.yOffset, 0);
+        matrix = m4.translate(matrix, -this.settings.worldWidth / 2, -this.settings.worldHeight / 2, 0);
+        this.lastMatrix = matrix;
+
+
         for (let i = 0; i < this._pixels.length; i++) {
             this._pixels[i] = 0;
         }
 
-        const pos = {x: 0, y: 0};
+        const pos = {x: 0, y: 0, z: 0};
         for (let i = 0; i < particles.length; i++) {
             const particle = particles[i];
 
             pos.x = particle.x;
             pos.y = particle.y;
+            pos.z = particle.z;
             if (this.coordinateTransformer) {
                 this.coordinateTransformer(i, particle, pos);
             }
 
-            const x = (this.xOffset + -this.settings.worldWidth / 2 + pos.x) * this.scale + this.canvasWidth / 2;
-            const y = (this.yOffset + -this.settings.worldHeight / 2 + pos.y) * this.scale + this.canvasHeight / 2;
-
+            const [x, y, z, w] = m4.transformPoint(pos, matrix)
             if (x < 0 || x > this.canvasWidth || y < 0 || y > this.canvasHeight) {
                 continue;
             }

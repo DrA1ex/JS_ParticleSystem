@@ -9,11 +9,9 @@ const CONFIGURATION1 = [{
     tfAttributes: ["out_velocity"],
     attributes: [
         {name: "position"},
-        {name: "mass"},
     ],
     buffers: [
         {name: "position", usageHint: GL.STREAM_DRAW},
-        {name: "mass", usageHint: GL.STREAM_DRAW},
         {name: "out_velocity", usageHint: GL.STREAM_READ},
     ],
     uniforms: [
@@ -25,7 +23,6 @@ const CONFIGURATION1 = [{
     vertexArrays: [{
         name: "particle", entries: [
             {name: "position", type: GL.FLOAT, size: 3},
-            {name: "mass", type: GL.FLOAT, size: 1},
         ]
     }],
     textures: [{
@@ -62,7 +59,6 @@ export class GPUPhysicsEngine extends PhysicsEngine {
         this._stateConfig = {};
 
         this._positionBufferData = new Float32Array(this.settings.segmentMaxCount * 3);
-        this._massBufferData = new Float32Array(this.settings.segmentMaxCount);
 
         this._outVelocityData = new Float32Array(this.settings.segmentMaxCount * 3);
         this._particleTexData = new Float32Array(this.settings.segmentMaxCount * 4);
@@ -105,7 +101,6 @@ export class GPUPhysicsEngine extends PhysicsEngine {
             this._positionBufferData[i * 3] = p.x;
             this._positionBufferData[i * 3 + 1] = p.y;
             this._positionBufferData[i * 3 + 2] = p.z;
-            this._massBufferData[i] = p.mass;
 
             this._particleTexData[i * 4] = p.x;
             this._particleTexData[i * 4 + 1] = p.y;
@@ -121,7 +116,6 @@ export class GPUPhysicsEngine extends PhysicsEngine {
             ],
             buffers: [
                 {name: "position", data: this._positionBufferData},
-                {name: "mass", data: this._massBufferData},
             ],
             textures: [
                 {name: "particles_tex", data: this._particleTexData}

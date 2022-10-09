@@ -72,7 +72,7 @@ export class DFRIHelper {
         for (let i = 0; i < this.settings.particleCount; i++) {
             this._deltas[i].x = buffer ? buffer[i * ITEM_SIZE] - particles[i].x : particles[i].velX;
             this._deltas[i].y = buffer ? buffer[i * ITEM_SIZE + 1] - particles[i].y : particles[i].velY;
-            this._deltas[i].z = buffer ? buffer[i * ITEM_SIZE + 2] - particles[i].z : particles[i].velz;
+            this._deltas[i].z = buffer ? buffer[i * ITEM_SIZE + 2] - particles[i].z : particles[i].velZ;
         }
 
         this.frame = 0;

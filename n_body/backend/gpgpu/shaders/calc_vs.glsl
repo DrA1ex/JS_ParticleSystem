@@ -8,7 +8,6 @@ uniform int count;
 uniform sampler2D particles_tex;
 
 in vec3 position;
-in float mass;
 
 out vec3 out_velocity;
 

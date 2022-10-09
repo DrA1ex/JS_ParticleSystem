@@ -1,3 +1,5 @@
+import {m4} from "../utils/m4.js";
+
 export class RendererBase {
     canvas;
     settings;
@@ -9,6 +11,9 @@ export class RendererBase {
     scale = 1;
     xOffset = 0;
     yOffset = 0;
+
+    xRotation = 0;
+    yRotation = 0;
 
     /**
      * @param {HTMLCanvasElement} canvas
@@ -38,6 +43,7 @@ export class RendererBase {
         this.canvas.width = this.canvasWidth;
         this.canvas.height = this.canvasHeight;
 
+        this.lastMatrix = null;
         this._hueAngle = 0;
     }
 
@@ -86,6 +92,22 @@ export class RendererBase {
     }
 
     rotate(xDelta, yDelta) {
+        let newX = this.xRotation + xDelta;
+        if (Math.abs(newX) > Math.PI * 2) {
+            newX -= Math.sign(newX) * Math.PI * 2;
+        }
+        this.xRotation = newX;
+
+        if (Math.abs(newX) > Math.PI) {
+            yDelta = -yDelta;
+        }
+
+        let newY = this.yRotation + yDelta;
+        if (Math.abs(newX) > Math.PI * 2) {
+            newY -= Math.sign(newY) * Math.PI * 2;
+        }
+
+        this.yRotation = newY;
     }
 
     /**
@@ -128,36 +150,69 @@ export class RendererBase {
     /**
      * @param {number} x
      * @param {number} y
+     * @param {number} z
      * @param {number} width
      * @param {number} height
+     * @param {number} depth
      * @return {void}
      */
-    drawWorldRect(x, y, width, height) {
+    drawWorldRect(x, y, z, width, height, depth) {
         if (this._errorIfNotDebug()) return;
         const ctx = this.getDebugDrawingContext();
 
+        const lines = this._drawBox(x, y, z, width, height, depth)
+            .map(l => m4.transformPoint({x: l[0], y: l[1], z: l[2]}, this.lastMatrix))
+
+
         ctx.beginPath()
-        ctx.rect(
-            this.xOffset + x * this.scale, this.yOffset + y * this.scale,
-            width * this.scale, height * this.scale
-        );
+        ctx.moveTo(...lines[0]);
+        for (let i = 1; i < lines.length; i++) {
+            ctx.lineTo(...lines[i]);
+        }
         ctx.stroke();
+    }
+
+    _drawBox(x, y, z, width, height, depth) {
+        // @formatter:off
+        return [
+            [x,           y,             z,       ],  // START
+            [x + width,   y,             z,       ],  // RIGHT
+            [x + width,   y + height,    z,       ],  // DOWN
+            [x,           y + height,    z,       ],  // LEFT
+            [x,           y,             z,       ],  // UP
+            [x,           y,             z + depth],  // FAR
+            [x + width,   y,             z + depth],  // RIGHT
+            [x + width,   y + height,    z + depth],  // DOWN
+            [x,           y + height,    z + depth],  // LEFT
+            [x,           y,             z + depth],  // UP
+            [x + width,   y,             z + depth],  // RIGHT
+            [x + width,   y,             z        ],  // NEAR
+            [x + width,   y,             z + depth],  // FAR
+            [x + width,   y + height,    z + depth],  // DOWN
+            [x + width,   y + height,    z        ],  // NEAR
+            [x + width,   y + height,    z + depth],  // FAR
+            [x,           y + height,    z + depth],  // LEFT
+            [x,           y + height,    z        ],  // NEAR
+        ]
+        // @formatter:on
     }
 
     /**
      * @param {number} x1
-     * @param {number} y1
      * @param {number} x2
+     * @param {number} y1
      * @param {number} y2
+     * @param {number} z1
+     * @param {number} z2
      * @return {void}
      */
-    drawWorldLine(x1, y1, x2, y2) {
+    drawWorldLine(x1, x2, y1, y2, z1, z2) {
         if (this._errorIfNotDebug()) return;
         const ctx = this.getDebugDrawingContext();
 
         ctx.beginPath();
-        ctx.moveTo(this.xOffset + x1 * this.scale, this.yOffset + y1 * this.scale);
-        ctx.lineTo(this.xOffset + x2 * this.scale, this.yOffset + y2 * this.scale);
+        ctx.moveTo(...m4.transformPoint({x: x1, y: y1, z: z1}, this.lastMatrix));
+        ctx.lineTo(...m4.transformPoint({x: x2, y: y2, z: z2}, this.lastMatrix));
         ctx.stroke();
     }
 
