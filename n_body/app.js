@@ -52,6 +52,10 @@ export class Application {
 
         this.lastRenderTime = performance.now() - this.refreshTime;
         this._canvasInteraction.enable();
+
+        if (this.settings.enableDFRI) {
+            this._dfriHelper.enable();
+        }
     }
 
     run() {
@@ -78,7 +82,7 @@ export class Application {
     }
 
     prepareNextStep() {
-        if (!this._dfriHelper.needSwitchBuffer()) {
+        if (this.settings.enableDFRI && !this._dfriHelper.needSwitchBuffer()) {
             return;
         }
 

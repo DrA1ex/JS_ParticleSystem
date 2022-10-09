@@ -6,8 +6,6 @@ export class DFRIHelper {
         this.renderer = renderer;
         this.settings = settings;
 
-        this.renderer.setCoordinateTransformer(this._transformParticlePosition.bind(this));
-
         this.frame = 0;
         this.interpolateFrames = 0;
         this.stepTimeSmoother = new DataSmoother(this.settings.fps * 4, 1);
@@ -19,8 +17,12 @@ export class DFRIHelper {
 
         this._deltas = new Array(this.settings.particleCount);
         for (let i = 0; i < this.settings.particleCount; i++) {
-            this._deltas[i] = {x: 0, y: 0};
+            this._deltas[i] = {x: 0, y: 0, z: 0};
         }
+    }
+
+    enable() {
+        this.renderer.setCoordinateTransformer(this._transformParticlePosition.bind(this));
     }
 
     render(particles) {
