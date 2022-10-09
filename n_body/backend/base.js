@@ -1,4 +1,4 @@
-import {ParticleInitializer, PhysicsEngine} from "../simulation/physics.js";
+import {ParticleInitializer} from "../simulation/particleInitializer.js";
 
 /**
  * @typedef {{physicsTime:number, treeTime: number, tree: {flops: number, depth: number, segmentCount: number}}} StepStatistics

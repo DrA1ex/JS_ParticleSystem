@@ -20,7 +20,7 @@ void main() {
     float speed = 2.0 * max(abs(velocity.x), abs(velocity.y)) / max_speed;
 
     if (max_mass > 1.0) {
-        gl_PointSize = point_size * mass / (max_mass / 2.0 + 1.0) + 1.0 + speed;
+        gl_PointSize = point_size + mass / (max_mass / 2.0 + 1.0) + speed;
     } else {
         gl_PointSize = point_size * mass + speed;
     }

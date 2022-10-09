@@ -41,8 +41,9 @@ export class Settings {
     resistance = 1;
     gravity = 1;
     particleGravity = null;
-    particleMass = 0;
-    minInteractionDistance = 0.01;
+    particleMassFactor = 0;
+    particleMass = null;
+    minInteractionDistance = 0.1;
     minInteractionDistanceSq = null;
 
     segmentDivider = 2;
@@ -102,7 +103,22 @@ export class Settings {
             }
         }
 
-        this.particleGravity = this.gravity / this.particleCount;
+        this.particleMass = Math.pow(2, this.particleMassFactor);
+
+        const k = Math.floor(this.particleCount / 100);
+        this.massDistribution = [
+            [5 * k, this.particleMass],
+            [4 * k, this.particleMass / 3],
+            [3 * k, this.particleMass / 9],
+        ]
+
+        let totalMass = this.particleCount;
+        for (let i = 0; i < this.massDistribution.length; i++) {
+            const [k, mass] = this.massDistribution[i];
+            totalMass += Math.floor(this.particleCount / k) * mass;
+        }
+
+        this.particleGravity = this.gravity / totalMass;
         this.minInteractionDistanceSq = Math.pow(this.minInteractionDistance, 2);
     }
 
@@ -177,7 +193,7 @@ export class Settings {
             DFRIMaxFrames: _int("dfri_max"),
             particleInitTypeCode: _string("particle_init"),
             particleCount: _int("particle_count"),
-            particleMass: _int("particle_mass"),
+            particleMassFactor: _int("particle_mass"),
             resistance: _float("resistance"),
             gravity: _float("g"),
             minInteractionDistance: _float("min_distance"),
