@@ -122,32 +122,43 @@ export class PhysicsEngine {
     }
 
     _processCollisions(leaf) {
+        const nextVelocity = new Array(leaf.length);
+
         for (let i = 0; i < leaf.length; i++) {
             const p1 = leaf.data[i];
-            for (let j = i + 1; j < leaf.length; j++) {
-                const p2 = leaf.data[j];
+            let nextVelX = p1.velX, nextVelY = p1.velY;
 
-                const dx = p1.x - p2.x, dy = p1.y - p2.y;
+            for (let j = 0; j < leaf.length; j++) {
+                if (i === j) {
+                    continue;
+                }
+
+                const p2 = leaf.data[j];
+                const dx = p1.x - p2.x,
+                    dy = p1.y - p2.y;
                 const distSquare = dx * dx + dy * dy;
 
                 if (distSquare < this.settings.minInteractionDistanceSq) {
-                    if (this.settings.debugForce) {
-                        p1.forceX += p2.velX
-                        p1.forceY += p2.velY
-
-                        p2.forceX += p1.velX;
-                        p2.forceY += p1.velY;
-                    }
-
-                    let tmp = p1.velX;
-                    p1.velX = p2.velX * this.settings.collisionResistance;
-                    p2.velX = tmp * this.settings.collisionResistance;
-
-                    tmp = p1.velY;
-                    p1.velY = p2.velY * this.settings.collisionResistance;
-                    p2.velY = tmp * this.settings.collisionResistance;
+                    const dot = (nextVelX - p2.velX) * dx + (nextVelY - p2.velY) * dy;
+                    nextVelX -= dot / distSquare * dx;
+                    nextVelY -= dot / distSquare * dy;
                 }
             }
+
+            nextVelocity[i] = [nextVelX * this.settings.collisionResistance, nextVelY * this.settings.collisionResistance];
+        }
+
+        for (let i = 0; i < leaf.length; i++) {
+            const p = leaf.data[i];
+            const [nextVelX, nextVelY] = nextVelocity[i];
+
+            if (this.settings.debugForce) {
+                p.forceX += nextVelX - p.velX;
+                p.forceY += nextVelY - p.velY;
+            }
+
+            p.velX = nextVelX;
+            p.velY = nextVelY;
         }
     }
 
