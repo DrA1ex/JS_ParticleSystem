@@ -42,7 +42,8 @@ export class Settings {
     gravity = 1;
     particleGravity = null;
     particleMassFactor = 0;
-    particleMass = null;
+    particleMass = 0;
+    massDistribution = [];
     minInteractionDistance = 0.1;
     minInteractionDistanceSq = null;
 
@@ -103,18 +104,20 @@ export class Settings {
             }
         }
 
-        this.particleMass = Math.pow(2, this.particleMassFactor);
-
-        this.massDistribution = [
-            [Math.floor(1 / 0.001), this.particleMass],
-            [Math.floor(1 / 0.005), this.particleMass / 3],
-            [Math.floor(1 / 0.01), this.particleMass / 9],
-        ]
-
         let totalMass = this.particleCount;
-        for (let i = 0; i < this.massDistribution.length; i++) {
-            const [k, mass] = this.massDistribution[i];
-            totalMass += Math.floor(this.particleCount / k) * mass;
+        if (this.particleMassFactor > 0) {
+            this.particleMass = Math.pow(2, this.particleMassFactor);
+            const k = Math.floor(this.particleCount / 100);
+            this.massDistribution = [
+                [5 * k, this.particleMass],
+                [4 * k, this.particleMass / 3],
+                [3 * k, this.particleMass / 9],
+            ]
+
+            for (let i = 0; i < this.massDistribution.length; i++) {
+                const [k, mass] = this.massDistribution[i];
+                totalMass += Math.floor(this.particleCount / k) * mass;
+            }
         }
 
         this.particleGravity = this.gravity / totalMass;
