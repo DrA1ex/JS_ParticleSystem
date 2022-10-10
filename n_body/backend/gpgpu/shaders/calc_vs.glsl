@@ -8,7 +8,6 @@ uniform int count;
 uniform sampler2D particles_tex;
 
 in vec2 position;
-in float mass;
 
 out vec2 out_velocity;
 
@@ -19,8 +18,7 @@ vec2 calculateForce(vec2 p1, vec2 p2, float g) {
     float distSquare = squareDelta.x + squareDelta.y;
 
     float force;
-    if (distSquare >= min_dist_square)
-    {
+    if (distSquare >= min_dist_square) {
         force = -g / distSquare;
     }
 
@@ -32,9 +30,8 @@ void main() {
     vec2 force = vec2(0.0);
 
     for (int i = 0; i < count; ++i) {
-        ivec2 index = ivec2(i % dimensions.x, i / dimensions.y);
+        ivec2 index = ivec2(i % dimensions.x, i / dimensions.x);
         vec3 atractor = texelFetch(particles_tex, index, 0).xyz;
-
         force += calculateForce(position, atractor.xy, gravity * atractor.z);
     }
 
