@@ -115,11 +115,45 @@ export class PhysicsEngine {
                 this._calculateForce(particle, attractor, this.settings.particleGravity * attractor.mass, particle, accumulateForce);
             }
         }
+
+        if (this.settings.enableCollision) {
+            this._processCollisions(leaf);
+        }
+    }
+
+    _processCollisions(leaf) {
+        for (let i = 0; i < leaf.length; i++) {
+            const p1 = leaf.data[i];
+            for (let j = i + 1; j < leaf.length; j++) {
+                const p2 = leaf.data[j];
+
+                const dx = p1.x - p2.x, dy = p1.y - p2.y;
+                const distSquare = dx * dx + dy * dy;
+
+                if (distSquare < this.settings.minInteractionDistanceSq) {
+                    if (this.settings.debugForce) {
+                        p1.forceX += p2.velX
+                        p1.forceY += p2.velY
+
+                        p2.forceX += p1.velX;
+                        p2.forceY += p1.velY;
+                    }
+
+                    let tmp = p1.velX;
+                    p1.velX = p2.velX * this.settings.collisionResistance;
+                    p2.velX = tmp * this.settings.collisionResistance;
+
+                    tmp = p1.velY;
+                    p1.velY = p2.velY * this.settings.collisionResistance;
+                    p2.velY = tmp * this.settings.collisionResistance;
+                }
+            }
+        }
     }
 
     /**
-     * @param {PositionVector} p1
-     * @param {PositionVector} p2
+     * @param {PositionVector|Particle} p1
+     * @param {PositionVector|Particle} p2
      * @param {number} g
      * @param {Particle|[number,number]} out
      * @param {boolean=false} accumulateForce
