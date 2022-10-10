@@ -69,6 +69,10 @@ export class PhysicsEngine {
             this._calculateLeafBlock(leaf, pForce);
         } else {
             this._calculateLeafData(leaf, pForce);
+
+            if (this.settings.enableCollision) {
+                this._processCollisions(leaf);
+            }
         }
     }
 
@@ -114,10 +118,6 @@ export class PhysicsEngine {
                 const particle = leaf.data[j];
                 this._calculateForce(particle, attractor, this.settings.particleGravity * attractor.mass, particle, accumulateForce);
             }
-        }
-
-        if (this.settings.enableCollision) {
-            this._processCollisions(leaf);
         }
     }
 

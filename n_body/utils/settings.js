@@ -201,7 +201,7 @@ export class Settings {
             particleMassFactor: _int("particle_mass"),
             resistance: _float("resistance"),
             gravity: _float("g"),
-            collision: _bool("collision"),
+            enableCollision: _bool("collision"),
             collisionResistance: _bool("collision_resistance"),
             minInteractionDistance: _float("min_distance"),
             segmentDivider: _int("segment_divider"),
