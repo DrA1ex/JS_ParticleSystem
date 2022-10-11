@@ -123,10 +123,12 @@ export class PhysicsEngine {
 
     _processCollisions(leaf) {
         const nextVelocity = new Array(leaf.length);
+        let hasCollision = false;
 
         for (let i = 0; i < leaf.length; i++) {
             const p1 = leaf.data[i];
-            let nextVelX = p1.velX, nextVelY = p1.velY;
+            let nextVelX = p1.velX,
+                nextVelY = p1.velY;
 
             for (let j = 0; j < leaf.length; j++) {
                 if (i === j) {
@@ -142,10 +144,16 @@ export class PhysicsEngine {
                     const dot = (nextVelX - p2.velX) * dx + (nextVelY - p2.velY) * dy;
                     nextVelX -= dot / distSquare * dx;
                     nextVelY -= dot / distSquare * dy;
+
+                    hasCollision = true;
                 }
             }
 
-            nextVelocity[i] = [nextVelX * this.settings.collisionResistance, nextVelY * this.settings.collisionResistance];
+            if (hasCollision) {
+                nextVelocity[i] = [nextVelX * this.settings.collisionRestitution, nextVelY * this.settings.collisionRestitution];
+            } else {
+                nextVelocity[i] = [nextVelX, nextVelY];
+            }
         }
 
         for (let i = 0; i < leaf.length; i++) {
@@ -204,6 +212,26 @@ export class PhysicsEngine {
         particle.velY *= this.settings.resistance;
         particle.x += particle.velX;
         particle.y += particle.velY;
+
+        if (particle.x >= this.settings.worldWidth) {
+            particle.x = this.settings.worldWidth
+            particle.velX *= -1;
+        }
+
+        if (particle.x <= 0) {
+            particle.x = 0;
+            particle.velX *= -1;
+        }
+
+        if (particle.y >= this.settings.worldHeight) {
+            particle.y = this.settings.worldHeight
+            particle.velY *= -1;
+        }
+
+        if (particle.y <= 0) {
+            particle.y = 0;
+            particle.velY *= -1;
+        }
     }
 
     _calcTreeStats(tree) {

@@ -2,6 +2,7 @@
 
 uniform float min_dist_square;
 uniform int count;
+uniform float restitution;
 
 uniform sampler2D particle_pos_mass_tex;
 uniform sampler2D particle_velocity_tex;
@@ -12,13 +13,15 @@ in float index;
 
 out vec2 out_velocity;
 
+bool has_collision = false;
+
 void collide(vec2 p1, vec2 p2, vec2 p2Vel) {
     vec2 deltaPos =  p1 - p2;
-    vec2 squareDelta = deltaPos * deltaPos;
-    float distSquare = squareDelta.x + squareDelta.y;
+    float distSquare = dot(deltaPos, deltaPos);
 
     if (distSquare < min_dist_square) {
         out_velocity -= dot((out_velocity - p2Vel), deltaPos) / distSquare * deltaPos;
+        has_collision = true;
     }
 }
 
@@ -37,5 +40,9 @@ void main() {
         vec2 atractor_velocity = texelFetch(particle_velocity_tex, index, 0).xy;
 
         collide(position, atractor.xy, atractor_velocity);
+    }
+
+    if (has_collision) {
+        out_velocity *= restitution;
     }
 }

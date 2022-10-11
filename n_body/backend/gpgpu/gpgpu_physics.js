@@ -57,6 +57,7 @@ const CONFIGURATION1 = [{
     ],
     uniforms: [
         {name: "min_dist_square", type: "uniform1f"},
+        {name: "restitution", type: "uniform1f"},
         {name: "count", type: "uniform1i"},
     ],
     vertexArrays: [{
@@ -159,6 +160,7 @@ export class GPUPhysicsEngine extends PhysicsEngine {
             program: "collision",
             uniforms: [
                 {name: "min_dist_square", values: [this.settings.minInteractionDistanceSq]},
+                {name: "restitution", values: [this.settings.collisionRestitution]},
             ],
             buffers: [
                 {name: "index", data: this._indexBufferData},

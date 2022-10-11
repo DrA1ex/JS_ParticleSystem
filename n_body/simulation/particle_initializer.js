@@ -50,13 +50,13 @@ export class Particle_initializer {
 
             case ParticleInitType.collision:
                 this._multiCircleInitializerBase(particles, settings, {
-                    gravityMul: 0.05,
-                    radiusDivider: 3,
-                    subRadiusDivider: 20,
+                    gravityMul: 0.5,
+                    radiusDivider: 2,
+                    subRadiusDivider: 4,
                     startAngle: Math.PI / 6,
-                    velocityAngle: Math.PI - Math.PI / 6 + Math.PI / 12,
+                    velocityAngle: Math.PI,
                     circleCount: 2,
-                    wiggleDivider: 0.5
+                    wiggleDivider: 0.55
                 });
                 break;
 

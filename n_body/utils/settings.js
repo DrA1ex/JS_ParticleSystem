@@ -19,7 +19,7 @@ export const BackendType = {
 
 const SERIALIZABLE_PROPS = [
     "enableFilter", "enableBlending", "particleCount", "resistance", "gravity", "minInteractionDistance",
-    "enableCollision", "collisionResistance",
+    "enableCollision", "collisionRestitution",
 ];
 
 export class Settings {
@@ -42,7 +42,7 @@ export class Settings {
     resistance = 1;
     gravity = 1;
     enableCollision = false;
-    collisionResistance = 1;
+    collisionRestitution = 1;
     particleGravity = null;
     particleMassFactor = 0;
     particleMass = 0;
@@ -202,7 +202,7 @@ export class Settings {
             resistance: _float("resistance"),
             gravity: _float("g"),
             enableCollision: _bool("collision"),
-            collisionResistance: _bool("collision_resistance"),
+            collisionRestitution: _float("collision_r"),
             minInteractionDistance: _float("min_distance"),
             segmentDivider: _int("segment_divider"),
             segmentMaxCount: _int("segment_max_count"),

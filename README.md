@@ -136,7 +136,7 @@ _Simulation demo links with maximum accuracy_:
 - *min_distance* - Minimal distance (pixels) to process interactions also determine collision distance (default: __1__)
 - *resistance* - Resistance of environment, *1* - means no resistance (default: __1__)
 - *collision* - Enable particles collision (default: __0__)
-- *collision_resistance* - Sets velocity loss when particles collide, *1* - means no loss (default: __1__)
+- *collision_r* - Sets collision restitution, *1* - means no energy loss during collision (default: __1__)
 - *render* - Configure renderer type: __canvas__, __webgl2__ (default: __canvas__ for mobile, __webgl__ for desktop)
 - *backend* - Configure physics backend: __worker__, __gpgpu__ (default: __worker__)
 - *dpr* - Enable drawing according to Device Pixel Ratio (default: __0__)
