@@ -69,6 +69,10 @@ export class PhysicsEngine {
             this._calculateLeafBlock(leaf, pForce);
         } else {
             this._calculateLeafData(leaf, pForce);
+
+            if (this.settings.enableCollision) {
+                this._processCollisions(leaf);
+            }
         }
     }
 
@@ -118,9 +122,68 @@ export class PhysicsEngine {
         }
     }
 
+    _processCollisions(leaf) {
+        const nextVelocity = new Array(leaf.length);
+        let hasCollision = false;
+
+        for (let i = 0; i < leaf.length; i++) {
+            const p1 = leaf.data[i];
+            let nextVelX = p1.velX,
+                nextVelY = p1.velY,
+                nextVelZ = p1.velZ;
+
+            for (let j = 0; j < leaf.length; j++) {
+                if (i === j) {
+                    continue;
+                }
+
+                const p2 = leaf.data[j];
+                const dx = p1.x - p2.x,
+                    dy = p1.y - p2.y,
+                    dz = p1.z - p2.z;
+                const distSquare = dx * dx + dy * dy + dz * dz;
+
+                if (distSquare < this.settings.minInteractionDistanceSq) {
+                    const massFactor = 2 * p2.mass / (p1.mass + p2.mass);
+                    const dot = massFactor * ((nextVelX - p2.velX) * dx + (nextVelY - p2.velY) * dy + (nextVelZ - p2.velZ) * dz);
+                    nextVelX -= dot / distSquare * dx;
+                    nextVelY -= dot / distSquare * dy;
+                    nextVelZ -= dot / distSquare * dz;
+
+                    hasCollision = true;
+                }
+            }
+
+            if (hasCollision) {
+                nextVelocity[i] = [
+                    nextVelX * this.settings.collisionRestitution,
+                    nextVelY * this.settings.collisionRestitution,
+                    nextVelZ * this.settings.collisionRestitution
+                ];
+            } else {
+                nextVelocity[i] = [nextVelX, nextVelY, nextVelZ];
+            }
+        }
+
+        for (let i = 0; i < leaf.length; i++) {
+            const p = leaf.data[i];
+            const [nextVelX, nextVelY, nextVelZ] = nextVelocity[i];
+
+            if (this.settings.debugForce) {
+                p.forceX += nextVelX - p.velX;
+                p.forceY += nextVelY - p.velY;
+                p.forceZ += nextVelZ - p.velZ;
+            }
+
+            p.velX = nextVelX;
+            p.velY = nextVelY;
+            p.velZ = nextVelZ;
+        }
+    }
+
     /**
-     * @param {PositionVector} p1
-     * @param {PositionVector} p2
+     * @param {PositionVector|Particle} p1
+     * @param {PositionVector|Particle} p2
      * @param {number} g
      * @param {Particle|[number,number]} out
      * @param {boolean=false} accumulateForce

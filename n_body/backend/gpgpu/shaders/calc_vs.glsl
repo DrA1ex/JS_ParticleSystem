@@ -18,8 +18,7 @@ vec3 calculateForce(vec3 p1, vec3 p2, float g) {
     float distSquare = squareDelta.x + squareDelta.y + squareDelta.z;
 
     float force;
-    if (distSquare >= min_dist_square)
-    {
+    if (distSquare >= min_dist_square) {
         force = -g / distSquare;
     }
 

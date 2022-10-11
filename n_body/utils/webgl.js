@@ -194,9 +194,12 @@ export function loadDataFromConfig(gl, stateConfig, dataConfig) {
         }
 
         if (dc.textures) {
+            let index = 0;
             for (const texConfig of dc.textures) {
                 const params = state._config.textures[texConfig.name];
                 loadTexture(gl, state.textures[texConfig.name], texConfig.data, params);
+
+                gl.uniform1i(gl.getUniformLocation(program, texConfig.name), index++);
             }
         }
     }
