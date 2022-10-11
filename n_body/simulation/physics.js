@@ -212,26 +212,6 @@ export class PhysicsEngine {
         particle.velY *= this.settings.resistance;
         particle.x += particle.velX;
         particle.y += particle.velY;
-
-        if (particle.x >= this.settings.worldWidth) {
-            particle.x = this.settings.worldWidth
-            particle.velX *= -1;
-        }
-
-        if (particle.x <= 0) {
-            particle.x = 0;
-            particle.velX *= -1;
-        }
-
-        if (particle.y >= this.settings.worldHeight) {
-            particle.y = this.settings.worldHeight
-            particle.velY *= -1;
-        }
-
-        if (particle.y <= 0) {
-            particle.y = 0;
-            particle.velY *= -1;
-        }
     }
 
     _calcTreeStats(tree) {
