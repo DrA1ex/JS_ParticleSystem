@@ -107,20 +107,18 @@ export class Settings {
             }
         }
 
-        let totalMass = this.particleCount;
-        if (this.particleMassFactor > 0) {
-            this.particleMass = Math.pow(2, this.particleMassFactor);
-            const k = Math.floor(this.particleCount / 100);
-            this.massDistribution = [
-                [5 * k, this.particleMass],
-                [4 * k, this.particleMass / 3],
-                [3 * k, this.particleMass / 9],
-            ]
+        this.particleMass = Math.pow(2, this.particleMassFactor);
+        this.massDistribution = [
+            [Math.floor(1 / 0.001), this.particleMass],
+            [Math.floor(1 / 0.005), this.particleMass / 3],
+            [Math.floor(1 / 0.01), this.particleMass / 9],
+            [Math.floor(1 / 0.05), this.particleMass / 20],
+        ]
 
-            for (let i = 0; i < this.massDistribution.length; i++) {
-                const [k, mass] = this.massDistribution[i];
-                totalMass += Math.floor(this.particleCount / k) * mass;
-            }
+        let totalMass = this.particleCount;
+        for (let i = 0; i < this.massDistribution.length; i++) {
+            const [k, mass] = this.massDistribution[i];
+            totalMass += Math.floor(this.particleCount / k) * mass;
         }
 
         this.particleGravity = this.gravity / totalMass;

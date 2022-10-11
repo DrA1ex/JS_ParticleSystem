@@ -47,11 +47,13 @@ const CONFIGURATION1 = [{
     attributes: [
         {name: "position"},
         {name: "velocity"},
+        {name: "mass"},
         {name: "index"},
     ],
     buffers: [
         {name: "position", usageHint: GL.STREAM_DRAW},
         {name: "velocity", usageHint: GL.STREAM_DRAW},
+        {name: "mass", usageHint: GL.STREAM_DRAW},
         {name: "index", usageHint: GL.STATIC_DRAW},
         {name: "out_velocity", usageHint: GL.STREAM_READ},
     ],
@@ -64,6 +66,7 @@ const CONFIGURATION1 = [{
         name: "particle", entries: [
             {name: "position", type: GL.FLOAT, size: 2},
             {name: "velocity", type: GL.FLOAT, size: 2},
+            {name: "mass", type: GL.FLOAT, size: 1},
             {name: "index", type: GL.FLOAT, size: 1},
         ]
     }],
@@ -118,6 +121,7 @@ export class GPUPhysicsEngine extends PhysicsEngine {
 
         this._positionBufferData = new Float32Array(this.settings.segmentMaxCount * 2);
         this._velocityBufferData = new Float32Array(this.settings.segmentMaxCount * 2);
+        this._massBufferData = new Float32Array(this.settings.segmentMaxCount);
         this._indexBufferData = new Float32Array(this.settings.segmentMaxCount);
 
         this._outVelocityData = new Float32Array(this.settings.segmentMaxCount * 2);
@@ -228,6 +232,8 @@ export class GPUPhysicsEngine extends PhysicsEngine {
             this._velocityBufferData[i * 2] = p.velX;
             this._velocityBufferData[i * 2 + 1] = p.velY;
 
+            this._massBufferData[i] = p.mass;
+
             this._particleTexData[i * 3] = p.x;
             this._particleTexData[i * 3 + 1] = p.y;
             this._particleTexData[i * 3 + 2] = p.mass;
@@ -244,6 +250,7 @@ export class GPUPhysicsEngine extends PhysicsEngine {
             buffers: [
                 {name: "position", data: this._positionBufferData},
                 {name: "velocity", data: this._velocityBufferData},
+                {name: "mass", data: this._massBufferData},
             ],
             textures: [
                 {name: "particle_pos_mass_tex", data: this._particleTexData},

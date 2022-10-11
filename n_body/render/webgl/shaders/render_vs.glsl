@@ -19,10 +19,9 @@ void main() {
 
     float speed = 2.0 * max(abs(velocity.x), abs(velocity.y)) / max_speed;
 
+    gl_PointSize = point_size + speed;
     if (max_mass > 1.0) {
-        gl_PointSize = point_size + mass / (max_mass / 2.0 + 1.0) + speed;
-    } else {
-        gl_PointSize = point_size * mass + speed;
+        gl_PointSize += 2.0 * mass / max_mass;
     }
 
     vec2 translated_velocity = 0.5 + velocity / max_speed * 0.5;
