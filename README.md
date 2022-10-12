@@ -68,6 +68,15 @@ _Debug mode:_
 - Spatial tree: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?debug=1&debug_tree=1&g=10&dfri=0)
 - Speed and momentum vectors: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=5&particle_init=rotation&segment_max_count=5&g=200&debug=1&debug_tree=0&debug_velocity=1)
 
+### Simulation Player
+You can use Simulation Player to watch recorded simulations.
+
+_Note:_ Please be patient, files may be very large (200MB), so loading may take a while.
+
+_Demo links_:
+
+- 65k particles with enabled collisions: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/player/?url=https://media.githubusercontent.com/media/DrA1ex/docs_storage/main/JS_ParticleSystem/records/record_collision_65k.bin)
+
 ### Renderer
 Supported render engines:
 ##### `сanvas`
