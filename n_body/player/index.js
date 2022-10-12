@@ -2,6 +2,14 @@ import {InteractionHandler} from "../render/base.js";
 import {Webgl2Renderer} from "../render/webgl/render.js";
 import {Settings} from "../utils/settings.js";
 
+const StateEnum = {
+    waiting: 0,
+    loading: 1,
+    playing: 2,
+    paused: 3,
+    finished: 4
+}
+
 const SettingsInstance = Settings.fromQueryParams();
 
 let Renderer = null;
@@ -14,9 +22,13 @@ let RecordedRate = null;
 let ComponentsCount = null;
 let CurrentFrameIndex = -1;
 
+let CurrentState;
+
 const loader = document.getElementById("loader");
 loader.ondrop = loadFile;
 loader.ondragover = e => e.preventDefault();
+
+document.getElementById("rewind_btn").onclick = rewind;
 
 async function loadFromUrl() {
     const urlSearchParams = new URLSearchParams(window.location.search);
@@ -58,8 +70,7 @@ async function load(loaderFn) {
 
     let success = false;
     try {
-        document.getElementById("drop_text").style.display = "none";
-        document.getElementById("loading_text").style.display = "block";
+        changeState(StateEnum.loading);
 
         const buffer = await loaderFn();
         if (buffer) {
@@ -70,17 +81,15 @@ async function load(loaderFn) {
 
     success = success && nextFrame();
     if (success) {
-        loader.remove();
-
         Renderer = new Webgl2Renderer(document.getElementById("canvas"), SettingsInstance);
         RendererInteractions = new InteractionHandler(Renderer, SettingsInstance);
         RendererInteractions.enable();
 
-        render();
+        setTimeout(() => render());
+
+        changeState(StateEnum.playing);
     } else {
-        document.getElementById("loading_text").style.display = "none";
-        document.getElementById("drop_text").style.display = "block";
-        loader.ondrop = loadFile;
+        changeState(StateEnum.waiting);
     }
 
     return success;
@@ -152,13 +161,86 @@ function nextFrame() {
     return true;
 }
 
+function rewind() {
+    CurrentFrameIndex = -1;
+    for (let i = 0; i < Particles.length; i++) {
+        Particles[i].velX = 0;
+        Particles[i].velY = 0;
+    }
+
+    Renderer._maxSpeed = 0;
+
+    nextFrame();
+    changeState(StateEnum.playing);
+}
+
 function render() {
     Renderer.render(Particles);
 
     setTimeout(() => {
-        nextFrame();
+        if (CurrentState === StateEnum.playing) {
+            const frameSwitched = nextFrame();
+
+            if (!frameSwitched) {
+                changeState(StateEnum.finished);
+            }
+        }
+
         requestAnimationFrame(render);
     });
 }
 
+function changeState(state) {
+    if (CurrentState === state) {
+        return;
+    }
+
+    switch (CurrentState) {
+        case StateEnum.finished:
+            document.getElementById("rewind_btn").style.display = "none";
+            break;
+
+        case StateEnum.waiting:
+            document.getElementById("drop_text").style.display = "none";
+            loader.ondrop = null;
+            break;
+
+        case StateEnum.loading:
+            document.getElementById("loading_text").style.display = "none";
+            break;
+
+        case StateEnum.playing:
+            break;
+
+        case StateEnum.paused:
+            break;
+    }
+
+    switch (state) {
+        case StateEnum.waiting:
+            document.getElementById("drop_text").style.display = "block";
+            loader.ondrop = loadFile;
+            break;
+
+        case StateEnum.loading:
+            document.getElementById("loading_text").style.display = "block";
+            break;
+
+        case StateEnum.playing:
+            loader.style.pointerEvents = "none";
+            break;
+
+        case StateEnum.paused:
+            break;
+
+        case StateEnum.finished:
+            document.getElementById("rewind_btn").style.display = "block";
+            loader.style.pointerEvents = null;
+            break;
+    }
+
+    CurrentState = state;
+}
+
+changeState(StateEnum.waiting);
 await loadFromUrl();

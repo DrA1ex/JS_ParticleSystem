@@ -2,7 +2,7 @@
 <head>
     <title>N-Body Gravity Player</title>
     <style>
-        #loader {
+        .fill {
             position: absolute;
             top: 0;
             left: 0;
@@ -10,7 +10,7 @@
             right: 0;
         }
 
-        #loader span {
+        .fill span {
             position: absolute;
             top: 50%;
             left: 50%;
@@ -19,13 +19,28 @@
             color: rgba(255, 255, 255, 0.7);
         }
 
-        #stats {
+        .fill button {
             position: absolute;
-            bottom: 4px;
-            left: 4px;
+            top: 50%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-50%);
+        }
+
+        button {
+            height: 48px;
+            border: 1px solid white;
             color: white;
-            pointer-events: none;
-            font-family: monospace;
+            background: transparent;
+            padding: 0 8px;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+        }
+
+        button:active {
+            background: rgba(255, 255, 255, 0.2);
         }
 
         #hint {
@@ -58,9 +73,10 @@
 </head>
 <body style="background: black; margin: 0">
 <canvas id="canvas" style="width: 100%; height: 100%;"></canvas>
-<div id="loader">
+<div class="fill" id="loader">
     <span id="drop_text">Drop file here...</span>
     <span id="loading_text" style="display: none;">Loading...</span>
+    <button id="rewind_btn" style="display: none;">RESTART</button>
 </div>
 <span id="hint">Drag & Zoom</span>
 </body>
