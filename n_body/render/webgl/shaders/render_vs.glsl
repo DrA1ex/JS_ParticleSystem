@@ -17,9 +17,7 @@ void main() {
     vec2 translated_pos = ((position * scale + offset) / resolution * 2.0 - 1.0);
     gl_Position = vec4(translated_pos * vec2(1, -1.0), 0, 1);
 
-    float speed = 2.0 * max(abs(velocity.x), abs(velocity.y)) / max_speed;
-
-    gl_PointSize = point_size + speed;
+    gl_PointSize = point_size;
     if (max_mass > 1.0) {
         gl_PointSize += 2.0 * mass / max_mass;
     }
