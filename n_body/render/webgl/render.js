@@ -1,8 +1,10 @@
 import {RendererBase} from "../base.js";
 import * as WebglUtils from "../../utils/webgl.js";
 
-const RenderVertexShaderSource = await fetch("./render/webgl/shaders/render_vs.glsl").then(r => r.text());
-const RenderFragmentShaderSource = await fetch("./render/webgl/shaders/render_fs.glsl").then(r => r.text());
+const RenderVertexShaderSource = await fetch(new URL("./shaders/render_vs.glsl", import.meta.url))
+    .then(r => r.text());
+const RenderFragmentShaderSource = await fetch(new URL("./shaders/render_fs.glsl", import.meta.url))
+    .then(r => r.text());
 
 const GL = WebGL2RenderingContext;
 const CONFIGURATION = [

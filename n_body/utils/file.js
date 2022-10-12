@@ -32,8 +32,17 @@ export function openFile(contentType, multiple) {
  * @param {string} contentType
  */
 export function saveFile(content, fileName, contentType) {
+    return saveFileParts([content], fileName, contentType);
+}
+
+/**
+ * @param {*[]} parts
+ * @param {string} fileName
+ * @param {string} contentType
+ */
+export function saveFileParts(parts, fileName, contentType) {
     const a = document.createElement("a");
-    const file = new Blob([content], {type: contentType});
+    const file = new Blob(parts, {type: contentType});
     a.href = URL.createObjectURL(file);
     a.download = fileName;
     a.click();
