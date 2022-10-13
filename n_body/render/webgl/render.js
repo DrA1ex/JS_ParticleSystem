@@ -111,12 +111,18 @@ export class Webgl2Renderer extends RendererBase {
         this._maxSpeed = 0;
     }
 
+    clear() {
+        super.clear();
+
+        this.gl.clear(this.gl.COLOR_BUFFER_BIT);
+        this.debugCtx?.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+    }
+
     render(particles) {
         const t = performance.now();
         super.render(particles);
 
         this.debugCtx?.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-
         this._updateData(particles)
 
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);

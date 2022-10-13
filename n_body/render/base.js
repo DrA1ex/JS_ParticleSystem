@@ -97,6 +97,12 @@ export class RendererBase {
 
     /**
      * @abstract
+     */
+    clear() {
+    }
+
+    /**
+     * @abstract
      * @return {CanvasRenderingContext2D}
      */
     getDebugDrawingContext() {

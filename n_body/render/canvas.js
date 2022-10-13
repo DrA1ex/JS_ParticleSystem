@@ -21,6 +21,12 @@ export class CanvasRenderer extends RendererBase {
         this._maxSpeed = 0;
     }
 
+    clear() {
+        super.clear();
+
+        this.canvas.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+    }
+
     /**
      * @param {Particle[]} particles
      */

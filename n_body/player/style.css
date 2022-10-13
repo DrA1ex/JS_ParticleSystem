@@ -1,0 +1,112 @@
+.fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+}
+
+.centered {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-50%);
+}
+
+.control-bar {
+    display: flex;
+
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 32px;
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+span.centered {
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.7);
+    pointer-events: none;
+}
+
+.control-bar button {
+    height: auto;
+    box-sizing: border-box;
+    border: none;
+    margin: 4px;
+    padding: 0;
+}
+
+.control-bar button img {
+    height: 100%;
+    box-sizing: border-box;
+    padding: 4px;
+    pointer-events: none;
+}
+
+.progress-bar {
+    flex-grow: 1;
+    box-sizing: border-box;
+    height: 100%;
+    width: 100%;
+    padding: 4px 0;
+}
+
+.progress-bar .progress {
+    --value: 0;
+
+    width: calc(100% * var(--value));
+    height: 100%;
+    background: rgba(41, 137, 255, 0.5);
+}
+
+button {
+    height: 48px;
+    border: 1px solid white;
+    color: white;
+    background: transparent;
+    padding: 0 8px;
+}
+
+button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+}
+
+button:active {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+button:disabled {
+    filter: brightness(50%);
+    pointer-events: none;
+}
+
+#hint {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.7);
+    pointer-events: none;
+}
+
+#hint {
+    animation-duration: 1s;
+    animation-delay: 2s;
+    animation-fill-mode: forwards;
+    animation-name: hint_fade;
+}
+
+@keyframes hint_fade {
+    from {
+        opacity: 100%;
+    }
+
+    to {
+        opacity: 0;
+    }
+}

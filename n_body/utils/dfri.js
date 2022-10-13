@@ -28,6 +28,7 @@ export class DFRIHelperBase {
         this.frame = 0;
         this.interpolateFrames = 0;
 
+        this._initialized = false;
         this._deltas = new Array(this.particleCount);
         for (let i = 0; i < this.particleCount; i++) {
             this._deltas[i] = {x: 0, y: 0};
@@ -38,10 +39,14 @@ export class DFRIHelperBase {
         this.renderer.setCoordinateTransformer(this._transformParticlePosition.bind(this));
     }
 
+    init() {
+        this.interpolateFrames = this._getInterpolateFramesCount();
+        this._initialized = true;
+    }
+
     render(particles) {
-        if (this._isFirstRender) {
-            this.interpolateFrames = this._getInterpolateFramesCount();
-            this._isFirstRender = false;
+        if (!this._initialized) {
+            this.init();
         }
 
         this._currentFactor = this.getFactor();
@@ -100,8 +105,8 @@ export class SimpleDFRIHelper extends DFRIHelperBase {
         return this._desiredTime;
     }
 
-    constructor(particles, particlesCount, sourceFrameRate, desiredFramerate) {
-        super(particles, particlesCount);
+    constructor(renderer, particlesCount, sourceFrameRate, desiredFramerate) {
+        super(renderer, particlesCount);
 
         this._actualTime = 1000 / sourceFrameRate;
         this._desiredTime = 1000 / desiredFramerate;
