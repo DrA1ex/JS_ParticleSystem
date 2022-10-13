@@ -82,7 +82,7 @@ export class Application {
     }
 
     prepareNextStep() {
-        if (this.settings.enableDFRI && !this._dfriHelper.needSwitchBuffer()) {
+        if (this.settings.enableDFRI && !this._dfriHelper.needNextFrame()) {
             return;
         }
 
@@ -109,7 +109,7 @@ export class Application {
         this.backend.freeBuffer(data);
         this.requestNextStep();
 
-        if (this.settings.enableDFRI && this._dfriHelper.needSwitchBuffer()) {
+        if (this.settings.enableDFRI && this._dfriHelper.needNextFrame()) {
             this._dfriHelper.bufferSwitched(this.particles, this.aheadBuffers[0]);
         }
     }

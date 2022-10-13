@@ -7,7 +7,6 @@ export class CanvasRenderer extends RendererBase {
      */
     constructor(canvas, settings) {
         super(canvas, settings);
-        this._hueAngle = 0;
         this._maxSpeed = 0;
 
         this.ctx = canvas.getContext('2d');
@@ -15,6 +14,11 @@ export class CanvasRenderer extends RendererBase {
 
         this._renderImageData = this.ctx.createImageData(this.canvasWidth, this.canvasHeight);
         this._pixels = new Uint32Array(this._renderImageData.data.buffer);
+    }
+
+    reset() {
+        super.reset();
+        this._maxSpeed = 0;
     }
 
     /**

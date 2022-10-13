@@ -41,6 +41,10 @@ export class RendererBase {
         this._hueAngle = 0;
     }
 
+    reset() {
+        this._hueAngle = 0;
+    }
+
     scaleCentered(factor) {
         const newScale = Math.max(0.01, this.scale * factor);
         if (this.scale === newScale) {

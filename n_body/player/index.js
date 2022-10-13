@@ -1,4 +1,5 @@
 import {InteractionHandler} from "../render/base.js";
+import {SimpleDFRIHelper} from "../utils/dfri.js";
 import {Webgl2Renderer} from "../render/webgl/render.js";
 import {Settings} from "../utils/settings.js";
 
@@ -14,6 +15,7 @@ const SettingsInstance = Settings.fromQueryParams();
 
 let Renderer = null;
 let RendererInteractions = null;
+let DFRI = null;
 
 let Frames = null;
 let Particles = null;
@@ -85,8 +87,12 @@ async function load(loaderFn) {
         RendererInteractions = new InteractionHandler(Renderer, SettingsInstance);
         RendererInteractions.enable();
 
-        setTimeout(() => render());
+        if (SettingsInstance.enableDFRI) {
+            DFRI = new SimpleDFRIHelper(Renderer, SettingsInstance.particleCount, RecordedRate, 60);
+            DFRI.enable();
+        }
 
+        setTimeout(() => render());
         changeState(StateEnum.playing);
     } else {
         changeState(StateEnum.waiting);
@@ -124,7 +130,7 @@ function loadFileData(buffer) {
     Frames = new Array(frames);
     const framesBuffer = new Float32Array(buffer, metaLength * Uint32Array.BYTES_PER_ELEMENT, totalDataSize);
     for (let i = 0; i < frames; i++) {
-        Frames[i] = new Float32Array(framesBuffer.slice(i * frameSize, i * frameSize + frameSize));
+        Frames[i] = new Float32Array(framesBuffer.subarray(i * frameSize, i * frameSize + frameSize));
     }
 
     Particles = new Array(particleCount);
@@ -138,6 +144,10 @@ function loadFileData(buffer) {
 }
 
 function nextFrame() {
+    if (DFRI && !DFRI.needNextFrame()) {
+        return true;
+    }
+
     CurrentFrameIndex += 1;
     const frame = Frames[CurrentFrameIndex];
 
@@ -158,6 +168,16 @@ function nextFrame() {
         Particles[i].y = y;
     }
 
+    if (DFRI) {
+        const nextFrame = Frames[CurrentFrameIndex + 1];
+        DFRI.setNextFrame(Particles, i => {
+            return [
+                nextFrame ? nextFrame[i * ComponentsCount] - Particles[i].x : Particles[i].velX,
+                nextFrame ? nextFrame[i * ComponentsCount + 1] - Particles[i].y : Particles[i].velY
+            ];
+        });
+    }
+
     return true;
 }
 
@@ -168,14 +188,19 @@ function rewind() {
         Particles[i].velY = 0;
     }
 
-    Renderer._maxSpeed = 0;
+    Renderer.reset();
+    DFRI?.reset();
 
     nextFrame();
     changeState(StateEnum.playing);
 }
 
 function render() {
-    Renderer.render(Particles);
+    if (DFRI) {
+        DFRI.render(Particles);
+    } else {
+        Renderer.render(Particles);
+    }
 
     setTimeout(() => {
         if (CurrentState === StateEnum.playing) {

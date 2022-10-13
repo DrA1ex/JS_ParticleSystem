@@ -106,6 +106,11 @@ export class Webgl2Renderer extends RendererBase {
         this.debugCtx.lineWidth = this.dpr;
     }
 
+    reset() {
+        super.reset();
+        this._maxSpeed = 0;
+    }
+
     render(particles) {
         const t = performance.now();
         super.render(particles);
