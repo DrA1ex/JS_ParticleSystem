@@ -87,7 +87,7 @@ export class DFRIHelperBase {
 
     _getInterpolateFramesCount() {
         const interpolate = this.actualTime / this.desiredTime - 1;
-        return Math.max(0, Math.min(this.maxCount, Math.ceil(interpolate * 1.1)));
+        return Math.max(0, Math.min(this.maxCount, Math.ceil(interpolate)));
     }
 
     _transformParticlePosition(index, particle, out) {
@@ -142,6 +142,11 @@ export class DFRIHelper extends DFRIHelperBase {
 
     postRenderTime(time) {
         this.renderTimeSmoother.postValue(time);
+    }
+
+    _getInterpolateFramesCount() {
+        const value = super._getInterpolateFramesCount();
+        return Math.ceil(value * 1.1);
     }
 
     get actualTime() {
