@@ -5,6 +5,7 @@ import {SimpleDFRIHelper} from "../utils/dfri.js";
 import {InteractionHandler} from "../render/base.js";
 import {Webgl2Renderer} from "../render/webgl/render.js";
 import {SimulationSequence} from "./utils/simulation_sequence.js";
+import {FetchDataAsyncReader, FileAsyncReader, ObservableStreamLoader} from "./utils/stream.js";
 
 export class Application {
     _statesToRender = new Set([StateEnum.playing, StateEnum.paused, StateEnum.finished]);
@@ -31,7 +32,9 @@ export class Application {
         await this.loadData(async () => {
             const data = await fetch(url);
             if (data.ok) {
-                return await data.arrayBuffer();
+                const reader = new FetchDataAsyncReader(data);
+                const loader = new ObservableStreamLoader(reader, this._onLoadProgress.bind(this));
+                return loader.load();
             }
 
             throw new Error(`Download failed. Code ${data.status}: ${data.statusText}`);
@@ -39,10 +42,17 @@ export class Application {
     }
 
     loadDataFromFile(file) {
-        this.loadData(() => file.arrayBuffer())
-            .catch(e => {
-                alert(`Unable to load file: ${e.message}`)
-            });
+        this.loadData(() => {
+            const reader = new FileAsyncReader(file);
+            const loader = new ObservableStreamLoader(reader, this._onLoadProgress.bind(this));
+            return loader.load()
+        }).catch(e => {
+            alert(`Unable to load file: ${e.message}`)
+        });
+    }
+
+    _onLoadProgress(loaded, size) {
+        this.playerCtrl.setLoadingProgress(loaded, size);
     }
 
     async loadData(loaderFn) {

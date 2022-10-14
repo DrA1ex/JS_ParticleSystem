@@ -6,11 +6,15 @@
     right: 0;
 }
 
-.centered {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translateX(-50%) translateY(-50%);
+.flex-centered {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.flex-column {
+    display: flex;
+    flex-direction: column;
 }
 
 .control-bar {
@@ -24,10 +28,11 @@
     border-top: 1px solid rgba(255, 255, 255, 0.5);
 }
 
-span.centered {
+.flex-centered span {
     font-size: 24px;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgb(200, 200, 200);
     pointer-events: none;
+    user-select: none;
 }
 
 .control-bar button {
@@ -100,6 +105,12 @@ button:disabled {
     pointer-events: none;
 }
 
+.loading-status {
+    margin-top: 20px;
+    font-size: 1.5em;
+    color: rgb(165, 165, 165);
+}
+
 .rotating {
     animation-duration: 1s;
     animation-fill-mode: forwards;
@@ -109,10 +120,10 @@ button:disabled {
 
 @keyframes rotating {
     from {
-        rotate: 0;
+        transform: rotate(0);
     }
 
     to {
-        rotate: 359deg;
+        transform: rotate(359deg);
     }
 }

@@ -23,10 +23,9 @@ export class ControlBarController extends StateControllerBase {
     static CONTROL_SEEK_EVENT = "control_seek";
 
     constructor(root, stateCtrl) {
-        super(root, stateCtrl);
-
-        this.view = new View(this.root, view);
-        this.root = this.view.element;
+        const viewObj = new View(root, view);
+        super(viewObj.element, stateCtrl);
+        this.view = viewObj;
 
         this.playControl = ButtonControl.byId("play")
         this.playControl.setOnClick(this.play.bind(this));
@@ -75,15 +74,13 @@ export class ControlBarController extends StateControllerBase {
         this.emitEvent(ControlBarController.CONTROL_SEEK_EVENT, value);
     }
 
-    openSettings() {
-        this.emitEvent(ControlBarController.CONTROL_ACTION_EVENT, ControlStateEnum.settings);
-    }
-
     setEnabled(enabled) {
         this.playControl.setEnabled(enabled);
         this.pauseControl.setEnabled(enabled);
         this.rewindControl.setEnabled(enabled);
         this.resetControl.setEnabled(enabled);
+
+        this.frame.setVisibility(enabled);
     }
 
     onStateChanged(sender, oldState, newState) {

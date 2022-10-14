@@ -1,4 +1,4 @@
-import {SimulationLoader} from "./loader.js";
+import {SimulationLoader} from "./simulation_loader.js";
 
 export class SimulationSequence {
     frames = [];

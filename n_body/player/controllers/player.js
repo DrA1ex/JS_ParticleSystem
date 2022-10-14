@@ -26,7 +26,33 @@ export class PlayerController extends StateControllerBase {
             (sender, type) => this.emitEvent(PlayerController.PLAYER_CONTROL_EVENT, type));
         this.controlBarCtrl.subscribe(this, ControlBarController.CONTROL_SEEK_EVENT, this._onSeek.bind(this));
 
-        this.loadingScreenCtrl = Control.byId("loading-screen");
+        this.loadingScreen = Control.byId("loading-screen");
+        this.loadingStatus = LabelControl.byId("loading-status");
+    }
+
+    setLoadingProgress(loaded, size) {
+        this.loadingStatus.setText(`Loaded ${this._getSizeLabel(loaded)} from ${this._getSizeLabel(size)}`);
+    }
+
+    _getSizeLabel(size) {
+        const units = [
+            {unit: "T", exp: Math.pow(1024, 4)},
+            {unit: "G", exp: Math.pow(1024, 3)},
+            {unit: "M", exp: Math.pow(1024, 2)},
+            {unit: "K", exp: 1024},
+        ]
+
+        let unit = "";
+        let value = size;
+        for (let i = 0; i < units.length; i++) {
+            if (value >= units[i].exp) {
+                value /= units[i].exp;
+                unit = units[i].unit;
+                break;
+            }
+        }
+
+        return `${value.toFixed(2)} ${unit}B`;
     }
 
     setupSequence(frameCount, subFrameCount) {
@@ -58,13 +84,16 @@ export class PlayerController extends StateControllerBase {
         switch (oldState) {
             case StateEnum.unset:
             case StateEnum.loading:
-                this.loadingScreenCtrl.setVisibility(false);
+                this.loadingStatus.setText("");
+                this.loadingScreen.setVisibility(false);
+                this.loadingStatus.setVisibility(false);
                 break;
         }
 
         switch (newState) {
             case StateEnum.loading:
-                this.loadingScreenCtrl.setVisibility(true);
+                this.loadingScreen.setVisibility(true);
+                this.loadingStatus.setVisibility(true);
                 break;
         }
     }
