@@ -75,11 +75,9 @@ export class DFRIHelperBase {
         this.interpolateFrames = this._getInterpolateFramesCount();
     }
 
-    setNextFrame(particles, dataFn) {
+    setNextFrame(dataFn) {
         for (let i = 0; i < this.particleCount; i++) {
-            const [nextX, nextY] = dataFn(i);
-            this._deltas[i].x = nextX;
-            this._deltas[i].y = nextY;
+            dataFn(i, this._deltas[i]);
         }
 
         this.reset();
@@ -130,11 +128,9 @@ export class DFRIHelper extends DFRIHelperBase {
             console.warn(`${performance.now().toFixed(0)} No available ahead buffer, interpolation may be inconsistent`);
         }
 
-        this.setNextFrame(particles, (i) => {
-            return [
-                buffer ? buffer[i * ITEM_SIZE] - particles[i].x : particles[i].velX,
-                buffer ? buffer[i * ITEM_SIZE + 1] - particles[i].y : particles[i].velY
-            ]
+        this.setNextFrame((i, out) => {
+            out.x = buffer ? buffer[i * ITEM_SIZE] - particles[i].x : particles[i].velX
+            out.y = buffer ? buffer[i * ITEM_SIZE + 1] - particles[i].y : particles[i].velY;
         });
     }
 

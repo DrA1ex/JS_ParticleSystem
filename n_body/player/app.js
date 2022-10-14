@@ -140,11 +140,9 @@ export class Application {
 
         if (this.dfri) {
             const nextFrame = this.sequence.getFrame(this.frameIndex + 1);
-            this.dfri.setNextFrame(this.particles, i => {
-                return [
-                    nextFrame ? nextFrame[i * this.sequence.componentsCount] - this.particles[i].x : this.particles[i].velX,
-                    nextFrame ? nextFrame[i * this.sequence.componentsCount + 1] - this.particles[i].y : this.particles[i].velY
-                ];
+            this.dfri.setNextFrame((i, out) => {
+                out.x = nextFrame ? nextFrame[i * this.sequence.componentsCount] - this.particles[i].x : this.particles[i].velX;
+                out.y = nextFrame ? nextFrame[i * this.sequence.componentsCount + 1] - this.particles[i].y : this.particles[i].velY;
             });
         }
     }
