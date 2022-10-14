@@ -39,3 +39,30 @@ export class ControlBase {
         this.element.style.pointerEvents = enable ? null : "none";
     }
 }
+
+export class View {
+    /**
+     * @param {Node} element
+     * @param {string} view
+     */
+    constructor(element, view) {
+        this.element = element;
+        this._replaceElement(view);
+    }
+
+    _replaceElement(outerHTML) {
+        let parent = false;
+        let ref;
+
+        if (this.element.previousElementSibling !== null) {
+            ref = this.element.previousElementSibling;
+        } else {
+            ref = this.element.parentElement;
+            parent = true;
+        }
+
+        this.element.outerHTML = outerHTML;
+        this.element = parent ? ref.firstElementChild : ref.nextElementSibling;
+    }
+
+}

@@ -1,4 +1,6 @@
-import {ControlBase} from "./base.js";
+import {ControlBase, View} from "./base.js";
+
+const view = await fetch(new URL("./views/progress_bar.html", import.meta.url)).then(d => d.text());
 
 /**
  * @class
@@ -9,7 +11,10 @@ export class ProgressBarControl extends ControlBase {
 
     constructor(element, min = 0, max = 1, step = 1) {
         super(element);
-        this.progressElement = element.getElementsByClassName("progress")[0];
+
+        this.view = new View(this.element, view);
+        this.element = this.view.element;
+        this.progressElement = this.element.getElementsByClassName("progress")[0];
 
         this.min = 0;
         this.max = 0;

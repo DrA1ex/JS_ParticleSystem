@@ -1,6 +1,9 @@
 import {ButtonControl} from "../../ui/controls/button.js";
 import {ProgressBarControl} from "../../ui/controls/progress_bar.js";
 import {StateEnum, StateControllerBase} from "./base.js";
+import {View} from "../../ui/controls/base.js";
+
+const view = await fetch(new URL("./views/control_bar.html", import.meta.url)).then(d => d.text());
 
 /**
  * @readonly
@@ -21,6 +24,9 @@ export class ControlBarController extends StateControllerBase {
 
     constructor(root, stateCtrl) {
         super(root, stateCtrl);
+
+        this.view = new View(this.root, view);
+        this.root = this.view.element;
 
         this.playControl = ButtonControl.byId("play")
         this.playControl.setOnClick(this.play.bind(this));
@@ -67,6 +73,10 @@ export class ControlBarController extends StateControllerBase {
 
     seek(value) {
         this.emitEvent(ControlBarController.CONTROL_SEEK_EVENT, value);
+    }
+
+    openSettings() {
+        this.emitEvent(ControlBarController.CONTROL_ACTION_EVENT, ControlStateEnum.settings);
     }
 
     setEnabled(enabled) {
