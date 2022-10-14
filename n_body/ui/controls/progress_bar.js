@@ -1,12 +1,12 @@
-import {ControlBase, View} from "./base.js";
+import {Control, View} from "./base.js";
 
 const view = await fetch(new URL("./views/progress_bar.html", import.meta.url)).then(d => d.text());
 
 /**
  * @class
- * @extends ControlBase<ProgressBarControl>
+ * @extends Control<ProgressBarControl>
  */
-export class ProgressBarControl extends ControlBase {
+export class ProgressBarControl extends Control {
     _onSeekHandler = null;
 
     constructor(element, min = 0, max = 1, step = 1) {

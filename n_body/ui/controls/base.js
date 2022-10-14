@@ -2,7 +2,7 @@
  * @class
  * @template T
  */
-export class ControlBase {
+export class Control {
     constructor(element) {
         this.element = element;
     }
@@ -11,7 +11,7 @@ export class ControlBase {
      *
      * @param {string} id
      * @param {...*} params
-     * @return {T}
+     * @return {Control<T>}
      */
     static byId(id, ...params) {
         const e = document.getElementById(id);

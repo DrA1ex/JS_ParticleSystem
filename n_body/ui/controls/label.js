@@ -1,6 +1,6 @@
-import {ControlBase} from "./base.js";
+import {Control} from "./base.js";
 
-export class LabelControl extends ControlBase {
+export class LabelControl extends Control {
     constructor(element) {
         super(element);
     }

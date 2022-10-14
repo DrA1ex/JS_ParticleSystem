@@ -2,6 +2,7 @@ import {ControlBarController} from "./control_bar.js";
 import {LoaderController} from "./loader.js";
 import {StateControllerBase, StateEnum} from "./base.js";
 import {LabelControl} from "../../ui/controls/label.js";
+import {Control} from "../../ui/controls/base.js";
 
 export class PlayerController extends StateControllerBase {
     static PLAYER_DATA_EVENT = "player_data";
@@ -25,8 +26,7 @@ export class PlayerController extends StateControllerBase {
             (sender, type) => this.emitEvent(PlayerController.PLAYER_CONTROL_EVENT, type));
         this.controlBarCtrl.subscribe(this, ControlBarController.CONTROL_SEEK_EVENT, this._onSeek.bind(this));
 
-        this.loadingLabel = LabelControl.byId("loading_text");
-        this.loadingLabel.setVisibility(false);
+        this.loadingScreenCtrl = Control.byId("loading-screen");
     }
 
     setupSequence(frameCount, subFrameCount) {
@@ -56,14 +56,15 @@ export class PlayerController extends StateControllerBase {
 
     onStateChanged(sender, oldState, newState) {
         switch (oldState) {
+            case StateEnum.unset:
             case StateEnum.loading:
-                this.loadingLabel.setVisibility(false);
+                this.loadingScreenCtrl.setVisibility(false);
                 break;
         }
 
         switch (newState) {
             case StateEnum.loading:
-                this.loadingLabel.setVisibility(true);
+                this.loadingScreenCtrl.setVisibility(true);
                 break;
         }
     }

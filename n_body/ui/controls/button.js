@@ -1,10 +1,10 @@
-import {ControlBase} from "./base.js";
+import {Control} from "./base.js";
 
 /**
  * @class
- * @extends ControlBase<ButtonControl>
+ * @extends Control<ButtonControl>
  */
-export class ButtonControl extends ControlBase {
+export class ButtonControl extends Control {
     constructor(element) {
         super(element);
     }

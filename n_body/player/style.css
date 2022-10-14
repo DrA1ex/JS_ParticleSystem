@@ -100,29 +100,19 @@ button:disabled {
     pointer-events: none;
 }
 
-#hint {
-    position: absolute;
-    bottom: 16px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 24px;
-    color: rgba(255, 255, 255, 0.7);
-    pointer-events: none;
-}
-
-#hint {
+.rotating {
     animation-duration: 1s;
-    animation-delay: 2s;
     animation-fill-mode: forwards;
-    animation-name: hint_fade;
+    animation-iteration-count: infinite;
+    animation-name: rotating;
 }
 
-@keyframes hint_fade {
+@keyframes rotating {
     from {
-        opacity: 100%;
+        rotate: 0;
     }
 
     to {
-        opacity: 0;
+        rotate: 359deg;
     }
 }

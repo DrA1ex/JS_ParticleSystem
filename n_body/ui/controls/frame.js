@@ -1,6 +1,6 @@
-import {ControlBase} from "./base.js";
+import {Control} from "./base.js";
 
-export class FrameControl extends ControlBase {
+export class FrameControl extends Control {
     constructor(element) {
         super(element);
     }
