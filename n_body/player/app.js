@@ -95,7 +95,7 @@ export class Application {
             this.particles[i] = {x: 0, y: 0, velX: 0, velY: 0, mass: 1};
         }
 
-        this.playerCtrl.setupSequence(this.sequence.length, 1 + this.dfri?.interpolateFrames ?? 0);
+        this.playerCtrl.setupSequence(this.sequence.length, 1 + (this.dfri?.interpolateFrames ?? 0));
         this.nextFrame();
     }
 
@@ -111,7 +111,7 @@ export class Application {
         }
 
         if (this.playerCtrl.currentState === StateEnum.playing) {
-            this.playerCtrl.setCurrentFrame(this.frameIndex, this.dfri?.frame ?? 0);
+            this.playerCtrl.setCurrentFrame(this.frameIndex, (this.dfri?.frame ?? 0));
         }
 
         setTimeout(() => {
