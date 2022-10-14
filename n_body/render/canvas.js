@@ -7,7 +7,7 @@ export class CanvasRenderer extends RendererBase {
      */
     constructor(canvas, settings) {
         super(canvas, settings);
-        this._maxSpeed = 0;
+        this._maxSpeed = this.settings.gravity / 100;
 
         this.ctx = canvas.getContext('2d');
         this.ctx.lineWidth = this.dpr;
@@ -18,7 +18,7 @@ export class CanvasRenderer extends RendererBase {
 
     reset() {
         super.reset();
-        this._maxSpeed = 0;
+        this._maxSpeed = this.settings.gravity / 100;
     }
 
     clear() {

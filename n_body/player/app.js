@@ -23,6 +23,7 @@ export class Application {
         this.playerCtrl = new PlayerController(document.body);
         this.playerCtrl.subscribe(this, PlayerController.PLAYER_CONTROL_EVENT, (sender, type) => this.handleControl(type));
         this.playerCtrl.subscribe(this, PlayerController.PLAYER_DATA_EVENT, (sender, file) => this.loadDataFromFile(file));
+        this.playerCtrl.subscribe(this, PlayerController.PLAYER_SEEK_EVENT, (sender, value) => this.handleSeek(value));
         this.playerCtrl.setState(StateEnum.waiting);
     }
 
@@ -125,17 +126,16 @@ export class Application {
             return;
         }
 
+        const prevFrame = this.sequence.getFrame(this.frameIndex - 1);
         for (let i = 0; i < this.particles.length; i++) {
             const x = frame[i * this.sequence.componentsCount];
             const y = frame[i * this.sequence.componentsCount + 1];
 
-            if (this.frameIndex > 0) {
-                this.particles[i].velX = x - this.particles[i].x;
-                this.particles[i].velY = y - this.particles[i].y;
-            }
-
             this.particles[i].x = x;
             this.particles[i].y = y;
+
+            this.particles[i].velX = prevFrame ? x - prevFrame[i * this.sequence.componentsCount] : 0;
+            this.particles[i].velY = prevFrame ? y - prevFrame[i * this.sequence.componentsCount + 1] : 0;
         }
 
         if (this.dfri) {
@@ -174,6 +174,27 @@ export class Application {
                 this.dfri?.reset();
                 this.playerCtrl.setState(StateEnum.waiting);
                 break;
+        }
+    }
+
+    handleSeek({frame, subFrame}) {
+        if (!this._statesToRender.has(this.playerCtrl.currentState)) {
+            return;
+        }
+
+        this.playerCtrl.setCurrentFrame(frame, subFrame);
+
+        this.frameIndex = frame - 1;
+        this.renderer.reset();
+        this.dfri?.reset();
+        this.nextFrame();
+
+        if (this.dfri) {
+            this.dfri.frame = subFrame;
+        }
+
+        if (this.playerCtrl.currentState === StateEnum.finished) {
+            this.playerCtrl.setState(StateEnum.paused);
         }
     }
 }

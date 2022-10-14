@@ -108,7 +108,7 @@ export class Webgl2Renderer extends RendererBase {
 
     reset() {
         super.reset();
-        this._maxSpeed = 0;
+        this._maxSpeed = this.settings.gravity / 100;
     }
 
     clear() {
@@ -152,7 +152,7 @@ export class Webgl2Renderer extends RendererBase {
             this._massBufferData[i] = particle.mass;
 
             const speed = Math.max(Math.abs(particle.velX), Math.abs(particle.velY));
-            if (this._maxSpeed < speed) {
+            if (Number.isFinite(speed) && this._maxSpeed < speed) {
                 this._maxSpeed = speed;
             }
         }

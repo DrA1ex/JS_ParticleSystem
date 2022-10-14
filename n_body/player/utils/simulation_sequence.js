@@ -14,7 +14,7 @@ export class SimulationSequence {
     }
 
     getFrame(index) {
-        if (index < this.length) {
+        if (index >= 0 && index < this.length) {
             return this.frames[index];
         }
 

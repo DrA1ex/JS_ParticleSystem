@@ -15,12 +15,11 @@
 
 .control-bar {
     display: flex;
-
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    height: 32px;
+    height: 2rem;
     border: none;
     border-top: 1px solid rgba(255, 255, 255, 0.5);
 }
@@ -51,7 +50,14 @@ span.centered {
     box-sizing: border-box;
     height: 100%;
     width: 100%;
-    padding: 4px 0;
+    padding: 8px 0;
+}
+
+.progress-bar .progress-container {
+    height: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid rgba(120, 120, 120, 0.5);
 }
 
 .progress-bar .progress {
@@ -63,7 +69,7 @@ span.centered {
 }
 
 button {
-    height: 48px;
+    height: 3rem;
     border: 1px solid white;
     color: white;
     background: transparent;

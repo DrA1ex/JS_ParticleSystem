@@ -16,7 +16,8 @@ export const ControlStateEnum = {
 }
 
 export class ControlBarController extends StateControllerBase {
-    static CONTROL_EVENT = "control";
+    static CONTROL_ACTION_EVENT = "control_action";
+    static CONTROL_SEEK_EVENT = "control_seek";
 
     constructor(root, stateCtrl) {
         super(root, stateCtrl);
@@ -34,6 +35,7 @@ export class ControlBarController extends StateControllerBase {
         this.resetControl.setOnClick(this.reset.bind(this));
 
         this.progressControl = ProgressBarControl.byId("simulation-progress");
+        this.progressControl.setOnSeek(this.seek.bind(this));
 
         this.setEnabled(false);
     }
@@ -48,19 +50,23 @@ export class ControlBarController extends StateControllerBase {
     }
 
     play() {
-        this.emitEvent(ControlBarController.CONTROL_EVENT, ControlStateEnum.play);
+        this.emitEvent(ControlBarController.CONTROL_ACTION_EVENT, ControlStateEnum.play);
     }
 
     pause() {
-        this.emitEvent(ControlBarController.CONTROL_EVENT, ControlStateEnum.pause);
+        this.emitEvent(ControlBarController.CONTROL_ACTION_EVENT, ControlStateEnum.pause);
     }
 
     rewind() {
-        this.emitEvent(ControlBarController.CONTROL_EVENT, ControlStateEnum.rewind);
+        this.emitEvent(ControlBarController.CONTROL_ACTION_EVENT, ControlStateEnum.rewind);
     }
 
     reset() {
-        this.emitEvent(ControlBarController.CONTROL_EVENT, ControlStateEnum.reset);
+        this.emitEvent(ControlBarController.CONTROL_ACTION_EVENT, ControlStateEnum.reset);
+    }
+
+    seek(value) {
+        this.emitEvent(ControlBarController.CONTROL_SEEK_EVENT, value);
     }
 
     setEnabled(enabled) {
@@ -77,6 +83,7 @@ export class ControlBarController extends StateControllerBase {
                 this.setEnabled(false);
 
                 this.playControl.setVisibility(true);
+                this.pauseControl.setVisibility(false);
                 this.progressControl.setValue(0);
                 break;
 
@@ -88,6 +95,8 @@ export class ControlBarController extends StateControllerBase {
                 break;
 
             case StateEnum.paused:
+                this.playControl.setEnabled(true);
+
                 this.playControl.setVisibility(true);
                 this.pauseControl.setVisibility(false);
                 break;

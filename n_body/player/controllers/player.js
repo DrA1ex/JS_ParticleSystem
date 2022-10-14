@@ -1,11 +1,12 @@
 import {ControlBarController} from "./control_bar.js";
 import {LoaderController} from "./loader.js";
 import {StateControllerBase, StateEnum} from "./base.js";
-import {LabelControl} from "../../ui/controls/labelControl.js";
+import {LabelControl} from "../../ui/controls/label.js";
 
 export class PlayerController extends StateControllerBase {
     static PLAYER_DATA_EVENT = "player_data";
     static PLAYER_CONTROL_EVENT = "player_control";
+    static PLAYER_SEEK_EVENT = "player_seek";
 
     framesCount = 0;
     subFrameCount = 0;
@@ -20,8 +21,9 @@ export class PlayerController extends StateControllerBase {
             (sender, file) => this.emitEvent(PlayerController.PLAYER_DATA_EVENT, file));
 
         this.controlBarCtrl = new ControlBarController(document.getElementById("control-bar"), this);
-        this.controlBarCtrl.subscribe(this, ControlBarController.CONTROL_EVENT,
+        this.controlBarCtrl.subscribe(this, ControlBarController.CONTROL_ACTION_EVENT,
             (sender, type) => this.emitEvent(PlayerController.PLAYER_CONTROL_EVENT, type));
+        this.controlBarCtrl.subscribe(this, ControlBarController.CONTROL_SEEK_EVENT, this._onSeek.bind(this));
 
         this.loadingLabel = LabelControl.byId("loading_text");
         this.loadingLabel.setVisibility(false);
@@ -39,6 +41,17 @@ export class PlayerController extends StateControllerBase {
         this.subFrameIndex = subFrameIndex;
 
         this.controlBarCtrl.setProgress(this.frameIndex * this.subFrameCount + this.subFrameIndex);
+    }
+
+    _onSeek(sender, value) {
+        if (!this.framesCount) {
+            return;
+        }
+
+        const frameIndex = Math.floor(value / this.subFrameCount);
+        const subFrameIndex = Math.floor(value % this.subFrameCount);
+
+        this.emitEvent(PlayerController.PLAYER_SEEK_EVENT, {frame: frameIndex, subFrame: subFrameIndex});
     }
 
     onStateChanged(sender, oldState, newState) {

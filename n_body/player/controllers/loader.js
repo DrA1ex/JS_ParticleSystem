@@ -1,5 +1,5 @@
 import {StateControllerBase, StateEnum} from "./base.js";
-import {LabelControl} from "../../ui/controls/labelControl.js";
+import {LabelControl} from "../../ui/controls/label.js";
 
 export class LoaderController extends StateControllerBase {
     static LOADER_DATA_EVENT = "loader_data";
