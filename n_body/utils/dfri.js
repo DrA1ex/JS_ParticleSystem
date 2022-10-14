@@ -44,7 +44,7 @@ export class DFRIHelperBase {
         this._initialized = true;
     }
 
-    render(particles) {
+    render(particles, pause = false) {
         if (!this._initialized) {
             this.init();
         }
@@ -52,7 +52,9 @@ export class DFRIHelperBase {
         this._currentFactor = this.getFactor();
         this.renderer.render(particles);
 
-        this.frame += 1;
+        if (!pause) {
+            this.frame += 1;
+        }
     }
 
     getFactor() {

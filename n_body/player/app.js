@@ -59,7 +59,7 @@ export class Application {
 
         if (success) {
             this.playerCtrl.setState(StateEnum.playing);
-            setTimeout(() => this.render(), 1000);
+            setTimeout(() => this.render());
         } else {
             this.playerCtrl.setState(StateEnum.waiting);
         }
@@ -94,8 +94,8 @@ export class Application {
             return;
         }
 
-        if (this.dfri && this.playerCtrl.currentState === StateEnum.playing) {
-            this.dfri.render(this.particles);
+        if (this.dfri) {
+            this.dfri.render(this.particles, this.playerCtrl.currentState !== StateEnum.playing);
         } else {
             this.renderer.render(this.particles);
         }

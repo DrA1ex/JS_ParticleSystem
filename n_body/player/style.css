@@ -53,10 +53,20 @@ span.centered {
     padding: 8px 0;
 }
 
+.progress-bar:focus {
+    outline: none;
+}
+
+.progress-bar:focus .progress-container {
+    outline: none;
+    border: 1px solid rgba(42, 78, 141, 0.5);
+}
+
 .progress-bar .progress-container {
+    pointer-events: none;
+    box-sizing: border-box;
     height: 100%;
     width: 100%;
-    box-sizing: border-box;
     border: 1px solid rgba(120, 120, 120, 0.5);
 }
 
@@ -65,7 +75,7 @@ span.centered {
 
     width: calc(100% * var(--value));
     height: 100%;
-    background: rgba(41, 137, 255, 0.5);
+    background: rgba(41, 127, 255, 0.5);
 }
 
 button {
