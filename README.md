@@ -39,7 +39,7 @@ _Visualization of 1,000,000 particles (click image to open YouTube video)_
 ### Simulation Player
 You can use [Simulation Player](https://dra1ex.github.io/JS_ParticleSystem/n_body/player) to watch recorded simulations.
 
-_Note:_ Please be patient, files may be very large (200MB), so loading may take a while.
+_Note:_ Please be patient, files may be very large, so loading may take a while. Pay attention to the package size written in brackets.
 
 _Demo links_:
 
