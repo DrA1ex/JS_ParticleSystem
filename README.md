@@ -31,9 +31,10 @@ You can see Spatial Tree segmentation in real-time: https://dra1ex.github.io/JS_
 This means that we can simulate _100,000_ particles in just about _500,000_ operations. Without optimization, _100,000_
 particles would require _10,000,000,000_ operations (_20,000_ times more)
 
-_Visualization of 500,000 particles (click image to open YouTube video)_
+_Visualization of 1,000,000 particles (click image to open YouTube video)_
 
-[<img width="720" alt="image" src="https://user-images.githubusercontent.com/1194059/192136192-65606492-466a-40fe-9274-204b1b446349.png">](https://youtu.be/kHLjrGTBi-o)
+[<img width="720" alt="image" src="https://user-images.githubusercontent.com/1194059/195990061-9fcf8693-faea-4038-80a3-30ccd9158182.png">](https://youtu.be/Gu8Y1t5cblE)
+
 
 ### Simulation Player
 You can use [Simulation Player](https://dra1ex.github.io/JS_ParticleSystem/n_body/player) to watch recorded simulations.
