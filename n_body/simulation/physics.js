@@ -29,7 +29,7 @@ export class PhysicsEngine {
     step(particles) {
         let t = performance.now();
 
-        const tree = new SpatialTree(particles, this.settings.segmentMaxCount, this.settings.segmentDivider);
+        const tree = new SpatialTree(particles, this.settings.segmentMaxCount, this.settings.segmentDivider, this.settings.segmentRandomness);
         if (this.settings.stats) {
             this.stats.treeTime = performance.now() - t;
         }

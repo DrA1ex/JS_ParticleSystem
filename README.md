@@ -26,7 +26,7 @@ _Visualization of Spatial tree used to optimize 100,000 particles interaction_
 
 <img width="720" alt="image" src="https://user-images.githubusercontent.com/1194059/192269736-64fe4b19-d0bb-4cbc-b0df-591e17191355.png">
 
-You can see Spatial Tree segmentation in real-time: https://dra1ex.github.io/JS_ParticleSystem/n_body?debug=1
+You can see Spatial Tree segmentation in real-time: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body?debug=1&segment_random=0)
 
 This means that we can simulate _100,000_ particles in just about _500,000_ operations. Without optimization, _100,000_
 particles would require _10,000,000,000_ operations (_20,000_ times more)
@@ -149,7 +149,8 @@ _Simulation demo links with maximum accuracy_:
 
 - *particle_count* - Count of particles to simulate (default: __10000__ for mobile, __20000__ for desktop)
 - *particle_init* - Particle initialization, values: __circle__, __disk__, __bang__, __uniform__, __rotation__, __collision__ (default: __circle__)
-- *segment_divider* - Spatial subdivision factor while segmentation (default: __2__)
+- *segment_divider* - Spatial subdivision factor while segmentation, larger values increase accuracy (default: __2__)
+- *segment_random* - Spatial subdivision randomness factor (default: __0.25__)
 - *segment_max_count* - Max particle count in segment, larger values increase accuracy (default: __32__)
 - *g* - Attraction force (default: __1__)
 - *particle_mass* - Particle mass variance, exponential (default: __0__)

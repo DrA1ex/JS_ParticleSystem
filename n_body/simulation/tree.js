@@ -62,8 +62,8 @@ class Leaf {
     /**
      * @param {SpatialTree} tree
      * @param {Particle[]} data
-     * @param {number=1} depth
-     * @param {BoundaryRect|null} rect
+     * @param {number} [depth=1]
+     * @param {BoundaryRect|null} [rect = null]
      */
     constructor(tree, data, depth = 1, rect = null) {
         this.tree = tree;
@@ -93,15 +93,17 @@ export class SpatialTree {
     /**
      * @param {Array<Particle>} data
      * @param {number} maxCount
-     * @param {number=4} divideFactor
+     * @param {number} [divideFactor=4]
+     * @param {number} [randomness=0.25]
      */
-    constructor(data, maxCount, divideFactor = 2) {
+    constructor(data, maxCount, divideFactor = 2, randomness = 0.25) {
         this._index = 0;
         this.maxDepth = 0;
 
         this.root = new Leaf(this, data);
         this.maxCount = maxCount;
         this.divideFactor = divideFactor;
+        this.randomness = randomness;
 
         this._populate(this.root, data)
     }
@@ -116,30 +118,44 @@ export class SpatialTree {
         }
 
         const boundary = current.boundaryRect;
-        const xStep = boundary.width / this.divideFactor;
-        const yStep = boundary.height / this.divideFactor;
 
+        let lastLeft = 0;
         for (let x = 0; x < this.divideFactor; x++) {
+            let xStep
+            if (x + 1 !== this.divideFactor) {
+                xStep = this._getNextStep(boundary.width);
+            } else {
+                xStep = boundary.width - lastLeft + EPSILON;
+            }
+
+            let lastTop = 0;
             for (let y = 0; y < this.divideFactor; y++) {
-                let left = boundary.left + x * xStep
-                let top = boundary.top + y * yStep;
+                let yStep;
+                if (y + 1 !== this.divideFactor) {
+                    yStep = this._getNextStep(boundary.height);
+                } else {
+                    yStep = boundary.height - lastTop + EPSILON;
+                }
+
+                let left = boundary.left + lastLeft;
+                let top = boundary.top + lastTop;
                 const filterRect = new BoundaryRect(left, top, left + xStep, top + yStep);
-
-                if (x + 1 === this.divideFactor) {
-                    filterRect.right += EPSILON;
-                }
-                if (y + 1 === this.divideFactor) {
-                    filterRect.bottom += EPSILON;
-                }
-
                 const rectData = current.filterByRect(filterRect);
 
                 if (rectData.length > 0) {
                     const leaf = current.appendChild(rectData, filterRect);
                     this._populate(leaf);
                 }
+
+                lastTop += yStep;
             }
+
+            lastLeft += xStep;
         }
+    }
+
+    _getNextStep(size) {
+        return size * ((1 + (this.randomness * (Math.random() - 0.5))) / this.divideFactor);
     }
 
     _getIndex() {

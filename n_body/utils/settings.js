@@ -51,6 +51,7 @@ export class Settings {
     minInteractionDistanceSq = null;
 
     segmentDivider = 2;
+    segmentRandomness = 0.25;
     segmentMaxCount = null;
 
     debug = false;
@@ -89,6 +90,9 @@ export class Settings {
         if (!this.segmentMaxCount) {
             this.segmentMaxCount = this.backend === BackendType.gpgpu ? 128 : 32;
         }
+
+        this.segmentRandomness = Math.max(0, Math.min(1, this.segmentRandomness));
+        this.resistance = Math.max(0.001, Math.min(1, this.resistance));
 
         if (this.backend === BackendType.gpgpu) {
             this.segmentMaxCount *= this.segmentMaxCount;
@@ -206,6 +210,7 @@ export class Settings {
             minInteractionDistance: _float("min_distance"),
             segmentDivider: _int("segment_divider"),
             segmentMaxCount: _int("segment_max_count"),
+            segmentRandomness: _float("segment_random"),
             bufferCount: _int("buffers"),
             debug: _bool("debug"),
             debugTree: _bool("debug_tree"),
