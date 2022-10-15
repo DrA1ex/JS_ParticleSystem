@@ -4,7 +4,7 @@
 
 ## N-Body Simulation
 
-This is a N-Body simulation, means all particles interacts with each other. This is what can be called a galaxy
+Simulation is N-Body, means all particles interacts with each other. This is what can be called a galaxy
 simulation. Of course, with some assumptions! The formation of a galaxy is a long process, the beauty of which was
 formed by millions of years of interactions. Moreover, the number of particles in a galaxy is so large that no computer
 could recreate the birth of a galaxy with high accuracy. But this simulation will allow you to enjoy the process on a
@@ -170,31 +170,3 @@ _Simulation demo links with maximum accuracy_:
 - *debug_velocity* - Draw particles velocity vector (default: __0__)
 - *debug_force* - Draw particles moment force vector (default: __0__)
 - *state* - Url to exported system state (default: __none__)
-
-
-# 1-Body Simulation
-
-This is not a something like simulation of a galaxy, since in a galaxy all bodies interact with each other. The
-simulation roughly visualizes how ultralight bodies would interact with one supermassive body.
-
-The advantage of this type of simulation is the simplicity of calculations: O(N^2). Because only one body actually
-attracts all the particles we can simulate hundreds of thousands of particles in the browser in real time.
-
-For a real N-Body simulation, it would be necessary to calculate the interaction of each particle with each other. For
-1000 particles this would require 1,000,000 operations.
-
-But with some optimization it is achievable! See implementation of N-Body simulation in the next section.
-
-_1-Body Visualization frame with 1,000,000 particles_
-
-<img width="1080" alt="image" src="https://user-images.githubusercontent.com/1194059/192269216-d1ed71f0-a3cb-48cc-9d3f-33126291c91e.png">
-
-Demo: https://dra1ex.github.io/JS_ParticleSystem/
-
-### Parameters:
-
-- *particle_count* - Count of particles to simulate (default: __100000__ for mobile, __200000__ for desktop)
-- *fps* - Refresh rate in frames per second (default: __60__)
-- *dpr* - Enable drawing according to Device Pixel Ratio (default: __0__)
-- *g* - Attraction force of mouse pointer (default: __9__)
-- *resistance* - Resistance of environment, *1* - means no resistance (default: __0.99__)
