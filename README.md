@@ -36,7 +36,7 @@ _Visualization of 500,000 particles (click image to open YouTube video)_
 [<img width="720" alt="image" src="https://user-images.githubusercontent.com/1194059/192136192-65606492-466a-40fe-9274-204b1b446349.png">](https://youtu.be/kHLjrGTBi-o)
 
 ### Simulation Player
-You can use Simulation Player to watch recorded simulations.
+You can use [Simulation Player](https://dra1ex.github.io/JS_ParticleSystem/n_body/player) to watch recorded simulations.
 
 _Note:_ Please be patient, files may be very large (200MB), so loading may take a while.
 
