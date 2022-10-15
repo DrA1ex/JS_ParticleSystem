@@ -10,10 +10,9 @@ export class ProgressBarControl extends Control {
     _onSeekHandler = null;
 
     constructor(element, min = 0, max = 1, step = 1) {
-        super(element);
+        const viewControl = new View(element, view);
+        super(viewControl.element);
 
-        this.view = new View(this.element, view);
-        this.element = this.view.element;
         this.progressElement = this.element.getElementsByClassName("progress")[0];
 
         this.min = 0;

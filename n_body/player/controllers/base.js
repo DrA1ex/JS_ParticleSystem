@@ -85,7 +85,7 @@ export class StateControllerBase extends ControllerBase {
 
     constructor(root, parentCtrl = null) {
         super(root, parentCtrl);
-        parentCtrl?.subscribe(this, StateControllerBase.STATE_EVENT_NAME, (sender, state) => this.setState(state));
+        this.parentCtrl?.subscribe(this, StateControllerBase.STATE_EVENT_NAME, (sender, state) => this.setState(state));
     }
 
     /**
@@ -101,7 +101,6 @@ export class StateControllerBase extends ControllerBase {
 
         this.emitEvent(StateControllerBase.STATE_EVENT_NAME, state);
         this.onStateChanged(this, oldState, state);
-
     }
 
     /**

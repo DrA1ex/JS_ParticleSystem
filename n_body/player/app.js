@@ -25,7 +25,9 @@ export class Application {
         this.playerCtrl.subscribe(this, PlayerController.PLAYER_CONTROL_EVENT, (sender, type) => this.handleControl(type));
         this.playerCtrl.subscribe(this, PlayerController.PLAYER_DATA_EVENT, (sender, file) => this.loadDataFromFile(file));
         this.playerCtrl.subscribe(this, PlayerController.PLAYER_SEEK_EVENT, (sender, value) => this.handleSeek(value));
+        this.playerCtrl.subscribe(this, PlayerController.PLAYER_SPEED_EVENT, (sender, value) => this.handleSpeed(value));
         this.playerCtrl.setState(StateEnum.waiting);
+        this.playerCtrl.configure(this.settings);
     }
 
     async loadDataFromUrl(url) {
@@ -203,6 +205,29 @@ export class Application {
 
         if (this.playerCtrl.currentState === StateEnum.finished) {
             this.playerCtrl.setState(StateEnum.paused);
+        }
+    }
+
+    handleSpeed(speed) {
+        if (this.dfri) {
+            let inputFps, outFps;
+            if (speed <= 1) {
+                inputFps = this.sequence.fps;
+                outFps = Math.ceil(this.settings.fps / speed);
+            } else {
+                inputFps = Math.ceil(this.sequence.fps * speed);
+                outFps = this.settings.fps;
+            }
+
+            const oldRelativeFrame = this.dfri.interpolateFrames > 0 ?
+                Math.min(this.dfri.frame / this.dfri.interpolateFrames, 1) : 0;
+            this.dfri.reconfigure(inputFps, outFps);
+            this.dfri.init();
+
+            this.dfri.reset();
+            this.dfri.frame = Math.ceil(oldRelativeFrame * this.dfri.interpolateFrames);
+
+            this.playerCtrl.setupSequence(this.sequence.length, 1 + this.dfri.interpolateFrames);
         }
     }
 }

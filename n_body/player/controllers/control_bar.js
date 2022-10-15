@@ -14,8 +14,7 @@ export const ControlStateEnum = {
     pause: 1,
     reset: 2,
     rewind: 3,
-
-    progress: 10,
+    settings: 4,
 }
 
 export class ControlBarController extends StateControllerBase {
@@ -25,7 +24,6 @@ export class ControlBarController extends StateControllerBase {
     constructor(root, stateCtrl) {
         const viewObj = new View(root, view);
         super(viewObj.element, stateCtrl);
-        this.view = viewObj;
 
         this.playControl = ButtonControl.byId("play")
         this.playControl.setOnClick(this.play.bind(this));
@@ -38,6 +36,9 @@ export class ControlBarController extends StateControllerBase {
 
         this.resetControl = ButtonControl.byId("reset")
         this.resetControl.setOnClick(this.reset.bind(this));
+
+        this.settingsControl = ButtonControl.byId("settings");
+        this.settingsControl.setOnClick(this.openSettings.bind(this));
 
         this.progressControl = ProgressBarControl.byId("simulation-progress");
         this.progressControl.setOnSeek(this.seek.bind(this));
@@ -74,11 +75,16 @@ export class ControlBarController extends StateControllerBase {
         this.emitEvent(ControlBarController.CONTROL_SEEK_EVENT, value);
     }
 
+    openSettings() {
+        this.emitEvent(ControlBarController.CONTROL_ACTION_EVENT, ControlStateEnum.settings);
+    }
+
     setEnabled(enabled) {
         this.playControl.setEnabled(enabled);
         this.pauseControl.setEnabled(enabled);
         this.rewindControl.setEnabled(enabled);
         this.resetControl.setEnabled(enabled);
+        this.settingsControl.setEnabled(enabled);
 
         this.frame.setVisibility(enabled);
     }

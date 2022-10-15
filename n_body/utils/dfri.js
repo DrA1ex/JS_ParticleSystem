@@ -108,6 +108,10 @@ export class SimpleDFRIHelper extends DFRIHelperBase {
     constructor(renderer, particlesCount, sourceFrameRate, desiredFramerate) {
         super(renderer, particlesCount);
 
+        this.reconfigure(sourceFrameRate, desiredFramerate);
+    }
+
+    reconfigure(sourceFrameRate, desiredFramerate) {
         this._actualTime = 1000 / sourceFrameRate;
         this._desiredTime = 1000 / desiredFramerate;
     }

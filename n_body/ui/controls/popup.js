@@ -1,0 +1,148 @@
+import {Control, View} from "./base.js";
+
+const view = await fetch(new URL("./views/popup.html", import.meta.url)).then(d => d.text());
+
+/**
+ * @enum{number}
+ */
+export const PopupDirectionEnum = {
+    up: 0,
+    down: 1,
+    left: 2,
+    right: 3
+}
+
+export class PopupControl extends Control {
+    anchor;
+    offsetX = 0;
+    offsetY = 0
+    direction = PopupDirectionEnum.up;
+
+    shown = false;
+
+    /**
+     * @param {Node} element
+     * @param {Node} contentNode
+     */
+    constructor(element, contentNode) {
+        const viewControl = new View(element, view);
+        super(viewControl.element);
+
+        this.contentNode = contentNode;
+        if (this.contentNode.parentElement) {
+            this.contentNode.parentElement.removeChild(this.contentNode);
+        }
+
+        this.element.appendChild(this.contentNode);
+        this.setVisibility(false);
+
+        this._docClickListener = this._onDocumentClick.bind(this);
+
+        this.element.style.position = "absolute";
+    }
+
+    show() {
+        if (this.shown) {
+            this.hide();
+            return;
+        } else if (!this.anchor) {
+            return;
+        }
+
+        this.setVisibility(true);
+        document.addEventListener("click", this._docClickListener);
+
+        const rect = this.element.getBoundingClientRect();
+        const containerRect = document.body.getBoundingClientRect();
+        const {x: anchorX, y: anchorY} = this._getAnchorPosition(this.direction, rect, containerRect);
+        let top, left;
+
+        switch (this.direction) {
+            case PopupDirectionEnum.up:
+                left = anchorX - rect.width / 2;
+                top = anchorY - rect.height;
+                break;
+            case PopupDirectionEnum.down:
+                left = anchorX - rect.width / 2;
+                top = anchorY;
+                break;
+            case PopupDirectionEnum.left:
+                left = anchorX - rect.width;
+                top = anchorY - rect.height / 2;
+                break;
+            case PopupDirectionEnum.right:
+                left = anchorX;
+                top = anchorY - rect.height / 2;
+                break;
+
+            default:
+                throw Error(`Unknown popup direction: ${this.direction}`);
+        }
+
+        left = this._constrainValue(left, containerRect.x + 2, containerRect.right - rect.width - 2);
+        top = this._constrainValue(top, containerRect.y + 2, containerRect.bottom - rect.height - 2);
+
+        this.element.style.left = `${left}px`;
+        this.element.style.top = `${top}px`;
+
+        this.shown = true;
+        this.element.focus();
+    }
+
+    hide() {
+        if (!this.shown) {
+            return;
+        }
+
+        this.shown = false;
+        this.setVisibility(false);
+        document.removeEventListener("click", this._docClickListener);
+    }
+
+    _getAnchorPosition() {
+        const anchorRect = this.anchor.getBoundingClientRect();
+
+        let anchorX, anchorY;
+        switch (this.direction) {
+            case PopupDirectionEnum.up:
+                anchorX = anchorRect.left + anchorRect.width / 2 - this.offsetX;
+                anchorY = anchorRect.top - this.offsetY;
+                break;
+
+            case PopupDirectionEnum.down:
+                anchorX = anchorRect.left + anchorRect.width / 2 - this.offsetX;
+                anchorY = anchorRect.bottom + this.offsetY;
+                break;
+
+            case PopupDirectionEnum.left:
+                anchorX = anchorRect.left - this.offsetX;
+                anchorY = anchorRect.top + anchorRect.height / 2 - this.offsetY;
+                break;
+
+            case PopupDirectionEnum.right:
+                anchorX = anchorRect.right + this.offsetX;
+                anchorY = anchorRect.top + anchorRect.height / 2 - this.offsetY;
+                break;
+
+            default:
+                throw Error(`Unknown popup direction: ${this.direction}`);
+        }
+
+        return {x: anchorX, y: anchorY};
+    }
+
+    _onDocumentClick(e) {
+        if (e.target === this.anchor || this.element.contains(e.target)) {
+            return;
+        }
+
+        const rect = this.element.getBoundingClientRect();
+        if (rect.left < e.clientX || rect.right > e.clientX || rect.top < e.clientY || rect.bottom > e.clientY) {
+            this.hide();
+        }
+    }
+
+    _constrainValue(value, min, max) {
+        return Math.min(max, Math.max(min, value));
+    }
+}

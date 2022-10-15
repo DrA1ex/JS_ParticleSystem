@@ -1,3 +1,25 @@
+button {
+    height: 2em;
+    border: 1px solid white;
+    color: white;
+    background: transparent;
+    padding: 0 8px;
+}
+
+button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+}
+
+button:active {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+button:disabled {
+    filter: brightness(50%);
+    pointer-events: none;
+}
+
 .fill {
     position: absolute;
     top: 0;
@@ -17,6 +39,13 @@
     flex-direction: column;
 }
 
+.flex-centered span {
+    font-size: 24px;
+    color: rgb(200, 200, 200);
+    pointer-events: none;
+    user-select: none;
+}
+
 .control-bar {
     display: flex;
     position: absolute;
@@ -26,13 +55,6 @@
     height: 2rem;
     border: none;
     border-top: 1px solid rgba(255, 255, 255, 0.5);
-}
-
-.flex-centered span {
-    font-size: 24px;
-    color: rgb(200, 200, 200);
-    pointer-events: none;
-    user-select: none;
 }
 
 .control-bar button {
@@ -83,32 +105,32 @@
     background: rgba(41, 127, 255, 0.5);
 }
 
-button {
-    height: 3rem;
-    border: 1px solid white;
-    color: white;
-    background: transparent;
-    padding: 0 8px;
-}
-
-button:hover {
-    background: rgba(255, 255, 255, 0.1);
-    cursor: pointer;
-}
-
-button:active {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-button:disabled {
-    filter: brightness(50%);
-    pointer-events: none;
-}
-
 .loading-status {
     margin-top: 20px;
     font-size: 1.5em;
     color: rgb(165, 165, 165);
+}
+
+.settings {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-rows: 2em;
+    gap: 10px 8px;
+    padding: 10px;
+    background: #1f1f1f;
+    color: white;
+    align-items: center;
+    justify-items: stretch;
+}
+
+.settings select {
+    background: transparent;
+    color: white;
+    user-select: none;
+    outline: none;
+    height: 1.5em;
+    border: none;
+    margin-top: 2px;
 }
 
 .rotating {
