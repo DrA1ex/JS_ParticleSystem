@@ -2,7 +2,8 @@ import {InteractionHandler} from "./render/base.js";
 import {Debug} from "./utils/debug.js";
 import {DFRIHelper} from "./utils/dfri.js";
 import {ITEM_SIZE} from "./backend/base.js";
-import * as FileUtils from "./utils/file.js";
+import {SimulationController} from "./controllers/simulation.js";
+import {SimulationStateEnum} from "./controllers/enums.js";
 
 export class Application {
     renderer;
@@ -12,6 +13,7 @@ export class Application {
     _canvasInteraction;
     _dfriHelper;
     _debug;
+    _exportSequence;
 
     aheadBuffers = [];
     pendingBufferCount = 0;
@@ -29,6 +31,8 @@ export class Application {
         this._dfriHelper = new DFRIHelper(this.renderer, this.settings);
         this._debug = new Debug(this.renderer, this.backend, this.settings);
         this._canvasInteraction = new InteractionHandler(this.renderer, this.settings);
+
+        this.simulationCtrl = new SimulationController(document.body, this);
     }
 
     init(state = null) {
@@ -46,8 +50,6 @@ export class Application {
             this.particles[i] = {x: 0, y: 0, velX: 0, velY: 0, mass: 0};
         }
 
-        document.getElementById("download_btn").onclick = this.exportState.bind(this);
-
         this.backend.init(this.onData.bind(this), this.requestNextStep.bind(this), this.settings, state?.particles);
 
         this.lastRenderTime = performance.now() - this.refreshTime;
@@ -64,11 +66,10 @@ export class Application {
 
     onData(data) {
         this._dfriHelper.postStepTime(performance.now() - data.timestamp);
+        this.simulationCtrl.onNewBuffer(data.buffer);
 
-        if (!this.ready) {
-            const e = document.getElementById("wait");
-            e.style.display = "none";
-            this.ready = true;
+        if (this.simulationCtrl.currentState === SimulationStateEnum.unset) {
+            this.simulationCtrl.setState(SimulationStateEnum.ready);
         }
 
         this.aheadBuffers.push({buffer: data.buffer, treeDebug: data.treeDebug, forceDebug: data.forceDebug});
@@ -120,7 +121,7 @@ export class Application {
     }
 
     render(timestamp) {
-        if (!this.ready) {
+        if (this.simulationCtrl.currentState === SimulationStateEnum.unset) {
             this.lastRenderTime = timestamp;
             requestAnimationFrame(this.render.bind(this));
             return;
@@ -148,19 +149,5 @@ export class Application {
 
         this.lastRenderTime = timestamp;
         requestAnimationFrame(this.render.bind(this));
-    }
-
-    exportState() {
-        const data = {
-            settings: this.settings.serialize(),
-            particles: this.particles.map(p => [p.x, p.y, p.velX, p.velY, p.mass]),
-            renderer: {
-                scale: this.renderer.scale / this.renderer.dpr,
-                relativeOffset: this.renderer.centeredRelativeOffset()
-            }
-        }
-
-        FileUtils.saveFile(JSON.stringify(data),
-            `universe_state_${new Date().toISOString()}.json`, "application/json");
     }
 }

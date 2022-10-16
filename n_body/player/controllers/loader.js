@@ -1,13 +1,17 @@
-import {StateControllerBase, StateEnum} from "./base.js";
-import {LabelControl} from "../../ui/controls/label.js";
+import {PlayerStateEnum} from "./base.js";
+import {Label} from "../../ui/controls/label.js";
+import {StateControllerBase} from "../../controllers/base.js";
 
+/**
+ * @extends StateControllerBase<PlayerStateEnum>
+ */
 export class LoaderController extends StateControllerBase {
     static LOADER_DATA_EVENT = "loader_data";
 
     constructor(root, stateCtrl) {
         super(root, stateCtrl);
 
-        this.dropLabel = LabelControl.byId("drop_text");
+        this.dropLabel = Label.byId("drop_text");
 
         this.root.ondragover = e => e.preventDefault();
     }
@@ -35,14 +39,14 @@ export class LoaderController extends StateControllerBase {
 
     onStateChanged(sender, oldState, newState) {
         switch (oldState) {
-            case StateEnum.waiting:
+            case PlayerStateEnum.waiting:
                 this.dropLabel.setVisibility(false);
                 this.setEnabled(false);
                 break;
         }
 
         switch (newState) {
-            case StateEnum.waiting:
+            case PlayerStateEnum.waiting:
                 this.dropLabel.setVisibility(true);
                 this.setEnabled(true);
                 break;

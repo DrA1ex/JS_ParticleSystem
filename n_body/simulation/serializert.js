@@ -1,9 +1,10 @@
-export class SimulationLoader {
-    static VERSION = 1;
+export class SimulationSerializer {
     static META_SIZE = 6;
+    static VERSION = 1;
+    static COMPONENTS_COUNT = 2;
 
     static loadData(buffer) {
-        const meta = SimulationLoader._parseMeta(buffer);
+        const meta = SimulationSerializer._parseMeta(buffer);
 
         const metaBytes = meta.metaLength * Uint32Array.BYTES_PER_ELEMENT
         const frameSize = meta.particleCount * meta.componentsCount;
@@ -47,5 +48,20 @@ export class SimulationLoader {
             particleCount,
             componentsCount
         }
+    }
+
+    /**
+     * @param {SimulationSequence} sequence
+     * @return {Uint32Array}
+     */
+    static formatMeta(sequence) {
+        const meta = new Uint32Array(SimulationSerializer.META_SIZE)
+        meta[0] = SimulationSerializer.META_SIZE;
+        meta[1] = SimulationSerializer.VERSION;
+        meta[2] = sequence.fps;
+        meta[3] = sequence.length;
+        meta[4] = sequence.particleCount;
+        meta[5] = SimulationSerializer.COMPONENTS_COUNT;
+        return meta;
     }
 }

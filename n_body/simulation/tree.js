@@ -26,19 +26,6 @@ class BoundaryRect {
         return this._height;
     }
 
-    contains(particle) {
-        return particle.x >= this.left && particle.x < this.right &&
-            particle.y >= this.top && particle.y < this.bottom;
-    }
-
-    center() {
-        if (this._center === null) {
-            this._center = {x: this.left + this.width / 2, y: this.top + this.height / 2};
-        }
-
-        return this._center;
-    }
-
     static fromData(data) {
         let minX = data[0].x, maxX = data[0].x,
             minY = data[0].y, maxY = data[0].y;
@@ -54,6 +41,19 @@ class BoundaryRect {
         }
 
         return new BoundaryRect(minX, minY, maxX, maxY);
+    }
+
+    contains(particle) {
+        return particle.x >= this.left && particle.x < this.right &&
+            particle.y >= this.top && particle.y < this.bottom;
+    }
+
+    center() {
+        if (this._center === null) {
+            this._center = {x: this.left + this.width / 2, y: this.top + this.height / 2};
+        }
+
+        return this._center;
     }
 }
 

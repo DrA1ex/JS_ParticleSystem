@@ -1,51 +1,3 @@
-button {
-    height: 2em;
-    border: 1px solid white;
-    color: white;
-    background: transparent;
-    padding: 0 8px;
-}
-
-button:hover {
-    background: rgba(255, 255, 255, 0.1);
-    cursor: pointer;
-}
-
-button:active {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-button:disabled {
-    filter: brightness(50%);
-    pointer-events: none;
-}
-
-.fill {
-    position: absolute;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    right: 0;
-}
-
-.flex-centered {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.flex-column {
-    display: flex;
-    flex-direction: column;
-}
-
-.flex-centered span {
-    font-size: 24px;
-    color: rgb(200, 200, 200);
-    pointer-events: none;
-    user-select: none;
-}
-
 .control-bar {
     display: flex;
     position: absolute;
@@ -58,6 +10,7 @@ button:disabled {
 }
 
 .control-bar button {
+    min-height: auto;
     height: auto;
     box-sizing: border-box;
     border: none;
@@ -131,21 +84,4 @@ button:disabled {
     height: 1.5em;
     border: none;
     margin-top: 2px;
-}
-
-.rotating {
-    animation-duration: 1s;
-    animation-fill-mode: forwards;
-    animation-iteration-count: infinite;
-    animation-name: rotating;
-}
-
-@keyframes rotating {
-    from {
-        transform: rotate(0);
-    }
-
-    to {
-        transform: rotate(359deg);
-    }
 }

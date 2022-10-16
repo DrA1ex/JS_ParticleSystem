@@ -131,17 +131,6 @@ export class Settings {
         this.minInteractionDistanceSq = Math.pow(this.minInteractionDistance, 2);
     }
 
-    serialize() {
-        const result = {};
-        for (const [key, value] of Object.entries(this)) {
-            if (SERIALIZABLE_PROPS.includes(key)) {
-                result[key] = value;
-            }
-        }
-
-        return result;
-    }
-
     static fromQueryParams(defaults = null) {
         const urlSearchParams = new URLSearchParams(window.location.search);
         const queryParams = Object.fromEntries(urlSearchParams.entries());
@@ -248,5 +237,16 @@ export class Settings {
         }
 
         return null;
+    }
+
+    serialize() {
+        const result = {};
+        for (const [key, value] of Object.entries(this)) {
+            if (SERIALIZABLE_PROPS.includes(key)) {
+                result[key] = value;
+            }
+        }
+
+        return result;
     }
 }

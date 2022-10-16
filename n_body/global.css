@@ -1,0 +1,245 @@
+body {
+    color: rgb(200, 200, 200);
+    height: 100%;
+}
+
+button {
+    min-height: 2rem;
+    border: 1px solid white;
+    color: white;
+    background: transparent;
+    padding: 0 8px;
+}
+
+button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+}
+
+button:active {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+button:disabled {
+    filter: brightness(50%);
+    pointer-events: none;
+}
+
+.fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+}
+
+.flex-centered {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.flex-row {
+    display: flex;
+    flex-direction: row;
+}
+
+.flex-column {
+    display: flex;
+    flex-direction: column;
+}
+
+.flex-centered span {
+    font-size: 2rem;
+    pointer-events: none;
+    user-select: none;
+}
+
+.loading-screen {
+    background: black;
+    z-index: 1000;
+}
+
+.popup {
+    display: none;
+    position: absolute;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.popup.popup-shown {
+    display: block;
+}
+
+.rotating {
+    animation-duration: 1s;
+    animation-fill-mode: forwards;
+    animation-iteration-count: infinite;
+    animation-name: rotating;
+}
+
+@keyframes rotating {
+    from {
+        transform: rotate(0);
+    }
+
+    to {
+        transform: rotate(359deg);
+    }
+}
+
+.icon-btn {
+    box-sizing: border-box;
+    border: none;
+    padding: 4px;
+    margin: 4px;
+}
+
+.icon-btn > * {
+    height: 2rem;
+    width: 2rem;
+}
+
+.align-corner-end {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+}
+
+.action-panel {
+    margin: 0;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 4px;
+    pointer-events: initial;
+}
+
+.action-panel-container {
+    overflow: hidden;
+    bottom: calc(28px + 2rem);
+    pointer-events: none;
+}
+
+.action-panel-container .popup {
+    display: block;
+    border: none;
+
+    transform: translateY(100%);
+    opacity: 0;
+    transition: transform 300ms, opacity 0ms 300ms;
+}
+
+.action-panel-container .popup.popup-shown {
+    opacity: 1;
+    transform: translateY(0);
+
+    transition: transform 300ms 50ms, opacity 0ms;
+}
+
+.action-panel .icon-btn {
+    margin: 4px 0;
+}
+
+.control-block .popup-trigger-opened {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#stats {
+    position: absolute;
+    bottom: 4px;
+    left: 4px;
+    color: white;
+    pointer-events: none;
+    font-family: monospace;
+}
+
+#hint {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 2rem;
+    color: rgba(255, 255, 255, 0.6);
+    text-shadow: 0 0 2px black;
+    pointer-events: none;
+}
+
+.fading-out {
+    animation-duration: 1s;
+    animation-delay: 2s;
+    animation-fill-mode: forwards;
+    animation-name: fading-out;
+}
+
+@keyframes fading-out {
+    from {
+        opacity: 100%;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
+.record-icon {
+    box-sizing: border-box;
+    border: 2px solid #5e0000;
+    background: darkred;
+    border-radius: 50%;
+}
+
+button:disabled .record-icon {
+    border: 2px solid #653939;
+    background: #7d4848;
+}
+
+.record-icon.active {
+    --color: 139, 0, 0;
+    animation-duration: 1s;
+    animation-iteration-count: infinite;
+    animation-name: pulsation;
+}
+
+.control-block > .icon-btn {
+    padding: 8px;
+}
+
+.record-container {
+    overflow: hidden;
+    margin: 2px;
+    pointer-events: none;
+}
+
+.record-panel {
+    box-sizing: border-box;
+    padding: 2px;
+    background: rgba(31, 31, 31, 0.5);
+    border: 2px solid rgba(68, 67, 67, 0.5);
+    transform: translateX(110%);
+    transition: transform 300ms;
+    pointer-events: initial;
+}
+
+.record-container.shown .record-panel {
+    transform: translateX(0);
+    transition: transform 300ms 50ms;
+}
+
+.record-panel > * {
+    margin: 0 4px;
+}
+
+@keyframes pulsation {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(var(--color), 0.9);
+    }
+
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 8px rgba(var(--color), 0);
+    }
+
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(var(--color), 0);
+    }
+}

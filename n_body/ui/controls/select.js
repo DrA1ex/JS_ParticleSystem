@@ -1,8 +1,7 @@
 import {Control} from "./base.js";
 
-export class SelectControl extends Control {
+export class Select extends Control {
     _onChangeFn = null;
-    _selected = null
     options = [];
 
     constructor(element) {
@@ -10,6 +9,8 @@ export class SelectControl extends Control {
 
         this.element.onchange = this._onChangeHandler.bind(this);
     }
+
+    _selected = null
 
     get selected() {
         return this._selected?.key ?? null;

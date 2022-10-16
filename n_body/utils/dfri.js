@@ -3,6 +3,20 @@ import {DataSmoother} from "./smoother.js";
 
 export class DFRIHelperBase {
 
+    constructor(renderer, particleCount) {
+        this.renderer = renderer;
+        this.particleCount = particleCount;
+
+        this.frame = 0;
+        this.interpolateFrames = 0;
+
+        this._initialized = false;
+        this._deltas = new Array(this.particleCount);
+        for (let i = 0; i < this.particleCount; i++) {
+            this._deltas[i] = {x: 0, y: 0};
+        }
+    }
+
     /**
      * @abstract
      */
@@ -19,20 +33,6 @@ export class DFRIHelperBase {
 
     get maxCount() {
         return Number.MAX_SAFE_INTEGER;
-    }
-
-    constructor(renderer, particleCount) {
-        this.renderer = renderer;
-        this.particleCount = particleCount;
-
-        this.frame = 0;
-        this.interpolateFrames = 0;
-
-        this._initialized = false;
-        this._deltas = new Array(this.particleCount);
-        for (let i = 0; i < this.particleCount; i++) {
-            this._deltas[i] = {x: 0, y: 0};
-        }
     }
 
     enable() {
@@ -97,18 +97,18 @@ export class DFRIHelperBase {
 }
 
 export class SimpleDFRIHelper extends DFRIHelperBase {
+    constructor(renderer, particlesCount, sourceFrameRate, desiredFramerate) {
+        super(renderer, particlesCount);
+
+        this.reconfigure(sourceFrameRate, desiredFramerate);
+    }
+
     get actualTime() {
         return this._actualTime;
     }
 
     get desiredTime() {
         return this._desiredTime;
-    }
-
-    constructor(renderer, particlesCount, sourceFrameRate, desiredFramerate) {
-        super(renderer, particlesCount);
-
-        this.reconfigure(sourceFrameRate, desiredFramerate);
     }
 
     reconfigure(sourceFrameRate, desiredFramerate) {
@@ -126,6 +126,18 @@ export class DFRIHelper extends DFRIHelperBase {
         this.stepTimeSmoother = new DataSmoother(this.settings.fps * 4, 1);
         this.renderTimeSmoother = new DataSmoother(this.settings.fps * 2, 5, true);
         this.renderTimeSmoother.postValue(1000 / this.settings.fps, true);
+    }
+
+    get actualTime() {
+        return this.stepTimeSmoother.smoothedValue;
+    }
+
+    get desiredTime() {
+        return this.renderTimeSmoother.smoothedValue;
+    }
+
+    get maxCount() {
+        return this.settings.DFRIMaxFrames;
     }
 
     bufferSwitched(particles, aheadBufferEntry) {
@@ -151,17 +163,5 @@ export class DFRIHelper extends DFRIHelperBase {
     _getInterpolateFramesCount() {
         const value = super._getInterpolateFramesCount();
         return Math.ceil(value * 1.1);
-    }
-
-    get actualTime() {
-        return this.stepTimeSmoother.smoothedValue;
-    }
-
-    get desiredTime() {
-        return this.renderTimeSmoother.smoothedValue;
-    }
-
-    get maxCount() {
-        return this.settings.DFRIMaxFrames;
     }
 }

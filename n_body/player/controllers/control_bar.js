@@ -1,7 +1,8 @@
-import {ButtonControl} from "../../ui/controls/button.js";
-import {ProgressBarControl} from "../../ui/controls/progress_bar.js";
-import {StateEnum, StateControllerBase} from "./base.js";
+import {StateControllerBase} from "../../controllers/base.js";
 import {View} from "../../ui/controls/base.js";
+import {Button} from "../../ui/controls/button.js";
+import {PlayingProgress} from "../../ui/controls/playing_progress.js";
+import {PlayerStateEnum} from "./base.js";
 
 const view = await fetch(new URL("./views/control_bar.html", import.meta.url)).then(d => d.text());
 
@@ -17,6 +18,9 @@ export const ControlStateEnum = {
     settings: 4,
 }
 
+/**
+ * @extends StateControllerBase<PlayerStateEnum>
+ */
 export class ControlBarController extends StateControllerBase {
     static CONTROL_ACTION_EVENT = "control_action";
     static CONTROL_SEEK_EVENT = "control_seek";
@@ -25,22 +29,22 @@ export class ControlBarController extends StateControllerBase {
         const viewObj = new View(root, view);
         super(viewObj.element, stateCtrl);
 
-        this.playControl = ButtonControl.byId("play")
+        this.playControl = Button.byId("play")
         this.playControl.setOnClick(this.play.bind(this));
 
-        this.pauseControl = ButtonControl.byId("pause")
+        this.pauseControl = Button.byId("pause")
         this.pauseControl.setOnClick(this.pause.bind(this));
 
-        this.rewindControl = ButtonControl.byId("rewind")
+        this.rewindControl = Button.byId("rewind")
         this.rewindControl.setOnClick(this.rewind.bind(this));
 
-        this.resetControl = ButtonControl.byId("reset")
+        this.resetControl = Button.byId("reset")
         this.resetControl.setOnClick(this.reset.bind(this));
 
-        this.settingsControl = ButtonControl.byId("settings");
+        this.settingsControl = Button.byId("settings");
         this.settingsControl.setOnClick(this.openSettings.bind(this));
 
-        this.progressControl = ProgressBarControl.byId("simulation-progress");
+        this.progressControl = PlayingProgress.byId("simulation-progress");
         this.progressControl.setOnSeek(this.seek.bind(this));
 
         this.setEnabled(false);
@@ -91,8 +95,8 @@ export class ControlBarController extends StateControllerBase {
 
     onStateChanged(sender, oldState, newState) {
         switch (newState) {
-            case StateEnum.waiting:
-            case StateEnum.loading:
+            case PlayerStateEnum.waiting:
+            case PlayerStateEnum.loading:
                 this.setEnabled(false);
 
                 this.playControl.setVisibility(true);
@@ -100,21 +104,21 @@ export class ControlBarController extends StateControllerBase {
                 this.progressControl.setValue(0);
                 break;
 
-            case StateEnum.playing:
+            case PlayerStateEnum.playing:
                 this.setEnabled(true);
 
                 this.playControl.setVisibility(false);
                 this.pauseControl.setVisibility(true);
                 break;
 
-            case StateEnum.paused:
+            case PlayerStateEnum.paused:
                 this.playControl.setEnabled(true);
 
                 this.playControl.setVisibility(true);
                 this.pauseControl.setVisibility(false);
                 break;
 
-            case StateEnum.finished:
+            case PlayerStateEnum.finished:
                 this.playControl.setEnabled(false);
                 this.pauseControl.setVisibility(false);
                 this.playControl.setVisibility(true);

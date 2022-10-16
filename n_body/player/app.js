@@ -1,14 +1,14 @@
 import {PlayerController} from "./controllers/player.js";
-import {StateEnum} from "./controllers/base.js";
+import {PlayerStateEnum} from "./controllers/base.js";
 import {ControlStateEnum} from "./controllers/control_bar.js";
 import {SimpleDFRIHelper} from "../utils/dfri.js";
 import {InteractionHandler} from "../render/base.js";
 import {Webgl2Renderer} from "../render/webgl/render.js";
-import {SimulationSequence} from "./utils/simulation_sequence.js";
-import {FetchDataAsyncReader, FileAsyncReader, ObservableStreamLoader} from "./utils/stream.js";
+import {SimulationSequence} from "../simulation/sequence.js";
+import {FetchDataAsyncReader, FileAsyncReader, ObservableStreamLoader} from "../utils/stream.js";
 
 export class Application {
-    _statesToRender = new Set([StateEnum.playing, StateEnum.paused, StateEnum.finished]);
+    _statesToRender = new Set([PlayerStateEnum.playing, PlayerStateEnum.paused, PlayerStateEnum.finished]);
 
     particles = null;
     sequence = null;
@@ -26,7 +26,7 @@ export class Application {
         this.playerCtrl.subscribe(this, PlayerController.PLAYER_DATA_EVENT, (sender, file) => this.loadDataFromFile(file));
         this.playerCtrl.subscribe(this, PlayerController.PLAYER_SEEK_EVENT, (sender, value) => this.handleSeek(value));
         this.playerCtrl.subscribe(this, PlayerController.PLAYER_SPEED_EVENT, (sender, value) => this.handleSpeed(value));
-        this.playerCtrl.setState(StateEnum.waiting);
+        this.playerCtrl.setState(PlayerStateEnum.waiting);
         this.playerCtrl.configure(this.settings);
     }
 
@@ -58,7 +58,7 @@ export class Application {
     }
 
     async loadData(loaderFn) {
-        this.playerCtrl.setState(StateEnum.loading);
+        this.playerCtrl.setState(PlayerStateEnum.loading);
 
         let success = false;
         try {
@@ -70,10 +70,10 @@ export class Application {
         }
 
         if (success) {
-            this.playerCtrl.setState(StateEnum.playing);
+            this.playerCtrl.setState(PlayerStateEnum.playing);
             setTimeout(() => this.render());
         } else {
-            this.playerCtrl.setState(StateEnum.waiting);
+            this.playerCtrl.setState(PlayerStateEnum.waiting);
         }
     }
 
@@ -107,17 +107,17 @@ export class Application {
         }
 
         if (this.dfri) {
-            this.dfri.render(this.particles, this.playerCtrl.currentState !== StateEnum.playing);
+            this.dfri.render(this.particles, this.playerCtrl.currentState !== PlayerStateEnum.playing);
         } else {
             this.renderer.render(this.particles);
         }
 
-        if (this.playerCtrl.currentState === StateEnum.playing) {
+        if (this.playerCtrl.currentState === PlayerStateEnum.playing) {
             this.playerCtrl.setCurrentFrame(this.frameIndex, (this.dfri?.frame ?? 0));
         }
 
         setTimeout(() => {
-            if (this.playerCtrl.currentState === StateEnum.playing) {
+            if (this.playerCtrl.currentState === PlayerStateEnum.playing) {
                 this.nextFrame();
             }
 
@@ -134,7 +134,7 @@ export class Application {
         const frame = this.sequence.getFrame(this.frameIndex);
 
         if (!frame) {
-            this.playerCtrl.setState(StateEnum.finished);
+            this.playerCtrl.setState(PlayerStateEnum.finished);
             return;
         }
 
@@ -162,11 +162,11 @@ export class Application {
     handleControl(state) {
         switch (state) {
             case ControlStateEnum.play:
-                this.playerCtrl.setState(StateEnum.playing);
+                this.playerCtrl.setState(PlayerStateEnum.playing);
                 break;
 
             case ControlStateEnum.pause:
-                this.playerCtrl.setState(StateEnum.paused);
+                this.playerCtrl.setState(PlayerStateEnum.paused);
                 break;
 
             case ControlStateEnum.rewind:
@@ -174,7 +174,7 @@ export class Application {
                 this.renderer.reset();
                 this.renderer.clear();
                 this.dfri?.reset();
-                this.playerCtrl.setState(StateEnum.playing);
+                this.playerCtrl.setState(PlayerStateEnum.playing);
                 break;
 
             case ControlStateEnum.reset:
@@ -182,7 +182,7 @@ export class Application {
                 this.renderer.reset();
                 this.renderer.clear();
                 this.dfri?.reset();
-                this.playerCtrl.setState(StateEnum.waiting);
+                this.playerCtrl.setState(PlayerStateEnum.waiting);
                 break;
         }
     }
@@ -203,8 +203,8 @@ export class Application {
             this.dfri.frame = subFrame;
         }
 
-        if (this.playerCtrl.currentState === StateEnum.finished) {
-            this.playerCtrl.setState(StateEnum.paused);
+        if (this.playerCtrl.currentState === PlayerStateEnum.finished) {
+            this.playerCtrl.setState(PlayerStateEnum.paused);
         }
     }
 

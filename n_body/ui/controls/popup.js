@@ -12,10 +12,10 @@ export const PopupDirectionEnum = {
     right: 3
 }
 
-export class PopupControl extends Control {
+export class Popup extends Control {
     anchor;
     offsetX = 0;
-    offsetY = 0
+    offsetY = 0;
     direction = PopupDirectionEnum.up;
 
     shown = false;
@@ -34,11 +34,9 @@ export class PopupControl extends Control {
         }
 
         this.element.appendChild(this.contentNode);
-        this.setVisibility(false);
 
         this._docClickListener = this._onDocumentClick.bind(this);
-
-        this.element.style.position = "absolute";
+        this._sizeObserver = new ResizeObserver(this._reposition.bind(this));
     }
 
     show() {
@@ -49,8 +47,34 @@ export class PopupControl extends Control {
             return;
         }
 
-        this.setVisibility(true);
         document.addEventListener("click", this._docClickListener);
+        this._sizeObserver.observe(document.body, {box: 'border-box'});
+
+        this.shown = true;
+        this.element.classList.add("popup-shown");
+
+        this.anchor.classList.add("popup-trigger-opened");
+        this._reposition();
+    }
+
+    hide() {
+        if (!this.shown) {
+            return;
+        }
+
+        this.shown = false;
+        this.element.classList.remove("popup-shown");
+        this.anchor.classList.remove("popup-trigger-opened");
+
+        document.removeEventListener("click", this._docClickListener);
+        this._sizeObserver.disconnect();
+
+    }
+
+    _reposition() {
+        if (!this.shown) {
+            return;
+        }
 
         const rect = this.element.getBoundingClientRect();
         const containerRect = document.body.getBoundingClientRect();
@@ -84,19 +108,6 @@ export class PopupControl extends Control {
 
         this.element.style.left = `${left}px`;
         this.element.style.top = `${top}px`;
-
-        this.shown = true;
-        this.element.focus();
-    }
-
-    hide() {
-        if (!this.shown) {
-            return;
-        }
-
-        this.shown = false;
-        this.setVisibility(false);
-        document.removeEventListener("click", this._docClickListener);
     }
 
     _getAnchorPosition() {
@@ -132,7 +143,7 @@ export class PopupControl extends Control {
     }
 
     _onDocumentClick(e) {
-        if (e.target === this.anchor || this.element.contains(e.target)) {
+        if (e.target === this.anchor || this.anchor.contains(e.target) || this.element.contains(e.target)) {
             return;
         }
 

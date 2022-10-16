@@ -1,6 +1,6 @@
 import {Control} from "./base.js";
 
-export class FrameControl extends Control {
+export class Frame extends Control {
     constructor(element) {
         super(element);
     }

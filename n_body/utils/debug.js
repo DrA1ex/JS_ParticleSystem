@@ -1,4 +1,5 @@
 import {DataSmoother} from "./smoother.js";
+import * as CommonUtils from "./common.js";
 
 export class Debug {
     depth = 0;
@@ -32,26 +33,12 @@ export class Debug {
     }
 
     drawStats() {
-        const flopsUnits = [
-            {unit: "T", exp: 1e12},
-            {unit: "G", exp: 1e9},
-            {unit: "M", exp: 1e6},
-            {unit: "K", exp: 1e3},
-        ]
-        let flopsUnit = "";
-        let flops = this.flops || 0;
-        for (let i = 0; i < flopsUnits.length; i++) {
-            if (flops >= flopsUnits[i].exp) {
-                flops /= flopsUnits[i].exp;
-                flopsUnit = flopsUnits[i].unit;
-                break;
-            }
-        }
+        const flops = CommonUtils.formatUnit(this.flops, "FLOPS");
 
         this.infoElem.innerText = [
             `max depth: ${this.depth}`,
             `segments: ${this.segmentCount}`,
-            `complexity: ${flops.toFixed(0)} ${flopsUnit}FLOPS`,
+            `complexity: ${flops}`,
             `ahead buffers: ${this.bufferCount}`,
             this.settings.enableDFRI ? `interpolated: ${this.interpolateFrames} frames` : "",
             `fps: ${(1000 / this.elapsed || 0).toFixed(1)}`,

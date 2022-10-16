@@ -1,6 +1,6 @@
-import {ControllerBase} from "./base.js";
+import {ControllerBase} from "../../controllers/base.js";
 import {View} from "../../ui/controls/base.js";
-import {SelectControl} from "../../ui/controls/select.js";
+import {Select} from "../../ui/controls/select.js";
 
 const view = await fetch(new URL("./views/settings.html", import.meta.url)).then(d => d.text());
 
@@ -11,7 +11,7 @@ export class SettingsController extends ControllerBase {
         const viewObj = new View(root, view);
         super(viewObj.element, parentCtrl);
 
-        this.speedSelectControl = SelectControl.byId("speed-select");
+        this.speedSelectControl = Select.byId("speed-select");
 
         const speedOptions = [
             {key: "0.01", label: "0.01"},

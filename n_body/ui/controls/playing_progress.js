@@ -4,9 +4,9 @@ const view = await fetch(new URL("./views/progress_bar.html", import.meta.url)).
 
 /**
  * @class
- * @extends Control<ProgressBarControl>
+ * @extends Control<PlayingProgress>
  */
-export class ProgressBarControl extends Control {
+export class PlayingProgress extends Control {
     _onSeekHandler = null;
 
     constructor(element, min = 0, max = 1, step = 1) {

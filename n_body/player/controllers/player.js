@@ -1,11 +1,16 @@
+import * as CommonUtils from "../../utils/common.js";
 import {ControlBarController, ControlStateEnum} from "./control_bar.js";
 import {LoaderController} from "./loader.js";
-import {StateControllerBase, StateEnum} from "./base.js";
-import {LabelControl} from "../../ui/controls/label.js";
+import {PlayerStateEnum} from "./base.js";
+import {Label} from "../../ui/controls/label.js";
 import {Control} from "../../ui/controls/base.js";
-import {PopupControl, PopupDirectionEnum} from "../../ui/controls/popup.js";
+import {Popup, PopupDirectionEnum} from "../../ui/controls/popup.js";
 import {SettingsController} from "./settings.js";
+import {StateControllerBase} from "../../controllers/base.js";
 
+/**
+ * @extends StateControllerBase<PlayerStateEnum>
+ */
 export class PlayerController extends StateControllerBase {
     static PLAYER_DATA_EVENT = "player_data";
     static PLAYER_CONTROL_EVENT = "player_control";
@@ -31,14 +36,14 @@ export class PlayerController extends StateControllerBase {
         this.settingsCtrl = new SettingsController(document.getElementById("settings-content"), this);
         this.settingsCtrl.subscribe(this, SettingsController.SETTINGS_SPEED_EVENT, this._onSpeedChange.bind(this))
 
-        this.settingsPopup = PopupControl.byId("settings-popup", this.settingsCtrl.root);
+        this.settingsPopup = Popup.byId("settings-popup", this.settingsCtrl.root);
         this.settingsPopup.offsetY = 8;
         this.settingsPopup.direction = PopupDirectionEnum.up;
         this.settingsPopup.anchor = this.controlBarCtrl.settingsControl.element;
 
 
         this.loadingScreen = Control.byId("loading-screen");
-        this.loadingStatus = LabelControl.byId("loading-status");
+        this.loadingStatus = Label.byId("loading-status");
     }
 
     setLoadingProgress(loaded, size) {
@@ -50,24 +55,7 @@ export class PlayerController extends StateControllerBase {
     }
 
     _getSizeLabel(size) {
-        const units = [
-            {unit: "T", exp: Math.pow(1024, 4)},
-            {unit: "G", exp: Math.pow(1024, 3)},
-            {unit: "M", exp: Math.pow(1024, 2)},
-            {unit: "K", exp: 1024},
-        ]
-
-        let unit = "";
-        let value = size;
-        for (let i = 0; i < units.length; i++) {
-            if (value >= units[i].exp) {
-                value /= units[i].exp;
-                unit = units[i].unit;
-                break;
-            }
-        }
-
-        return `${value.toFixed(2)} ${unit}B`;
+        return CommonUtils.formatUnit(size, "B", 2, 1024);
     }
 
     setupSequence(frameCount, subFrameCount) {
@@ -109,8 +97,8 @@ export class PlayerController extends StateControllerBase {
 
     onStateChanged(sender, oldState, newState) {
         switch (oldState) {
-            case StateEnum.unset:
-            case StateEnum.loading:
+            case PlayerStateEnum.unset:
+            case PlayerStateEnum.loading:
                 this.loadingStatus.setText("");
                 this.loadingScreen.setVisibility(false);
                 this.loadingStatus.setVisibility(false);
@@ -118,7 +106,7 @@ export class PlayerController extends StateControllerBase {
         }
 
         switch (newState) {
-            case StateEnum.loading:
+            case PlayerStateEnum.loading:
                 this.loadingScreen.setVisibility(true);
                 this.loadingStatus.setVisibility(true);
                 break;

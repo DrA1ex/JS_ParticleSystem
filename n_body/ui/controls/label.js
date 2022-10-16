@@ -1,6 +1,6 @@
 import {Control} from "./base.js";
 
-export class LabelControl extends Control {
+export class Label extends Control {
     constructor(element) {
         super(element);
     }

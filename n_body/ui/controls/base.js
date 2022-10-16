@@ -11,7 +11,7 @@ export class Control {
      *
      * @param {string} id
      * @param {...*} params
-     * @return {Control<T>}
+     * @return {T}
      */
     static byId(id, ...params) {
         const e = document.getElementById(id);
@@ -19,7 +19,7 @@ export class Control {
             throw new Error(`Unable to fined element ${id}`);
         }
 
-        return new this(e, ...params);
+        return /** @type {T} */ new this(e, ...params);
     }
 
     setVisibility(show) {
@@ -38,6 +38,14 @@ export class Control {
     setInteractions(enable) {
         this.element.style.pointerEvents = enable ? null : "none";
     }
+
+    addClass(className) {
+        this.element.classList.add(className);
+    }
+
+    removeClass(className) {
+        this.element.classList.remove(className);
+    }
 }
 
 export class View {
@@ -46,6 +54,14 @@ export class View {
      * @param {string} view
      */
     constructor(element, view) {
+        if (!element) {
+            throw new Error("Element is missing");
+        }
+
+        if (!view) {
+            throw new Error("View is missing");
+        }
+
         this.element = element;
         this._replaceElement(view);
     }
