@@ -58,6 +58,7 @@ button:disabled {
 .loading-screen {
     background: black;
     z-index: 1000;
+    pointer-events: none;
 }
 
 .popup {
@@ -198,6 +199,14 @@ button:disabled .record-icon {
     animation-name: pulsation;
 }
 
+.control-block {
+    pointer-events: none;
+}
+
+.control-block > * {
+    pointer-events: initial;
+}
+
 .control-block > .icon-btn {
     padding: 8px;
 }
@@ -213,14 +222,16 @@ button:disabled .record-icon {
     padding: 2px;
     background: rgba(31, 31, 31, 0.5);
     border: 2px solid rgba(68, 67, 67, 0.5);
-    transform: translateX(110%);
-    transition: transform 300ms;
-    pointer-events: initial;
+    opacity: 0;
+    transform: translateX(100%);
+    transition: transform 300ms, opacity 300ms;
 }
 
 .record-container.shown .record-panel {
     transform: translateX(0);
-    transition: transform 300ms 50ms;
+    opacity: 1;
+    transition: transform 300ms 50ms, opacity 300ms 50ms;
+    pointer-events: initial;
 }
 
 .record-panel > * {
