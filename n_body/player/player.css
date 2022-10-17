@@ -1,12 +1,18 @@
-.control-bar {
-    display: flex;
+.control-bar-container {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
+    overflow: hidden;
+}
+
+.control-bar {
+    display: flex;
     height: 2rem;
     border: none;
     border-top: 1px solid rgba(255, 255, 255, 0.5);
+
+    transition: transform 300ms;
 }
 
 .control-bar button {
@@ -18,11 +24,19 @@
     padding: 0;
 }
 
+.control-bar button:focus {
+    outline: 1px solid rgba(41, 127, 255, 0.5);
+}
+
 .control-bar button img {
     height: 100%;
     box-sizing: border-box;
     padding: 4px;
     pointer-events: none;
+}
+
+.control-bar-container.control-bar-hidden .control-bar {
+    transform: translateY(100%);
 }
 
 .progress-bar {

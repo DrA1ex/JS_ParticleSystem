@@ -48,6 +48,7 @@ export class ControlBarController extends StateControllerBase {
         this.progressControl.setOnSeek(this.seek.bind(this));
 
         this.setEnabled(false);
+        this.shown = true;
     }
 
 
@@ -80,7 +81,9 @@ export class ControlBarController extends StateControllerBase {
     }
 
     openSettings() {
-        this.emitEvent(ControlBarController.CONTROL_ACTION_EVENT, ControlStateEnum.settings);
+        if (this.shown) {
+            this.emitEvent(ControlBarController.CONTROL_ACTION_EVENT, ControlStateEnum.settings);
+        }
     }
 
     setEnabled(enabled) {
@@ -91,6 +94,15 @@ export class ControlBarController extends StateControllerBase {
         this.settingsControl.setEnabled(enabled);
 
         this.frame.setVisibility(enabled);
+    }
+
+    toggleVisibility() {
+        this.shown = !this.shown;
+        if (this.shown) {
+            this.frame.removeClass("control-bar-hidden");
+        } else {
+            this.frame.addClass("control-bar-hidden");
+        }
     }
 
     onStateChanged(sender, oldState, newState) {

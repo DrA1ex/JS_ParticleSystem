@@ -24,7 +24,6 @@ export class PlayingProgress extends Control {
         this.setValue(min);
 
         this.element.onclick = this._onProgressClick.bind(this);
-        this.element.onkeydown = this._onKeyPress.bind(this);
     }
 
     setOnSeek(fn) {
@@ -42,38 +41,6 @@ export class PlayingProgress extends Control {
 
         if (value !== this.value) {
             this._onSeekHandler(value);
-        }
-    }
-
-    _onKeyPress(e) {
-        if (!this._onSeekHandler) {
-            return;
-        }
-
-        let step = 0;
-        switch (e.key) {
-            case  "ArrowLeft":
-                step = -1;
-                break;
-
-            case  "ArrowRight":
-                step = 1;
-                break;
-
-            case  "ArrowUp":
-                step = -50;
-                break;
-
-            case  "ArrowDown":
-                step = 50;
-                break;
-        }
-
-        if (step !== 0) {
-            const nextValue = Math.max(this.min, Math.min(this.max, this.value + step * this.step));
-            if (nextValue !== this.value) {
-                this._onSeekHandler(nextValue);
-            }
         }
     }
 

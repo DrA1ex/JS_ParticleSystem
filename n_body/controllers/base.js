@@ -97,18 +97,16 @@ export class StateControllerBase extends ControllerBase {
         const oldState = this.currentState;
         this.currentState = state;
 
-        this.emitEvent(StateControllerBase.STATE_EVENT_NAME, state);
-        this.onStateChanged(this, oldState, state);
+        this.emitEvent(StateControllerBase.STATE_EVENT_NAME, this.currentState);
+        this.onStateChanged(this, oldState, this.currentState);
     }
 
     /**
-     * @abstract
      *
      * @param {object} sender
      * @param {T} oldState
      * @param {T} newState
      */
     onStateChanged(sender, oldState, newState) {
-        this.currentState = newState;
     }
 }

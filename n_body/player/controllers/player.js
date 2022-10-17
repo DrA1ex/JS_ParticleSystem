@@ -44,6 +44,8 @@ export class PlayerController extends StateControllerBase {
 
         this.loadingScreen = Control.byId("loading-screen");
         this.loadingStatus = Label.byId("loading-status");
+
+        this._globalHotKeyHandler = this._handleHotKey.bind(this);
     }
 
     setLoadingProgress(loaded, size) {
@@ -72,11 +74,16 @@ export class PlayerController extends StateControllerBase {
         this.controlBarCtrl.setProgress(this.frameIndex * this.subFrameCount + this.subFrameIndex);
     }
 
+    _seekOffset(offset) {
+        this._onSeek(this, this.frameIndex * this.subFrameCount + this.subFrameIndex + offset);
+    }
+
     _onSeek(sender, value) {
         if (!this.framesCount) {
             return;
         }
 
+        value = Math.max(0, Math.min(this.framesCount * this.subFrameCount, value));
         const frameIndex = Math.floor(value / this.subFrameCount);
         const subFrameIndex = Math.floor(value % this.subFrameCount);
 
@@ -95,6 +102,46 @@ export class PlayerController extends StateControllerBase {
         this.emitEvent(PlayerController.PLAYER_SPEED_EVENT, speed);
     }
 
+    _handleHotKey(e) {
+        let handled = true;
+        switch (e.code) {
+            case "Escape":
+                this.controlBarCtrl.toggleVisibility();
+                if (!this.controlBarCtrl.shown) {
+                    this.settingsPopup.hide();
+                }
+                break;
+
+            case "Space":
+                this.setState(this.currentState === PlayerStateEnum.playing ? PlayerStateEnum.paused : PlayerStateEnum.playing);
+                break;
+
+            case "ArrowLeft":
+                this._seekOffset(-1);
+                break;
+
+            case "ArrowRight":
+                this._seekOffset(1);
+                break;
+
+            case "ArrowUp":
+                this._seekOffset(Math.ceil(this.framesCount * 0.1));
+                break;
+
+            case "ArrowDown":
+                this._seekOffset(Math.ceil(-this.framesCount * 0.1));
+                break;
+
+            default:
+                handled = false;
+        }
+
+        if (handled) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+    }
+
     onStateChanged(sender, oldState, newState) {
         switch (oldState) {
             case PlayerStateEnum.unset:
@@ -106,10 +153,18 @@ export class PlayerController extends StateControllerBase {
         }
 
         switch (newState) {
+            case PlayerStateEnum.waiting:
+                document.body.removeEventListener("keydown", this._globalHotKeyHandler);
+                break;
+
             case PlayerStateEnum.loading:
                 this.loadingScreen.setVisibility(true);
                 this.loadingStatus.setVisibility(true);
                 break;
+        }
+
+        if (oldState === PlayerStateEnum.loading && newState === PlayerStateEnum.playing) {
+            document.body.addEventListener("keydown", this._globalHotKeyHandler);
         }
     }
 }
