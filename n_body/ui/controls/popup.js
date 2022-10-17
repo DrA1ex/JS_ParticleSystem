@@ -47,7 +47,8 @@ export class Popup extends Control {
             return;
         }
 
-        document.addEventListener("click", this._docClickListener);
+        document.addEventListener("mousedown", this._docClickListener);
+        document.addEventListener("touchstart", this._docClickListener);
         this._sizeObserver.observe(document.body, {box: 'border-box'});
 
         this.shown = true;
@@ -66,7 +67,8 @@ export class Popup extends Control {
         this.element.classList.remove("popup-shown");
         this.anchor.classList.remove("popup-trigger-opened");
 
-        document.removeEventListener("click", this._docClickListener);
+        document.removeEventListener("mousedown", this._docClickListener);
+        document.removeEventListener("touchstart", this._docClickListener);
         this._sizeObserver.disconnect();
 
     }
@@ -147,10 +149,7 @@ export class Popup extends Control {
             return;
         }
 
-        const rect = this.element.getBoundingClientRect();
-        if (rect.left < e.clientX || rect.right > e.clientX || rect.top < e.clientY || rect.bottom > e.clientY) {
-            this.hide();
-        }
+        this.hide();
     }
 
     _constrainValue(value, min, max) {
