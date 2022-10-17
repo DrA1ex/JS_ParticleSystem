@@ -83,7 +83,7 @@ export class PlayerController extends StateControllerBase {
             return;
         }
 
-        value = Math.max(0, Math.min(this.framesCount * this.subFrameCount, value));
+        value = Math.max(0, Math.min(this.framesCount * this.subFrameCount - 1, value));
         const frameIndex = Math.floor(value / this.subFrameCount);
         const subFrameIndex = Math.floor(value % this.subFrameCount);
 
@@ -125,11 +125,11 @@ export class PlayerController extends StateControllerBase {
                 break;
 
             case "ArrowUp":
-                this._seekOffset(Math.ceil(this.framesCount * 0.1));
+                this._seekOffset(Math.ceil(this.framesCount * this.subFrameCount * 0.1));
                 break;
 
             case "ArrowDown":
-                this._seekOffset(Math.ceil(-this.framesCount * 0.1));
+                this._seekOffset(Math.ceil(-this.framesCount * this.subFrameCount * 0.1));
                 break;
 
             default:
