@@ -1,6 +1,8 @@
 import {PlayerStateEnum} from "./base.js";
 import {Label} from "../../ui/controls/label.js";
 import {StateControllerBase} from "../../controllers/base.js";
+import {Button} from "../../ui/controls/button.js";
+import * as FileUtils from "../../utils/file.js";
 
 /**
  * @extends StateControllerBase<PlayerStateEnum>
@@ -11,7 +13,9 @@ export class LoaderController extends StateControllerBase {
     constructor(root, stateCtrl) {
         super(root, stateCtrl);
 
-        this.dropLabel = Label.byId("drop_text");
+        this.dropLabel = Label.byId("drop-text");
+        this.openFileBtn = Button.byId("open-file-btn");
+        this.openFileBtn.setOnClick(this._openFile.bind(this));
 
         this.root.ondragover = e => e.preventDefault();
     }
@@ -25,6 +29,13 @@ export class LoaderController extends StateControllerBase {
 
         const file = e.dataTransfer.files[0];
         this.emitEvent(LoaderController.LOADER_DATA_EVENT, file);
+    }
+
+    async _openFile() {
+        const file = await FileUtils.openFile(".bin", false);
+        if (file) {
+            this.emitEvent(LoaderController.LOADER_DATA_EVENT, file);
+        }
     }
 
     setEnabled(enabled) {
@@ -41,6 +52,7 @@ export class LoaderController extends StateControllerBase {
         switch (oldState) {
             case PlayerStateEnum.waiting:
                 this.dropLabel.setVisibility(false);
+                this.openFileBtn.setVisibility(false);
                 this.setEnabled(false);
                 break;
         }
@@ -48,6 +60,7 @@ export class LoaderController extends StateControllerBase {
         switch (newState) {
             case PlayerStateEnum.waiting:
                 this.dropLabel.setVisibility(true);
+                this.openFileBtn.setVisibility(true);
                 this.setEnabled(true);
                 break;
         }
