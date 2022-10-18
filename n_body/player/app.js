@@ -22,10 +22,10 @@ export class Application {
         this.settings = settings;
 
         this.playerCtrl = new PlayerController(document.body);
-        this.playerCtrl.subscribe(this, PlayerController.PLAYER_CONTROL_EVENT, (sender, type) => this.handleControl(type));
-        this.playerCtrl.subscribe(this, PlayerController.PLAYER_DATA_EVENT, (sender, file) => this.loadDataFromFile(file));
-        this.playerCtrl.subscribe(this, PlayerController.PLAYER_SEEK_EVENT, (sender, value) => this.handleSeek(value));
-        this.playerCtrl.subscribe(this, PlayerController.PLAYER_SPEED_EVENT, (sender, value) => this.handleSpeed(value));
+        this.playerCtrl.subscribe(this, PlayerController.CONTROL_EVENT, (sender, type) => this.handleControl(type));
+        this.playerCtrl.subscribe(this, PlayerController.DATA_EVENT, (sender, file) => this.loadDataFromFile(file));
+        this.playerCtrl.subscribe(this, PlayerController.SEEK_EVENT, (sender, value) => this.handleSeek(value));
+        this.playerCtrl.subscribe(this, PlayerController.SPEED_EVENT, (sender, value) => this.handleSpeed(value));
         this.playerCtrl.setState(PlayerStateEnum.waiting);
         this.playerCtrl.configure(this.settings);
     }

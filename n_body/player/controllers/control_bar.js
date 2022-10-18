@@ -22,8 +22,8 @@ export const ControlStateEnum = {
  * @extends StateControllerBase<PlayerStateEnum>
  */
 export class ControlBarController extends StateControllerBase {
-    static CONTROL_ACTION_EVENT = "control_action";
-    static CONTROL_SEEK_EVENT = "control_seek";
+    static ACTION_EVENT = "control_action";
+    static SEEK_EVENT = "control_seek";
 
     constructor(root, stateCtrl) {
         const viewObj = new View(root, view);
@@ -61,28 +61,28 @@ export class ControlBarController extends StateControllerBase {
     }
 
     play() {
-        this.emitEvent(ControlBarController.CONTROL_ACTION_EVENT, ControlStateEnum.play);
+        this.emitEvent(ControlBarController.ACTION_EVENT, ControlStateEnum.play);
     }
 
     pause() {
-        this.emitEvent(ControlBarController.CONTROL_ACTION_EVENT, ControlStateEnum.pause);
+        this.emitEvent(ControlBarController.ACTION_EVENT, ControlStateEnum.pause);
     }
 
     rewind() {
-        this.emitEvent(ControlBarController.CONTROL_ACTION_EVENT, ControlStateEnum.rewind);
+        this.emitEvent(ControlBarController.ACTION_EVENT, ControlStateEnum.rewind);
     }
 
     reset() {
-        this.emitEvent(ControlBarController.CONTROL_ACTION_EVENT, ControlStateEnum.reset);
+        this.emitEvent(ControlBarController.ACTION_EVENT, ControlStateEnum.reset);
     }
 
     seek(value) {
-        this.emitEvent(ControlBarController.CONTROL_SEEK_EVENT, value);
+        this.emitEvent(ControlBarController.SEEK_EVENT, value);
     }
 
     openSettings() {
         if (this.shown) {
-            this.emitEvent(ControlBarController.CONTROL_ACTION_EVENT, ControlStateEnum.settings);
+            this.emitEvent(ControlBarController.ACTION_EVENT, ControlStateEnum.settings);
         }
     }
 

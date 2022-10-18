@@ -4,8 +4,6 @@ import * as CommonUtils from "./common.js";
 export class Debug {
     depth = 0;
     segmentCount = 0;
-    flops = 0;
-    elapsed = 0;
     bufferCount = 0;
     interpolateFrames = 0;
 
@@ -15,12 +13,25 @@ export class Debug {
     treeDebugData = [];
     forceDebugData = [];
 
+    get elapsed() {
+        return this.frameRateSmoother.smoothedValue;
+    }
+
+    get flops() {
+        return this.flopsSmoother.smoothedValue;
+    }
+
+    get frameLatency() {
+        return this.frameLatencySmoother.smoothedValue;
+    }
+
     constructor(renderer, backend, settings) {
         this.renderer = renderer;
         this.backend = backend;
         this.settings = settings;
 
         this.frameRateSmoother = new DataSmoother(this.settings.fps, 3, true);
+        this.frameLatencySmoother = new DataSmoother(this.settings.fps);
         this.flopsSmoother = new DataSmoother(this.settings.fps, 0, true);
 
         if (settings.stats) {
@@ -51,11 +62,15 @@ export class Debug {
     }
 
     postFrameTime(elapsed) {
-        this.elapsed = this.frameRateSmoother.postValue(elapsed)
+        this.frameRateSmoother.postValue(elapsed)
     }
 
     postFlops(flops) {
-        this.flops = this.flopsSmoother.postValue(flops);
+        this.flopsSmoother.postValue(flops);
+    }
+
+    postFrameLatency(latency) {
+        this.frameLatencySmoother.postValue(latency);
     }
 
     drawTreeDebug() {

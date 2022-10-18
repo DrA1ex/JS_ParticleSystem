@@ -15,7 +15,7 @@ export class ControllerBase extends IEventEmitter {
     subscribers = new Map();
 
     /**
-     * @param {Node} root
+     * @param {HTMLElement} root
      * @param {ControllerBase|null} [parentCtrl=null]
      */
     constructor(root, parentCtrl = null) {
@@ -78,7 +78,7 @@ export class StateControllerBase extends ControllerBase {
     currentState = StateControllerBase.UnsetState;
 
     /**
-     * @param {Node} root
+     * @param {HTMLElement} root
      * @param {ControllerBase|null} [parentCtrl=null]
      */
     constructor(root, parentCtrl = null) {

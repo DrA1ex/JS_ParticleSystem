@@ -8,7 +8,7 @@ import * as FileUtils from "../../utils/file.js";
  * @extends StateControllerBase<PlayerStateEnum>
  */
 export class LoaderController extends StateControllerBase {
-    static LOADER_DATA_EVENT = "loader_data";
+    static DATA_EVENT = "loader_data";
 
     constructor(root, stateCtrl) {
         super(root, stateCtrl);
@@ -28,13 +28,13 @@ export class LoaderController extends StateControllerBase {
         }
 
         const file = e.dataTransfer.files[0];
-        this.emitEvent(LoaderController.LOADER_DATA_EVENT, file);
+        this.emitEvent(LoaderController.DATA_EVENT, file);
     }
 
     async _openFile() {
         const file = await FileUtils.openFile(".bin", false);
         if (file) {
-            this.emitEvent(LoaderController.LOADER_DATA_EVENT, file);
+            this.emitEvent(LoaderController.DATA_EVENT, file);
         }
     }
 

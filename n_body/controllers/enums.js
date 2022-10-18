@@ -5,6 +5,7 @@ import {StateControllerBase} from "./base.js";
  */
 export const SimulationStateEnum = {
     unset: StateControllerBase.UnsetState,
-    ready: 0,
-    recording: 1,
+    active: 0,
+    paused: 1,
+    recording: 2,
 }

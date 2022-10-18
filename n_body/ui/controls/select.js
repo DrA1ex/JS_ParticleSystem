@@ -28,7 +28,7 @@ export class Select extends Control {
     }
 
     /**
-     * @param {Array<{key: string, label: string}>} options
+     * @param {Array<{key: string, label: string}|*>} options
      */
     setOptions(options) {
         const selectedKey = this.selected;
@@ -36,8 +36,12 @@ export class Select extends Control {
         this.options = [];
         this.element.innerHTML = "";
 
-        for (const option of options) {
+        for (let option of options) {
             const e = document.createElement("option");
+            if (!(option instanceof Object)) {
+                option = {key: option.toString(), label: option.toString()}
+            }
+
             e.value = option.key;
             e.text = option.label;
 
@@ -57,6 +61,7 @@ export class Select extends Control {
         const option = this.options.find(o => o.key === key);
         if (option) {
             option.e.setAttribute("selected", "");
+            this._selected = option;
         }
     }
 }

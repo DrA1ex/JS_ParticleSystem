@@ -3,6 +3,9 @@
  * @template T
  */
 export class Control {
+    /**
+     * @param {HTMLElement} element
+     */
     constructor(element) {
         this.element = element;
     }
@@ -35,6 +38,10 @@ export class Control {
 
     }
 
+    setTooltip(text) {
+        this.element.setAttribute("title", text);
+    }
+
     setInteractions(enable) {
         this.element.style.pointerEvents = enable ? null : "none";
     }
@@ -50,7 +57,7 @@ export class Control {
 
 export class View {
     /**
-     * @param {Node} element
+     * @param {HTMLElement} element
      * @param {string} view
      */
     constructor(element, view) {

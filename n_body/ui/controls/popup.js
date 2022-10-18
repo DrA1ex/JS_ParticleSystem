@@ -21,8 +21,8 @@ export class Popup extends Control {
     shown = false;
 
     /**
-     * @param {Node} element
-     * @param {Node} contentNode
+     * @param {HTMLElement} element
+     * @param {HTMLElement} contentNode
      */
     constructor(element, contentNode) {
         const viewControl = new View(element, view);

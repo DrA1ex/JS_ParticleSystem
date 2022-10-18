@@ -5,7 +5,7 @@ import {Select} from "../../ui/controls/select.js";
 const view = await fetch(new URL("./views/settings.html", import.meta.url)).then(d => d.text());
 
 export class SettingsController extends ControllerBase {
-    static SETTINGS_SPEED_EVENT = "settings_speed";
+    static SPEED_EVENT = "settings_speed";
 
     constructor(root, parentCtrl) {
         const viewObj = new View(root, view);
@@ -34,7 +34,7 @@ export class SettingsController extends ControllerBase {
 
         this.speedSelectControl.setOnChange((key) => {
             if (key) {
-                this.emitEvent(SettingsController.SETTINGS_SPEED_EVENT, Number.parseFloat(key));
+                this.emitEvent(SettingsController.SPEED_EVENT, Number.parseFloat(key));
             }
         });
     }

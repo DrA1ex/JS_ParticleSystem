@@ -8,14 +8,14 @@ import {Label} from "../ui/controls/label.js";
 const view = await fetch(new URL("./views/record_panel.html", import.meta.url)).then(d => d.text());
 
 export class RecordPanelController extends StateControllerBase {
-    static RECORD_PANEL_STOP_RECORDING_EVENT = "record_panel_stop_recording";
+    static STOP_RECORDING_EVENT = "record_panel_stop_recording";
 
     constructor(root, parentCtrl) {
         const viewControl = new View(root, view)
         super(viewControl.element, parentCtrl);
 
         this.recordBtn = Button.byId("recording-button");
-        this.recordBtn.setOnClick(() => this.emitEvent(RecordPanelController.RECORD_PANEL_STOP_RECORDING_EVENT));
+        this.recordBtn.setOnClick(() => this.emitEvent(RecordPanelController.STOP_RECORDING_EVENT));
 
         this.recordStatusLbl = Label.byId("recording-status");
     }
@@ -25,7 +25,7 @@ export class RecordPanelController extends StateControllerBase {
      */
     onSequenceUpdated(sequence) {
         const bytes = sequence.length * sequence.particleCount * sequence.componentsCount * Float32Array.BYTES_PER_ELEMENT;
-        const writtenLabel = CommonUtils.formatUnit(bytes, "B", 2, 1024);
+        const writtenLabel = CommonUtils.formatByteSize(bytes);
 
         this.recordStatusLbl.setText(`Frames: ${sequence.length}, size: ${writtenLabel}`);
     }

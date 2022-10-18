@@ -21,10 +21,10 @@ const PlayerMouseStateEnum = {
  * @extends StateControllerBase<PlayerStateEnum>
  */
 export class PlayerController extends StateControllerBase {
-    static PLAYER_DATA_EVENT = "player_data";
-    static PLAYER_CONTROL_EVENT = "player_control";
-    static PLAYER_SEEK_EVENT = "player_seek";
-    static PLAYER_SPEED_EVENT = "player_speed";
+    static DATA_EVENT = "player_data";
+    static CONTROL_EVENT = "player_control";
+    static SEEK_EVENT = "player_seek";
+    static SPEED_EVENT = "player_speed";
 
     static MOUSE_INACTIVE_DELAY = 2000;
 
@@ -40,14 +40,14 @@ export class PlayerController extends StateControllerBase {
         super(root, parentCtrl);
 
         this.loaderCtrl = new LoaderController(document.getElementById("loader"), this);
-        this.loaderCtrl.subscribe(this, LoaderController.LOADER_DATA_EVENT, (sender, file) => this.emitEvent(PlayerController.PLAYER_DATA_EVENT, file));
+        this.loaderCtrl.subscribe(this, LoaderController.DATA_EVENT, (sender, file) => this.emitEvent(PlayerController.DATA_EVENT, file));
 
         this.controlBarCtrl = new ControlBarController(document.getElementById("control-bar"), this);
-        this.controlBarCtrl.subscribe(this, ControlBarController.CONTROL_ACTION_EVENT, this._onControl.bind(this));
-        this.controlBarCtrl.subscribe(this, ControlBarController.CONTROL_SEEK_EVENT, this._onSeek.bind(this));
+        this.controlBarCtrl.subscribe(this, ControlBarController.ACTION_EVENT, this._onControl.bind(this));
+        this.controlBarCtrl.subscribe(this, ControlBarController.SEEK_EVENT, this._onSeek.bind(this));
 
         this.settingsCtrl = new SettingsController(document.getElementById("settings-content"), this);
-        this.settingsCtrl.subscribe(this, SettingsController.SETTINGS_SPEED_EVENT, this._onSpeedChange.bind(this))
+        this.settingsCtrl.subscribe(this, SettingsController.SPEED_EVENT, this._onSpeedChange.bind(this))
 
         this.settingsPopup = Popup.byId("settings-popup", this.settingsCtrl.root);
         this.settingsPopup.offsetY = 8;
@@ -71,7 +71,7 @@ export class PlayerController extends StateControllerBase {
     }
 
     _getSizeLabel(size) {
-        return CommonUtils.formatUnit(size, "B", 2, 1024);
+        return CommonUtils.formatByteSize(size);
     }
 
     setupSequence(frameCount, subFrameCount) {
@@ -101,7 +101,7 @@ export class PlayerController extends StateControllerBase {
         const frameIndex = Math.floor(value / this.subFrameCount);
         const subFrameIndex = Math.floor(value % this.subFrameCount);
 
-        this.emitEvent(PlayerController.PLAYER_SEEK_EVENT, {frame: frameIndex, subFrame: subFrameIndex});
+        this.emitEvent(PlayerController.SEEK_EVENT, {frame: frameIndex, subFrame: subFrameIndex});
     }
 
     _onControl(sender, type) {
@@ -109,11 +109,11 @@ export class PlayerController extends StateControllerBase {
             this.settingsPopup.show();
         }
 
-        this.emitEvent(PlayerController.PLAYER_CONTROL_EVENT, type);
+        this.emitEvent(PlayerController.CONTROL_EVENT, type);
     }
 
     _onSpeedChange(sender, speed) {
-        this.emitEvent(PlayerController.PLAYER_SPEED_EVENT, speed);
+        this.emitEvent(PlayerController.SPEED_EVENT, speed);
     }
 
     _handleHotKey(e) {

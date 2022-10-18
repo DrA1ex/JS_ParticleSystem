@@ -6,7 +6,8 @@ body {
 button {
     min-height: 2rem;
     border: 1px solid white;
-    color: white;
+    font-family: system-ui;
+    color: rgb(200, 200, 200);
     background: transparent;
     padding: 0 8px;
 }
@@ -23,6 +24,18 @@ button:active {
 button:disabled {
     filter: brightness(50%);
     pointer-events: none;
+}
+
+select {
+    background: transparent;
+    user-select: none;
+    font-size: 1em;
+    color: rgb(41, 127, 255);
+    outline: none;
+    border: none;
+    appearance: none;
+    font-family: system-ui;
+    padding: 4px;
 }
 
 .fill {
@@ -69,6 +82,55 @@ button:disabled {
 
 .popup.popup-shown {
     display: block;
+}
+
+.dialog-container {
+    display: none;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.dialog-container.dialog-shown {
+    display: flex;
+}
+
+.dialog {
+    padding: 10px;
+    min-width: 20vw;
+    max-height: 80vw;
+    overflow: auto;
+
+    background: #111111;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.dialog .dialog-caption {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+    font-size: 2rem;
+    border-bottom: 1px solid #2c2c2c;
+    user-select: none;
+}
+
+.dialog .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding-top: 8px;
+    margin-top: 4px;
+    border-top: 1px solid #2c2c2c;
+}
+
+.dialog .dialog-actions > *:not(:first-child) {
+    margin-left: 8px;
+}
+
+.dialog button.dialog-close {
+    border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .rotating {
@@ -199,6 +261,18 @@ button:disabled .record-icon {
     animation-name: pulsation;
 }
 
+.record-button {
+    border: 1px solid #5e0000;
+}
+
+.record-button:hover {
+    background: rgba(94, 0, 0, 0.2);
+}
+
+.record-button:active {
+    background: rgba(94, 0, 0, 0.4);
+}
+
 .control-block {
     pointer-events: none;
 }
@@ -236,6 +310,26 @@ button:disabled .record-icon {
 
 .record-panel > * {
     margin: 0 4px;
+}
+
+.record-settings {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-rows: repeat(7, 2rem);
+    align-items: center;
+    justify-content: space-between;
+    gap: 0 1rem;
+    font-size: 1rem;
+    font-family: system-ui;
+}
+
+.record-settings > div,
+.record-settings > select {
+    padding: 4px;
+}
+
+.record-settings .warning {
+    background: #5e0000;
 }
 
 @keyframes pulsation {

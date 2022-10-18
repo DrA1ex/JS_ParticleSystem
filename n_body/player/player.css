@@ -93,13 +93,3 @@
     align-items: center;
     justify-items: stretch;
 }
-
-.settings select {
-    background: transparent;
-    color: white;
-    user-select: none;
-    outline: none;
-    height: 1.5em;
-    border: none;
-    margin-top: 2px;
-}

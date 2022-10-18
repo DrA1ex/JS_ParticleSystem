@@ -10,6 +10,8 @@ import {Label} from "../ui/controls/label.js";
 import {SimulationSequence} from "../simulation/sequence.js";
 import {ITEM_SIZE} from "../backend/base.js";
 import {RecordPanelController} from "./record_panel.js";
+import {RecordSettingsController} from "./record_settings.js";
+import {Dialog} from "../ui/controls/dialog.js";
 
 /**
  * @extends StateControllerBase<SimulationStateEnum>
@@ -39,7 +41,14 @@ export class SimulationController extends StateControllerBase {
         this.hintLabel.setVisibility(false);
 
         this.recordBar = new RecordPanelController(document.getElementById("record-panel"), this);
-        this.recordBar.subscribe(this, RecordPanelController.RECORD_PANEL_STOP_RECORDING_EVENT, this.exportRecording.bind(this));
+        this.recordBar.subscribe(this, RecordPanelController.STOP_RECORDING_EVENT, this.exportRecording.bind(this));
+
+        this.recordSettingsCtrl = new RecordSettingsController(document.getElementById("record-settings-content"), this);
+        this.recordSettingsCtrl.subscribe(this, RecordSettingsController.START_RECORDING_EVENT,
+            () => this.setState(SimulationStateEnum.recording));
+
+        this.recordSettingsDialog = Dialog.byId("record-settings", this.recordSettingsCtrl.root);
+        this.recordSettingsDialog.setOnDismissed(() => this.setState(SimulationStateEnum.active));
     }
 
     _onAction(sender, action) {
@@ -49,7 +58,12 @@ export class SimulationController extends StateControllerBase {
                 break;
 
             case ActionEnum.record:
-                this.setState(SimulationStateEnum.recording);
+                this.recordSettingsCtrl.configure(this.app.settings.fps,
+                    this.app.settings.particleCount * SimulationSerializer.COMPONENTS_COUNT * Float32Array.BYTES_PER_ELEMENT,
+                    SimulationSerializer.META_SIZE, this.app.debug.frameLatency);
+                this.recordSettingsDialog.show();
+
+                this.setState(SimulationStateEnum.paused);
                 break;
         }
 
@@ -66,8 +80,11 @@ export class SimulationController extends StateControllerBase {
 
         if (this._exportFrameNumber % (this.app.settings.fps / this._exportSequence.fps) === 0) {
             this._exportSequence.addFrame(this._transformBuffer(buffer));
-
             this.recordBar.onSequenceUpdated(this._exportSequence);
+        }
+
+        if (this.recordSettingsCtrl.totalFrames > 0 && this._exportSequence.length >= this.recordSettingsCtrl.totalFrames) {
+            this.exportRecording();
         }
 
         this._exportFrameNumber += 1;
@@ -110,7 +127,7 @@ export class SimulationController extends StateControllerBase {
             "application/octet-stream"
         );
 
-        this.setState(SimulationStateEnum.ready);
+        this.setState(SimulationStateEnum.active);
     }
 
     onStateChanged(sender, oldState, newState) {
@@ -129,7 +146,9 @@ export class SimulationController extends StateControllerBase {
 
         switch (newState) {
             case SimulationStateEnum.recording:
-                this._exportSequence = new SimulationSequence(this.app.settings.particleCount, SimulationSerializer.COMPONENTS_COUNT, 10);
+                this.recordSettingsDialog.hide();
+                this._exportSequence = new SimulationSequence(this.app.settings.particleCount, SimulationSerializer.COMPONENTS_COUNT,
+                    this.recordSettingsCtrl.frameRate);
         }
     }
 }
