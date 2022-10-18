@@ -87,9 +87,11 @@
     grid-template-columns: auto auto;
     grid-template-rows: 2em;
     gap: 10px 8px;
+    align-items: center;
+    justify-items: stretch;
+
+    font-family: system-ui;
     padding: 10px;
     background: #1f1f1f;
     color: white;
-    align-items: center;
-    justify-items: stretch;
 }
