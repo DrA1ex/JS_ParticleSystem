@@ -22,12 +22,20 @@ export class RecordPanelController extends StateControllerBase {
 
     /**
      * @param {SimulationSequence} sequence
+     * @param {number} fpsRatio
+     * @param {number} totalFrames
+     * @param {number} frameTime
      */
-    onSequenceUpdated(sequence) {
-        const bytes = sequence.length * sequence.particleCount * sequence.componentsCount * Float32Array.BYTES_PER_ELEMENT;
-        const writtenLabel = CommonUtils.formatByteSize(bytes);
-
-        this.recordStatusLbl.setText(`Frames: ${sequence.length}, size: ${writtenLabel}`);
+    onSequenceUpdated(sequence, fpsRatio, totalFrames, frameTime) {
+        if (totalFrames > 0) {
+            const remaining = (totalFrames - sequence.length) * fpsRatio * frameTime;
+            const remainingLabel = CommonUtils.formatTimeSpan(Math.ceil(remaining / 1000) * 1000);
+            this.recordStatusLbl.setText(`Frames: ${sequence.length}/${totalFrames}, time remaining: ~${remainingLabel}`);
+        } else {
+            const bytes = sequence.length * sequence.particleCount * sequence.componentsCount * Float32Array.BYTES_PER_ELEMENT;
+            const writtenLabel = CommonUtils.formatByteSize(bytes);
+            this.recordStatusLbl.setText(`Frames: ${sequence.length}, size: ${writtenLabel}`);
+        }
     }
 
     onStateChanged(sender, oldState, newState) {

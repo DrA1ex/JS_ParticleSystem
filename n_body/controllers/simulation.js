@@ -78,9 +78,9 @@ export class SimulationController extends StateControllerBase {
             return;
         }
 
-        if (this._exportFrameNumber % (this.app.settings.fps / this._exportSequence.fps) === 0) {
+        if (this._exportFrameNumber % this.recordSettingsCtrl.frameRateRatio === 0) {
             this._exportSequence.addFrame(this._transformBuffer(buffer));
-            this.recordBar.onSequenceUpdated(this._exportSequence);
+            this.recordBar.onSequenceUpdated(this._exportSequence, this.recordSettingsCtrl.frameRateRatio, this.recordSettingsCtrl.totalFrames, this.app.debug.frameLatency);
         }
 
         if (this.recordSettingsCtrl.totalFrames > 0 && this._exportSequence.length >= this.recordSettingsCtrl.totalFrames) {

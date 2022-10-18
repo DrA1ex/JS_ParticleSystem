@@ -12,6 +12,8 @@ export class RecordSettingsController extends ControllerBase {
 
     static RECOMMENDED_MAX_SIZE = 1024 * 1024 * 1024 * 2 - 1;
 
+    _totalFrames;
+    _fpsRatio;
     fps;
     frameSize;
     frameTime;
@@ -26,6 +28,10 @@ export class RecordSettingsController extends ControllerBase {
 
     get totalFrames() {
         return this._totalFrames;
+    }
+
+    get frameRateRatio() {
+        return this._fpsRatio;
     }
 
     constructor(root, parentCtrl) {
@@ -70,15 +76,11 @@ export class RecordSettingsController extends ControllerBase {
     }
 
     _update() {
-        if (this.duration <= 0) {
-            this._totalFrames = -1;
+        this._fpsRatio = Math.round(this.fps / this.frameRate);
+        this._totalFrames = this.duration > 0 ? this.fps * this.duration : -1;
 
-            this.totalSizeLbl.setText(`${CommonUtils.formatByteSize(this.frameSize)}+`);
-            this.totalDurationLbl.setText("infinite");
-        } else {
-            this._totalFrames = this.fps * this.duration;
+        if (this.totalFrames > 0) {
             const totalSize = this.metaSize + this.frameSize * this.totalFrames;
-
             this.totalSizeLbl.setText(`${CommonUtils.formatByteSize(totalSize)}`);
             if (totalSize > RecordSettingsController.RECOMMENDED_MAX_SIZE) {
                 this.totalSizeLbl.addClass("warning")
@@ -88,7 +90,10 @@ export class RecordSettingsController extends ControllerBase {
                 this.totalSizeLbl.setTooltip("");
             }
 
-            this.totalDurationLbl.setText(`~${CommonUtils.formatTimeSpan(this.totalFrames * (this.fps / this.frameRate) * this.frameTime)}`);
+            this.totalDurationLbl.setText(`~${CommonUtils.formatTimeSpan(this.totalFrames * this.frameRateRatio * this.frameTime)}`);
+        } else {
+            this.totalSizeLbl.setText(`${CommonUtils.formatByteSize(this.frameSize)}+`);
+            this.totalDurationLbl.setText("infinite");
         }
     }
 }
