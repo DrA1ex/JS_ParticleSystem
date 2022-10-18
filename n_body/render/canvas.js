@@ -1,6 +1,9 @@
 import {RendererBase} from "./base.js";
 
 export class CanvasRenderer extends RendererBase {
+    _renderImageData = null;
+    _pixels = null;
+
     /**
      * @param {HTMLCanvasElement} canvas
      * @param {Settings} settings
@@ -12,8 +15,7 @@ export class CanvasRenderer extends RendererBase {
         this.ctx = canvas.getContext('2d');
         this.ctx.lineWidth = this.dpr;
 
-        this._renderImageData = this.ctx.createImageData(this.canvasWidth, this.canvasHeight);
-        this._pixels = new Uint32Array(this._renderImageData.data.buffer);
+        this._initImageData();
     }
 
     reset() {
@@ -92,5 +94,21 @@ export class CanvasRenderer extends RendererBase {
 
     getDebugDrawingContext() {
         return this.ctx;
+    }
+
+    _updateCanvasSize() {
+        super._updateCanvasSize();
+    }
+
+    _handleResize() {
+        super._handleResize();
+
+        this.ctx.lineWidth = this.dpr;
+        this._initImageData();
+    }
+
+    _initImageData() {
+        this._renderImageData = this.ctx.createImageData(this.canvasWidth, this.canvasHeight);
+        this._pixels = new Uint32Array(this._renderImageData.data.buffer);
     }
 }

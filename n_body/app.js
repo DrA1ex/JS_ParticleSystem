@@ -1,9 +1,9 @@
-import {InteractionHandler} from "./render/base.js";
 import {Debug} from "./utils/debug.js";
 import {DFRIHelper} from "./utils/dfri.js";
 import {ITEM_SIZE} from "./backend/base.js";
 import {SimulationController} from "./controllers/simulation.js";
 import {SimulationStateEnum} from "./controllers/enums.js";
+import {InteractionHandler} from "./render/interactions.js";
 
 export class Application {
     renderer;

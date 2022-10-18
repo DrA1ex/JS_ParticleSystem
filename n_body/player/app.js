@@ -2,10 +2,10 @@ import {PlayerController} from "./controllers/player.js";
 import {PlayerStateEnum} from "./controllers/base.js";
 import {ControlStateEnum} from "./controllers/control_bar.js";
 import {SimpleDFRIHelper} from "../utils/dfri.js";
-import {InteractionHandler} from "../render/base.js";
 import {Webgl2Renderer} from "../render/webgl/render.js";
 import {SimulationSequence} from "../simulation/sequence.js";
 import {FetchDataAsyncReader, FileAsyncReader, ObservableStreamLoader} from "../utils/stream.js";
+import {InteractionHandler} from "../render/interactions.js";
 
 export class Application {
     _statesToRender = new Set([PlayerStateEnum.playing, PlayerStateEnum.paused, PlayerStateEnum.finished]);

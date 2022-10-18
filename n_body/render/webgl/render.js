@@ -94,16 +94,12 @@ export class Webgl2Renderer extends RendererBase {
         debugCanvas.style.top = "0";
         debugCanvas.style.left = "0";
         debugCanvas.style.pointerEvents = "none";
-        debugCanvas.style.width = this.canvas.style.width;
-        debugCanvas.style.height = this.canvas.style.height;
-        debugCanvas.width = this.canvasWidth;
-        debugCanvas.height = this.canvasHeight;
 
         document.body.appendChild(debugCanvas);
 
         this.debugCanvas = debugCanvas;
         this.debugCtx = this.debugCanvas.getContext("2d");
-        this.debugCtx.lineWidth = this.dpr;
+        this._updateDebugCanvasSize();
     }
 
     reset() {
@@ -174,5 +170,29 @@ export class Webgl2Renderer extends RendererBase {
 
     getDebugDrawingContext() {
         return this.debugCtx;
+    }
+
+    _updateDebugCanvasSize() {
+        if (this.debugCanvas) {
+            this.debugCanvas.style.width = this.canvas.style.width;
+            this.debugCanvas.style.height = this.canvas.style.height;
+            this.debugCanvas.width = this.canvasWidth;
+            this.debugCanvas.height = this.canvasHeight;
+            this.debugCtx.lineWidth = this.dpr;
+        }
+    }
+
+    _handleResize() {
+        super._handleResize();
+        this._updateDebugCanvasSize();
+
+        this.gl.viewport(0, 0, this.canvasWidth, this.canvasHeight);
+        WebglUtils.loadDataFromConfig(this.gl, this._stateConfig, [{
+            program: "render",
+            uniforms: [
+                {name: "point_size", values: [this.dpr]},
+                {name: "resolution", values: [this.canvasWidth, this.canvasHeight]}],
+            buffers: []
+        }]);
     }
 }
