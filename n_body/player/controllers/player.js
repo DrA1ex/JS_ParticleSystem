@@ -9,6 +9,15 @@ import {SettingsController} from "./settings.js";
 import {StateControllerBase} from "../../controllers/base.js";
 
 /**
+ * @enum{number}
+ */
+const PlayerMouseStateEnum = {
+    active: 0,
+    waiting: 1,
+    inactive: 2
+}
+
+/**
  * @extends StateControllerBase<PlayerStateEnum>
  */
 export class PlayerController extends StateControllerBase {
@@ -17,17 +26,21 @@ export class PlayerController extends StateControllerBase {
     static PLAYER_SEEK_EVENT = "player_seek";
     static PLAYER_SPEED_EVENT = "player_speed";
 
+    static MOUSE_INACTIVE_DELAY = 2000;
+
     framesCount = 0;
     subFrameCount = 0;
     frameIndex = 0;
     subFrameIndex = 0;
 
+    _playerMouseState = PlayerMouseStateEnum.active;
+    _inactiveTimer = null;
+
     constructor(root, parentCtrl = null) {
         super(root, parentCtrl);
 
         this.loaderCtrl = new LoaderController(document.getElementById("loader"), this);
-        this.loaderCtrl.subscribe(this, LoaderController.LOADER_DATA_EVENT,
-            (sender, file) => this.emitEvent(PlayerController.PLAYER_DATA_EVENT, file));
+        this.loaderCtrl.subscribe(this, LoaderController.LOADER_DATA_EVENT, (sender, file) => this.emitEvent(PlayerController.PLAYER_DATA_EVENT, file));
 
         this.controlBarCtrl = new ControlBarController(document.getElementById("control-bar"), this);
         this.controlBarCtrl.subscribe(this, ControlBarController.CONTROL_ACTION_EVENT, this._onControl.bind(this));
@@ -46,6 +59,7 @@ export class PlayerController extends StateControllerBase {
         this.loadingStatus = Label.byId("loading-status");
 
         this._globalHotKeyHandler = this._handleHotKey.bind(this);
+        this._globalMouseMoveHandler = this._handleMouseMove.bind(this);
     }
 
     setLoadingProgress(loaded, size) {
@@ -142,6 +156,42 @@ export class PlayerController extends StateControllerBase {
         }
     }
 
+    _handleMouseMove() {
+        this._handleMouseState(PlayerMouseStateEnum.waiting);
+    }
+
+    _handleMouseState(state) {
+        if (this._inactiveTimer !== null) {
+            clearTimeout(this._inactiveTimer);
+        }
+
+        if (this._playerMouseState === PlayerMouseStateEnum.active && state === PlayerMouseStateEnum.inactive) {
+            return;
+        }
+
+        this._playerMouseState = state;
+        switch (this._playerMouseState) {
+            case PlayerMouseStateEnum.active:
+                this.frame.removeClass("mouse-inactive");
+                if (this._inactiveTimer !== null) {
+                    clearTimeout(this._inactiveTimer);
+                }
+                this._inactiveTimer = null;
+                break;
+
+            case PlayerMouseStateEnum.waiting:
+                this.frame.removeClass("mouse-inactive");
+                this._inactiveTimer = setTimeout(() => this._handleMouseState(PlayerMouseStateEnum.inactive), PlayerController.MOUSE_INACTIVE_DELAY);
+                break;
+
+            case PlayerMouseStateEnum.inactive:
+                this.frame.addClass("mouse-inactive");
+                this._inactiveTimer = null;
+
+                break;
+        }
+    }
+
     onStateChanged(sender, oldState, newState) {
         switch (oldState) {
             case PlayerStateEnum.unset:
@@ -155,6 +205,8 @@ export class PlayerController extends StateControllerBase {
         switch (newState) {
             case PlayerStateEnum.waiting:
                 document.body.removeEventListener("keydown", this._globalHotKeyHandler);
+                document.body.removeEventListener("mousemove", this._globalMouseMoveHandler);
+                this._handleMouseState(PlayerMouseStateEnum.active);
                 break;
 
             case PlayerStateEnum.loading:
@@ -165,6 +217,8 @@ export class PlayerController extends StateControllerBase {
 
         if (oldState === PlayerStateEnum.loading && newState === PlayerStateEnum.playing) {
             document.body.addEventListener("keydown", this._globalHotKeyHandler);
+            document.body.addEventListener("mousemove", this._globalMouseMoveHandler);
+            this._handleMouseState(PlayerMouseStateEnum.waiting);
         }
     }
 }

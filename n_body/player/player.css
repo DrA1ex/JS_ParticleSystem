@@ -1,3 +1,7 @@
+.mouse-inactive {
+    cursor: none;
+}
+
 .control-bar-container {
     position: absolute;
     left: 0;
