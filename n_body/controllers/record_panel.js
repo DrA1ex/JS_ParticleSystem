@@ -39,6 +39,7 @@ export class RecordPanelController extends StateControllerBase {
 
         switch (newState) {
             case SimulationStateEnum.recording:
+                this.recordStatusLbl.setText("Waiting for the first frame");
                 this.frame.addClass("shown");
         }
     }
