@@ -13,6 +13,7 @@ export class Application {
     particles = null;
     sequence = null;
     frameIndex = -1;
+    currentSpeed = 1;
 
     renderer = null;
     renderInteractions = null;
@@ -71,6 +72,7 @@ export class Application {
 
         if (success) {
             this.playerCtrl.setState(PlayerStateEnum.playing);
+            this.handleSpeed(this.currentSpeed);
             setTimeout(() => this.render());
         } else {
             this.playerCtrl.setState(PlayerStateEnum.waiting);
@@ -209,13 +211,15 @@ export class Application {
     }
 
     handleSpeed(speed) {
+        this.currentSpeed = speed;
+
         if (this.dfri) {
             let inputFps, outFps;
-            if (speed <= 1) {
+            if (this.currentSpeed <= 1) {
                 inputFps = this.sequence.fps;
-                outFps = Math.ceil(this.settings.fps / speed);
+                outFps = Math.ceil(this.settings.fps / this.currentSpeed);
             } else {
-                inputFps = Math.ceil(this.sequence.fps * speed);
+                inputFps = Math.ceil(this.sequence.fps * this.currentSpeed);
                 outFps = this.settings.fps;
             }
 
