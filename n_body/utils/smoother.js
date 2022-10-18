@@ -33,10 +33,12 @@ export class DataSmoother {
     }
 
     _filter(value) {
-        if (value > this.smoothedValue) {
-            value = Math.min(value, this.smoothedValue * 2);
-        } else if (value < this.smoothedValue) {
-            value = Math.max(value, this.smoothedValue / 2);
+        if (this.smoothedValue !== 0) {
+            if (value > this.smoothedValue) {
+                value = Math.min(value, this.smoothedValue * 2);
+            } else if (value < this.smoothedValue) {
+                value = Math.max(value, this.smoothedValue / 2);
+            }
         }
 
         return value;

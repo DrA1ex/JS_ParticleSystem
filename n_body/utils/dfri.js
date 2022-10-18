@@ -126,6 +126,8 @@ export class DFRIHelper extends DFRIHelperBase {
         this.stepTimeSmoother = new DataSmoother(this.settings.fps * 4, 1);
         this.renderTimeSmoother = new DataSmoother(this.settings.fps * 2, 5, true);
         this.renderTimeSmoother.postValue(1000 / this.settings.fps, true);
+
+        this.interpolateFramesSmoother = new DataSmoother(this.settings.fps);
     }
 
     get actualTime() {
@@ -162,6 +164,7 @@ export class DFRIHelper extends DFRIHelperBase {
 
     _getInterpolateFramesCount() {
         const value = super._getInterpolateFramesCount();
-        return Math.ceil(value * 1.1);
+        this.interpolateFramesSmoother.postValue(Math.ceil(value));
+        return Math.round(this.interpolateFramesSmoother.smoothedValue);
     }
 }
