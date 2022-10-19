@@ -50,7 +50,7 @@ export class PlayerController extends StateControllerBase {
         this.settingsCtrl.subscribe(this, SettingsController.SPEED_EVENT, this._onSpeedChange.bind(this))
 
         this.settingsPopup = Popup.byId("settings-popup", this.settingsCtrl.root);
-        this.settingsPopup.offsetY = 8;
+        this.settingsPopup.offsetY = 0.4;
         this.settingsPopup.direction = PopupDirectionEnum.up;
         this.settingsPopup.anchor = this.controlBarCtrl.settingsControl.element;
 

@@ -1,15 +1,68 @@
+@media screen and (min-width: 1024px) and (max-width: 1440px) {
+    html {
+        font-size: 18px;
+    }
+}
+
+@media screen and (min-width: 768px) and (max-width: 1024px) {
+    html {
+        font-size: 22px;
+    }
+
+    #stats {
+        font-size: 0.6em;
+    }
+}
+
+@media screen and (max-width: 768px) {
+    html {
+        font-size: 22px;
+    }
+
+    #stats {
+        font-size: 0.4em;
+    }
+}
+
+@media screen and (min-resolution: 280dpi) {
+    html {
+        font-size: 16px;
+    }
+
+    .loading-screen {
+        font-size: 0.6em;
+    }
+
+    #stats {
+        font-size: 0.4em;
+    }
+
+    .dialog {
+        font-size: 0.6em;
+    }
+
+    .dialog button {
+        font-size: 0.8em;
+    }
+
+    #hint {
+        font-size: 1em !important;
+    }
+}
+
 body {
     color: rgb(200, 200, 200);
     height: 100%;
 }
 
 button {
-    min-height: 2rem;
-    border: 1px solid white;
+    min-height: 2em;
+    border: 0.1em solid white;
     font-family: system-ui;
     color: rgb(200, 200, 200);
     background: transparent;
-    padding: 0 8px;
+    padding: 0 0.5em;
+    font-size: 1rem;
 }
 
 button:hover {
@@ -35,7 +88,7 @@ select {
     border: none;
     appearance: none;
     font-family: system-ui;
-    padding: 4px;
+    padding: 0.2em;
 }
 
 .fill {
@@ -63,7 +116,7 @@ select {
 }
 
 .flex-centered span {
-    font-size: 2rem;
+    font-size: 2em;
     pointer-events: none;
     user-select: none;
 }
@@ -77,7 +130,7 @@ select {
 .popup {
     display: none;
     position: absolute;
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    border: 0.1em solid rgba(255, 255, 255, 0.5);
 }
 
 .popup.popup-shown {
@@ -96,23 +149,23 @@ select {
 }
 
 .dialog {
-    padding: 10px;
+    padding: 1em;
     min-width: 20vw;
     max-height: 80vw;
     overflow: auto;
 
     background: #111111;
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    border: 0.1em solid rgba(255, 255, 255, 0.5);
 }
 
 .dialog .dialog-caption {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding-bottom: 8px;
-    margin-bottom: 4px;
-    font-size: 2rem;
-    border-bottom: 1px solid #2c2c2c;
+    padding-bottom: 0.5em;
+    margin-bottom: 0.2em;
+    font-size: 2em;
+    border-bottom: 0.1em solid #2c2c2c;
     user-select: none;
 }
 
@@ -120,17 +173,17 @@ select {
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    padding-top: 8px;
-    margin-top: 4px;
-    border-top: 1px solid #2c2c2c;
+    padding-top: 0.5em;
+    margin-top: 0.2em;
+    border-top: 0.1em solid #2c2c2c;
 }
 
 .dialog .dialog-actions > *:not(:first-child) {
-    margin-left: 8px;
+    margin-left: 0.5em;
 }
 
 .dialog button.dialog-close {
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    border: 0.1em solid rgba(255, 255, 255, 0.5);
 }
 
 .rotating {
@@ -153,31 +206,34 @@ select {
 .icon-btn {
     box-sizing: border-box;
     border: none;
-    padding: 4px;
-    margin: 4px;
+    padding: 0.6em;
+    margin: 0;
 }
 
 .icon-btn > * {
-    height: 2rem;
-    width: 2rem;
+    height: 2em;
+    width: 2em;
 }
 
 .align-corner-end {
     position: absolute;
-    right: 8px;
-    bottom: 8px;
+    right: 0.6em;
+    bottom: 0.6em;
 }
 
 .action-panel {
     margin: 0;
     background: rgba(255, 255, 255, 0.1);
-    padding: 4px;
     pointer-events: initial;
+}
+
+.action-panel .icon-btn {
+    padding: 0.8em;
 }
 
 .action-panel-container {
     overflow: hidden;
-    bottom: calc(28px + 2rem);
+    bottom: 4.2em;
     pointer-events: none;
 }
 
@@ -197,18 +253,14 @@ select {
     transition: transform 300ms 50ms, opacity 0ms;
 }
 
-.action-panel .icon-btn {
-    margin: 4px 0;
-}
-
 .control-block .popup-trigger-opened {
     background: rgba(255, 255, 255, 0.1);
 }
 
 #stats {
     position: absolute;
-    bottom: 4px;
-    left: 4px;
+    bottom: 0.4em;
+    left: 0.4em;
     color: white;
     pointer-events: none;
     font-family: monospace;
@@ -216,12 +268,12 @@ select {
 
 #hint {
     position: absolute;
-    bottom: 16px;
+    bottom: 1em;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 2rem;
+    font-size: 2em;
     color: rgba(255, 255, 255, 0.6);
-    text-shadow: 0 0 2px black;
+    text-shadow: 0 0 0.2em black;
     pointer-events: none;
 }
 
@@ -244,13 +296,13 @@ select {
 
 .record-icon {
     box-sizing: border-box;
-    border: 2px solid #5e0000;
+    border: 0.2em solid #5e0000;
     background: darkred;
     border-radius: 50%;
 }
 
 button:disabled .record-icon {
-    border: 2px solid #653939;
+    border: 0.2em solid #653939;
     background: #7d4848;
 }
 
@@ -262,15 +314,15 @@ button:disabled .record-icon {
 }
 
 .record-button {
-    border: 1px solid #5e0000;
+    border: 0.1em solid #830000;
 }
 
 .record-button:hover {
-    background: rgba(94, 0, 0, 0.2);
+    background: rgba(94, 0, 0, 0.4);
 }
 
 .record-button:active {
-    background: rgba(94, 0, 0, 0.4);
+    background: rgba(94, 0, 0, 0.6);
 }
 
 .control-block {
@@ -281,21 +333,21 @@ button:disabled .record-icon {
     pointer-events: initial;
 }
 
+
 .control-block > .icon-btn {
-    padding: 8px;
+    padding: 0.8em;
 }
 
 .record-container {
     overflow: hidden;
-    margin: 2px;
+    margin: 0;
     pointer-events: none;
 }
 
 .record-panel {
     box-sizing: border-box;
-    padding: 2px;
     background: rgba(31, 31, 31, 0.5);
-    border: 2px solid rgba(68, 67, 67, 0.5);
+    border: 0.2em solid rgba(68, 67, 67, 0.5);
     opacity: 0;
     transform: translateX(100%);
     transition: transform 300ms, opacity 300ms;
@@ -309,23 +361,23 @@ button:disabled .record-icon {
 }
 
 .record-panel > * {
-    margin: 0 4px;
+    margin-left: 0.2em;
 }
 
 .record-settings {
     display: grid;
-    grid-template-columns: auto auto;
-    grid-template-rows: repeat(7, 2rem);
+    grid-template-columns: 2fr 1fr;
+    grid-template-rows: repeat(7, 2em);
     align-items: center;
     justify-content: space-between;
-    gap: 0 1rem;
-    font-size: 1rem;
+    gap: 0 1em;
+    font-size: 1em;
     font-family: system-ui;
 }
 
 .record-settings > div,
 .record-settings > select {
-    padding: 4px;
+    padding: 0.2em;
 }
 
 .record-settings .warning {
@@ -340,7 +392,7 @@ button:disabled .record-icon {
 
     70% {
         transform: scale(1);
-        box-shadow: 0 0 0 8px rgba(var(--color), 0);
+        box-shadow: 0 0 0 0.6em rgba(var(--color), 0);
     }
 
     100% {

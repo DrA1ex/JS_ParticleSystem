@@ -93,6 +93,8 @@ export class Webgl2Renderer extends RendererBase {
         debugCanvas.style.position = "absolute";
         debugCanvas.style.top = "0";
         debugCanvas.style.left = "0";
+        debugCanvas.style.width = "100%"
+        debugCanvas.style.height = "100%"
         debugCanvas.style.pointerEvents = "none";
 
         document.body.appendChild(debugCanvas);
@@ -174,8 +176,6 @@ export class Webgl2Renderer extends RendererBase {
 
     _updateDebugCanvasSize() {
         if (this.debugCanvas) {
-            this.debugCanvas.style.width = this.canvas.style.width;
-            this.debugCanvas.style.height = this.canvas.style.height;
             this.debugCanvas.width = this.canvasWidth;
             this.debugCanvas.height = this.canvasHeight;
             this.debugCtx.lineWidth = this.dpr;

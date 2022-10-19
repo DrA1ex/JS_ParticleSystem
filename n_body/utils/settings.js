@@ -72,7 +72,7 @@ export class Settings {
         }
 
         if (!this.render) {
-            this.render = this.isMobile ? RenderType.canvas : RenderType.webgl2;
+            this.render = WebGL2RenderingContext === undefined ? RenderType.canvas : RenderType.webgl2;
         }
 
         if (this.useDpr === null) {

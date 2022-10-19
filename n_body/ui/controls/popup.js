@@ -115,26 +115,30 @@ export class Popup extends Control {
     _getAnchorPosition() {
         const anchorRect = this.anchor.getBoundingClientRect();
 
+        const em = parseFloat(getComputedStyle(this.element).fontSize);
+        const offsetX = this.offsetX * em;
+        const offsetY = this.offsetY * em;
+
         let anchorX, anchorY;
         switch (this.direction) {
             case PopupDirectionEnum.up:
-                anchorX = anchorRect.left + anchorRect.width / 2 - this.offsetX;
-                anchorY = anchorRect.top - this.offsetY;
+                anchorX = anchorRect.left + anchorRect.width / 2 - offsetX;
+                anchorY = anchorRect.top - offsetY;
                 break;
 
             case PopupDirectionEnum.down:
-                anchorX = anchorRect.left + anchorRect.width / 2 - this.offsetX;
-                anchorY = anchorRect.bottom + this.offsetY;
+                anchorX = anchorRect.left + anchorRect.width / 2 - offsetX;
+                anchorY = anchorRect.bottom + offsetY;
                 break;
 
             case PopupDirectionEnum.left:
-                anchorX = anchorRect.left - this.offsetX;
-                anchorY = anchorRect.top + anchorRect.height / 2 - this.offsetY;
+                anchorX = anchorRect.left - offsetX;
+                anchorY = anchorRect.top + anchorRect.height / 2 - offsetY;
                 break;
 
             case PopupDirectionEnum.right:
-                anchorX = anchorRect.right + this.offsetX;
-                anchorY = anchorRect.top + anchorRect.height / 2 - this.offsetY;
+                anchorX = anchorRect.right + offsetX;
+                anchorY = anchorRect.top + anchorRect.height / 2 - offsetY;
                 break;
 
             default:
