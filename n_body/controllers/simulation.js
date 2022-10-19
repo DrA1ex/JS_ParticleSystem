@@ -123,7 +123,7 @@ export class SimulationController extends StateControllerBase {
         const meta = SimulationSerializer.formatMeta(this._exportSequence);
         FileUtils.saveFileParts(
             [meta, ...this._exportSequence.frames],
-            `sequence_${this.app.settings.particleCount}_${this._exportSequence.length}_${new Date().toISOString()}.bin`,
+            `sequence_${this.app.settings.physics.particleCount}_${this._exportSequence.length}_${new Date().toISOString()}.bin`,
             "application/octet-stream"
         );
 
@@ -147,7 +147,7 @@ export class SimulationController extends StateControllerBase {
         switch (newState) {
             case SimulationStateEnum.recording:
                 this.recordSettingsDialog.hide();
-                this._exportSequence = new SimulationSequence(this.app.settings.particleCount, SimulationSerializer.COMPONENTS_COUNT,
+                this._exportSequence = new SimulationSequence(this.app.settings.physics.particleCount, SimulationSerializer.COMPONENTS_COUNT,
                     this.recordSettingsCtrl.frameRate);
         }
     }
