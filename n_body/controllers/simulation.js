@@ -58,8 +58,8 @@ export class SimulationController extends StateControllerBase {
                 break;
 
             case ActionEnum.record:
-                this.recordSettingsCtrl.configure(this.app.settings.fps,
-                    this.app.settings.particleCount * SimulationSerializer.COMPONENTS_COUNT * Float32Array.BYTES_PER_ELEMENT,
+                this.recordSettingsCtrl.configure(this.app.settings.world.fps,
+                    this.app.settings.physics.particleCount * SimulationSerializer.COMPONENTS_COUNT * Float32Array.BYTES_PER_ELEMENT,
                     SimulationSerializer.META_SIZE, this.app.debug.frameLatency);
                 this.recordSettingsDialog.show();
 
