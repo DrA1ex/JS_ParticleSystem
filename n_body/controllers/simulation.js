@@ -103,7 +103,7 @@ export class SimulationController extends StateControllerBase {
 
     exportState() {
         const data = {
-            settings: this.app.settings.serialize(),
+            settings: this.app.settings.export(),
             particles: this.app.particles.map(p => [p.x, p.y, p.velX, p.velY, p.mass]),
             renderer: {
                 scale: this.app.renderer.scale / this.app.renderer.dpr,

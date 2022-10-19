@@ -1,16 +1,16 @@
-import {ParticleInitType} from "../utils/settings.js";
+import {ParticleInitType} from "../settings/enum.js";
 
 export class Particle_initializer {
     /**
-     * @param {Settings} settings
+     * @param {AppSimulationSettings} settings
      * @returns {Particle[]}
      */
     static initialize(settings) {
-        const particles = new Array(settings.particleCount);
-        for (let i = 0; i < settings.particleCount; i++) {
+        const particles = new Array(settings.physics.particleCount);
+        for (let i = 0; i < settings.physics.particleCount; i++) {
             let addMass = 0;
-            for (let j = 0; j < settings.massDistribution.length; j++) {
-                const [k, mass] = settings.massDistribution[j];
+            for (let j = 0; j < settings.physics.massDistribution.length; j++) {
+                const [k, mass] = settings.physics.massDistribution[j];
                 if (i % k === 0) {
                     addMass = mass;
                     break;
@@ -23,7 +23,7 @@ export class Particle_initializer {
             }
         }
 
-        switch (settings.particleInitType) {
+        switch (settings.physics.particleInitType) {
             case ParticleInitType.uniform:
                 this._uniformInitializer(particles, settings);
                 break;
@@ -71,11 +71,11 @@ export class Particle_initializer {
 
     /**
      * @param {Particle[]} particles
-     * @param {Settings} settings
+     * @param {AppSimulationSettings} settings
      * @private
      */
     static _circleInitializer(particles, settings) {
-        const {worldWidth, worldHeight} = settings;
+        const {worldWidth, worldHeight} = settings.world;
 
         const radius = Math.min(worldWidth, worldHeight) / 2.5;
         const wiggle = radius / 3;
@@ -85,11 +85,11 @@ export class Particle_initializer {
 
     /**
      * @param {Particle[]} particles
-     * @param {Settings} settings
+     * @param {AppSimulationSettings} settings
      * @private
      */
     static _diskInitializer(particles, settings) {
-        const {worldWidth, worldHeight} = settings;
+        const {worldWidth, worldHeight} = settings.world;
 
         const radius = Math.min(worldWidth, worldHeight) / 4;
         this._circleCenteredInitializer(particles, settings, radius, radius * 1.9);
@@ -121,13 +121,14 @@ export class Particle_initializer {
 
     /**
      * @param {Particle[]} particles
-     * @param {Settings} settings
+     * @param {AppSimulationSettings} settings
      * @param {number} radius
      * @param {number} wiggle
      * @private
      */
     static _circleCenteredInitializer(particles, settings, radius, wiggle) {
-        const {particleCount, worldWidth, worldHeight} = settings;
+        const {worldWidth, worldHeight} = settings.world;
+        const {particleCount} = settings.physics;
         const centerX = worldWidth / 2,
             centerY = worldHeight / 2;
 
@@ -143,11 +144,12 @@ export class Particle_initializer {
 
     /**
      * @param {Particle[]} particles
-     * @param {Settings} settings
+     * @param {AppSimulationSettings} settings
      * @private
      */
     static _uniformInitializer(particles, settings) {
-        const {particleCount, worldWidth, worldHeight} = settings;
+        const {worldWidth, worldHeight} = settings.world;
+        const {particleCount} = settings.physics;
 
         for (let i = 0; i < particleCount; i++) {
             particles[i].x = Math.random() * worldWidth;
@@ -157,7 +159,7 @@ export class Particle_initializer {
 
     /**
      * @param {Particle[]} particles
-     * @param {Settings} settings
+     * @param {AppSimulationSettings} settings
      * @private
      */
     static _bangInitializer(particles, settings) {
@@ -176,21 +178,22 @@ export class Particle_initializer {
 
     /**
      * @param {Particle[]} particles
-     * @param {Settings} settings
-     * @param {number=1} gravityMul
-     * @param {number=4} radiusDivider
-     * @param {number=4} subRadiusDivider
-     * @param {number=0} startAngle
-     * @param {number=0} velocityAngle
-     * @param {number=2} circleCount
-     * @param {number=2} wiggleDivider
+     * @param {AppSimulationSettings} settings
+     * @param {number} [gravityMul=1]
+     * @param {number} [radiusDivider=4]
+     * @param {number} [subRadiusDivider=4]
+     * @param {number} [startAngle=0]
+     * @param {number} [velocityAngle=0]
+     * @param {number} [circleCount=2]
+     * @param {number} [wiggleDivider=2]
      * @private
      */
     static _multiCircleInitializerBase(particles, settings, {
         gravityMul = 1, radiusDivider = 4, subRadiusDivider = 4,
         startAngle = 0, velocityAngle = 0, circleCount = 2, wiggleDivider = 2
     }) {
-        const {particleCount, worldWidth, worldHeight, gravity, particleMass} = settings;
+        const {worldWidth, worldHeight} = settings.world;
+        const {particleCount, gravity, particleMass} = settings.physics;
 
         const size = Math.ceil(particleCount / circleCount);
         const centerX = worldWidth / 2;

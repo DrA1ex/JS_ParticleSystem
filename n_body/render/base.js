@@ -1,5 +1,6 @@
 export class RendererBase {
     canvas;
+    /** @type{AppSimulationSettings} */
     settings;
     dpr;
 
@@ -12,7 +13,7 @@ export class RendererBase {
 
     /**
      * @param {HTMLCanvasElement} canvas
-     * @param {Settings} settings
+     * @param {AppSimulationSettings} settings
      */
     constructor(canvas, settings) {
         this.coordinateTransformer = null;
@@ -23,8 +24,8 @@ export class RendererBase {
 
         this._updateCanvasSize();
 
-        const xDiff = this.canvasWidth / this.settings.worldWidth;
-        const yDiff = this.canvasHeight / this.settings.worldHeight;
+        const xDiff = this.canvasWidth / this.settings.world.worldWidth;
+        const yDiff = this.canvasHeight / this.settings.world.worldHeight;
 
         this.scale = Math.min(xDiff, yDiff);
         this.setCenterRelativeOffset(0, 0);
@@ -59,14 +60,14 @@ export class RendererBase {
 
     centeredRelativeOffset() {
         return {
-            xCenterOffset: (this.xOffset - this.canvasWidth / 2 + this.settings.worldWidth * this.scale / 2) / this.canvasWidth,
-            yCenterOffset: (this.yOffset - this.canvasHeight / 2 + this.settings.worldHeight * this.scale / 2) / this.canvasHeight
+            xCenterOffset: (this.xOffset - this.canvasWidth / 2 + this.settings.world.worldWidth * this.scale / 2) / this.canvasWidth,
+            yCenterOffset: (this.yOffset - this.canvasHeight / 2 + this.settings.world.worldHeight * this.scale / 2) / this.canvasHeight
         };
     }
 
     setCenterRelativeOffset(x, y) {
-        this.xOffset = (this.canvasWidth - this.settings.worldWidth * this.scale) / 2 + x * this.canvasWidth;
-        this.yOffset = (this.canvasHeight - this.settings.worldHeight * this.scale) / 2 + y * this.canvasHeight;
+        this.xOffset = (this.canvasWidth - this.settings.world.worldWidth * this.scale) / 2 + x * this.canvasWidth;
+        this.yOffset = (this.canvasHeight - this.settings.world.worldHeight * this.scale) / 2 + y * this.canvasHeight;
     }
 
     /**
@@ -83,7 +84,7 @@ export class RendererBase {
      * @return {void}
      */
     render(particles) {
-        if (this.settings.enableFilter) {
+        if (this.settings.render.enableFilter) {
             this.canvas.style.filter = `brightness(2) hue-rotate(${this._hueAngle % 360}deg)`;
             this._hueAngle += 0.2;
         }
@@ -157,7 +158,7 @@ export class RendererBase {
     }
 
     _errorIfNotDebug() {
-        if (!this.settings.debug) {
+        if (!this.settings.common.debug) {
             console.error("Allowed only in debug mode");
             return true;
         }
@@ -170,7 +171,7 @@ export class RendererBase {
     }
 
     _updateCanvasSize() {
-        this.dpr = this.settings.useDpr ? (this.settings.dprRate || window.devicePixelRatio) : 1;
+        this.dpr = this.settings.render.useDpr ? (this.settings.render.dprRate || window.devicePixelRatio) : 1;
         const rect = this.canvas.getBoundingClientRect();
         this.canvasWidth = rect.width * this.dpr;
         this.canvasHeight = rect.height * this.dpr;

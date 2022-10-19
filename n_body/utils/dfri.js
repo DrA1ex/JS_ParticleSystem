@@ -118,16 +118,20 @@ export class SimpleDFRIHelper extends DFRIHelperBase {
 }
 
 export class DFRIHelper extends DFRIHelperBase {
+    /**
+     * @param {RendererBase} renderer
+     * @param {AppSimulationSettings} settings
+     */
     constructor(renderer, settings) {
-        super(renderer, settings.particleCount)
+        super(renderer, settings.physics.particleCount)
 
         this.settings = settings;
 
-        this.stepTimeSmoother = new DataSmoother(this.settings.fps * 4, 1);
-        this.renderTimeSmoother = new DataSmoother(this.settings.fps * 2, 5, true);
-        this.renderTimeSmoother.postValue(1000 / this.settings.fps, true);
+        this.stepTimeSmoother = new DataSmoother(this.settings.world.fps * 4, 1);
+        this.renderTimeSmoother = new DataSmoother(this.settings.world.fps * 2, 5, true);
+        this.renderTimeSmoother.postValue(1000 / this.settings.world.fps, true);
 
-        this.interpolateFramesSmoother = new DataSmoother(this.settings.fps);
+        this.interpolateFramesSmoother = new DataSmoother(this.settings.world.fps);
     }
 
     get actualTime() {
@@ -139,7 +143,7 @@ export class DFRIHelper extends DFRIHelperBase {
     }
 
     get maxCount() {
-        return this.settings.DFRIMaxFrames;
+        return this.settings.render.DFRIMaxFrames;
     }
 
     bufferSwitched(particles, aheadBufferEntry) {

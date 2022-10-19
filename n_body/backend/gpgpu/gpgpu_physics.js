@@ -114,25 +114,26 @@ const CONFIGURATION2 = [{
 export class GPUPhysicsEngine extends PhysicsEngine {
     async init(settings) {
         this.settings = settings;
-        this.canvas = new OffscreenCanvas(this.settings.worldWidth, this.settings.worldHeight);
+        this.canvas = new OffscreenCanvas(this.settings.world.worldWidth, this.settings.world.worldHeight);
         this.gl = this.canvas.getContext("webgl2");
-
         this._stateConfig = {};
 
-        this._positionBufferData = new Float32Array(this.settings.segmentMaxCount * 2);
-        this._velocityBufferData = new Float32Array(this.settings.segmentMaxCount * 2);
-        this._massBufferData = new Float32Array(this.settings.segmentMaxCount);
-        this._indexBufferData = new Float32Array(this.settings.segmentMaxCount);
+        this.segmentMaxCount = Math.pow(this.settings.simulation.segmentMaxCount, 2);
 
-        this._outVelocityData = new Float32Array(this.settings.segmentMaxCount * 2);
-        this._particleTexData = new Float32Array(this.settings.segmentMaxCount * 3);
-        this._particleVelocityTexData = new Float32Array(this.settings.segmentMaxCount * 2);
+        this._positionBufferData = new Float32Array(this.segmentMaxCount * 2);
+        this._velocityBufferData = new Float32Array(this.segmentMaxCount * 2);
+        this._massBufferData = new Float32Array(this.segmentMaxCount);
+        this._indexBufferData = new Float32Array(this.segmentMaxCount);
+
+        this._outVelocityData = new Float32Array(this.segmentMaxCount * 2);
+        this._particleTexData = new Float32Array(this.segmentMaxCount * 3);
+        this._particleVelocityTexData = new Float32Array(this.segmentMaxCount * 2);
 
         await this.initGl();
     }
 
     async initGl() {
-        const lineSize = Math.ceil(Math.sqrt(this.settings.segmentMaxCount));
+        const lineSize = Math.ceil(Math.sqrt(this.segmentMaxCount));
         for (let i = 0; i < CONFIGURATION1.length; i++) {
             const conf = CONFIGURATION1[i];
             conf.vs = await fetch(conf.vs).then(r => r.text())
@@ -144,7 +145,7 @@ export class GPUPhysicsEngine extends PhysicsEngine {
             }
         }
 
-        for (let i = 0; i < this.settings.segmentMaxCount; i++) {
+        for (let i = 0; i < this.segmentMaxCount; i++) {
             this._indexBufferData[i] = i;
         }
 
@@ -153,9 +154,9 @@ export class GPUPhysicsEngine extends PhysicsEngine {
         WebglUtils.loadDataFromConfig(this.gl, this._stateConfig, [{
             program: "calc",
             uniforms: [
-                {name: "gravity", values: [this.settings.particleGravity]},
+                {name: "gravity", values: [this.settings.physics.particleGravity]},
                 {name: "p_force", values: [0, 0]},
-                {name: "min_dist_square", values: [this.settings.minInteractionDistanceSq]},
+                {name: "min_dist_square", values: [this.settings.physics.minInteractionDistanceSq]},
             ],
             buffers: [
                 {name: "out_velocity", data: this._outVelocityData}
@@ -163,8 +164,8 @@ export class GPUPhysicsEngine extends PhysicsEngine {
         }, {
             program: "collision",
             uniforms: [
-                {name: "min_dist_square", values: [this.settings.minInteractionDistanceSq]},
-                {name: "restitution", values: [this.settings.collisionRestitution]},
+                {name: "min_dist_square", values: [this.settings.physics.minInteractionDistanceSq]},
+                {name: "restitution", values: [this.settings.physics.collisionRestitution]},
             ],
             buffers: [
                 {name: "index", data: this._indexBufferData},
@@ -174,7 +175,7 @@ export class GPUPhysicsEngine extends PhysicsEngine {
 
         WebglUtils.createFromConfig(this.gl, CONFIGURATION2, this._stateConfig);
 
-        this.gl.viewport(0, 0, this.settings.worldWidth, this.settings.worldHeight);
+        this.gl.viewport(0, 0, this.settings.world.worldWidth, this.settings.world.worldHeight);
         this.gl.enable(GL.RASTERIZER_DISCARD);
     }
 

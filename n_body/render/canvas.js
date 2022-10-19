@@ -6,11 +6,11 @@ export class CanvasRenderer extends RendererBase {
 
     /**
      * @param {HTMLCanvasElement} canvas
-     * @param {Settings} settings
+     * @param {AppSimulationSettings} settings
      */
     constructor(canvas, settings) {
         super(canvas, settings);
-        this._maxSpeed = this.settings.gravity / 100;
+        this._maxSpeed = this.settings.physics.gravity / 100;
 
         this.ctx = canvas.getContext('2d');
         this.ctx.lineWidth = this.dpr;
@@ -20,7 +20,7 @@ export class CanvasRenderer extends RendererBase {
 
     reset() {
         super.reset();
-        this._maxSpeed = this.settings.gravity / 100;
+        this._maxSpeed = this.settings.physics.gravity / 100;
     }
 
     clear() {
@@ -58,13 +58,13 @@ export class CanvasRenderer extends RendererBase {
             }
 
             this._maxSpeed = Math.max(this._maxSpeed, Math.abs(particle.velX), Math.abs(particle.velY));
-            const mass = Math.floor(255 * (0.25 + particle.mass / (this.settings.particleMass + 1) * 0.25));
+            const mass = Math.floor(255 * (0.25 + particle.mass / (this.settings.physics.particleMass + 1) * 0.25));
             const xVelToColor = Math.floor(255 * (0.5 + particle.velX / this._maxSpeed * 0.5));
             const yVelToColor = Math.floor(255 * (0.5 + particle.velY / this._maxSpeed * 0.5));
             const color = 0xff000000 | xVelToColor << 16 | mass << 8 | yVelToColor;
 
             const index = (Math.floor(x) + Math.floor(y) * this.canvasWidth);
-            if (this.settings.enableBlending) {
+            if (this.settings.render.enableBlending) {
                 this._pixels[index] = this._blendColors(this._pixels[index], color);
             } else {
                 this._pixels[index] = color;

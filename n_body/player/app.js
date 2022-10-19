@@ -82,13 +82,13 @@ export class Application {
     _setSequence(sequence) {
         this.sequence = sequence;
 
-        this.settings.particleCount = this.sequence.particleCount;
+        this.settings.physics.config.particleCount = this.sequence.particleCount;
 
         this.renderer = new Webgl2Renderer(document.getElementById("canvas"), this.settings);
-        this.renderInteractions = new InteractionHandler(this.renderer, this.settings);
+        this.renderInteractions = new InteractionHandler(this.renderer);
         this.renderInteractions.enable();
 
-        if (this.settings.enableDFRI) {
+        if (this.settings.render.enableDFRI) {
             this.dfri = new SimpleDFRIHelper(this.renderer, this.sequence.particleCount, this.sequence.fps, 60);
             this.dfri.enable();
             this.dfri.init();
@@ -217,10 +217,10 @@ export class Application {
             let inputFps, outFps;
             if (this.currentSpeed <= 1) {
                 inputFps = this.sequence.fps;
-                outFps = Math.ceil(this.settings.fps / this.currentSpeed);
+                outFps = Math.ceil(this.settings.world.fps / this.currentSpeed);
             } else {
                 inputFps = Math.ceil(this.sequence.fps * this.currentSpeed);
-                outFps = this.settings.fps;
+                outFps = this.settings.world.fps;
             }
 
             const oldRelativeFrame = this.dfri.interpolateFrames > 0 ?

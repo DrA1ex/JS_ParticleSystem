@@ -1,8 +1,8 @@
-import {Settings} from "../utils/settings.js";
 import {Application} from "./app.js";
+import {AppPlayerSettings} from "../settings/app.js";
 
 
-const SettingsInstance = Settings.fromQueryParams();
+const SettingsInstance = AppPlayerSettings.fromQueryParams();
 
 const App = new Application(SettingsInstance);
 

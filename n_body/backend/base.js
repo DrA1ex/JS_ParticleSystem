@@ -1,4 +1,5 @@
 import {Particle_initializer} from "../simulation/particle_initializer.js";
+import {AppSimulationSettings} from "../settings/app.js";
 
 /**
  * @typedef {{physicsTime:number, treeTime: number, tree: {flops: number, depth: number, segmentCount: number}}} StepStatistics
@@ -18,13 +19,13 @@ export class BackendBase {
     /**
      * @param {function(StepResult):void} onDataFn
      * @param {function():void} onReadyFn
-     * @param {Settings} settings
+     * @param {AppSimulationSettings} settings
      * @param {Particle[]=null} particles
      * @return {void}
      */
     async init(onDataFn, onReadyFn, settings, particles = null) {
         this.subscribe(onDataFn, onReadyFn);
-        this._worker.postMessage({type: "init", settings, state: particles});
+        this._worker.postMessage({type: "init", settings: settings.serialize(), state: particles});
     }
 
     subscribe(dataFn, readyFn) {
@@ -57,6 +58,7 @@ export class BackendBase {
 }
 
 export class BackendImpl {
+    /** @type{AppSimulationSettings} */
     settings;
     state;
 
@@ -69,12 +71,12 @@ export class BackendImpl {
     }
 
     init(settings, state) {
-        this.settings = settings;
+        this.settings = AppSimulationSettings.deserialize(settings);
         this.physicalEngine = new this.physicalEngineClass(this.settings);
         this.particles = Particle_initializer.initialize(this.settings);
 
         if (state && state.length > 0) {
-            const size = Math.min(state.length, this.settings.particleCount);
+            const size = Math.min(state.length, this.settings.physics.particleCount);
             for (let i = 0; i < size; i++) {
                 const [x, y, velX, velY, mass] = state[i];
                 this.particles[i].x = x;
@@ -85,13 +87,13 @@ export class BackendImpl {
             }
         }
 
-        for (let i = 0; i < this.settings.bufferCount; i++) {
-            this.buffers.push(new Float32Array(this.settings.particleCount * ITEM_SIZE));
+        for (let i = 0; i < this.settings.simulation.bufferCount; i++) {
+            this.buffers.push(new Float32Array(this.settings.physics.particleCount * ITEM_SIZE));
         }
     }
 
     ack(buffer) {
-        if (this.buffers.length < this.settings.bufferCount) {
+        if (this.buffers.length < this.settings.simulation.bufferCount) {
             this.buffers.push(buffer);
         } else {
             console.error("Unexpected ack: buffers already fulfilled");
@@ -116,7 +118,7 @@ export class BackendImpl {
         return {
             timestamp: timestamp,
             buffer: buffer,
-            treeDebug: this.settings.debugTree ? tree.getDebugData() : [],
+            treeDebug: this.settings.common.debugTree ? tree.getDebugData() : [],
             forceDebug: [],
             stats: {
                 physicsTime: this.physicalEngine.stats.physicsTime,
@@ -134,7 +136,7 @@ export class BackendImpl {
      * @protected
      */
     _fillBuffer(buffer) {
-        for (let i = 0; i < this.settings.particleCount; i++) {
+        for (let i = 0; i < this.settings.physics.particleCount; i++) {
             buffer[i * ITEM_SIZE] = this.particles[i].x;
             buffer[i * ITEM_SIZE + 1] = this.particles[i].y;
             buffer[i * ITEM_SIZE + 2] = this.particles[i].velX;

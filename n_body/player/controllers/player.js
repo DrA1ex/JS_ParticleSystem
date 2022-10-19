@@ -67,7 +67,7 @@ export class PlayerController extends StateControllerBase {
     }
 
     configure(settings) {
-        this.controlBarCtrl.settingsControl.setVisibility(settings.enableDFRI);
+        this.controlBarCtrl.settingsControl.setVisibility(settings.render.enableDFRI);
     }
 
     _getSizeLabel(size) {

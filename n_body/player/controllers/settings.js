@@ -14,6 +14,7 @@ export class SettingsController extends ControllerBase {
         this.speedSelectControl = Select.byId("speed-select");
 
         const speedOptions = [
+            {key: "0.005", label: "0.005"},
             {key: "0.01", label: "0.01"},
             {key: "0.05", label: "0.05"},
             {key: "0.1", label: "0.1"},

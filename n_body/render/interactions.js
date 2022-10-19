@@ -10,9 +10,8 @@ export class InteractionHandler {
         ontouchmove: this._onTouchMove.bind(this),
     }
 
-    constructor(renderer, settings) {
+    constructor(renderer) {
         this.renderer = renderer;
-        this.settings = settings;
 
         this._pressed = false;
         this._pinched = false;

@@ -17,8 +17,8 @@ class WorkerBackendImpl extends BackendImpl {
     async init(settings, state) {
         super.init(settings, state);
 
-        if (this.settings.debugForce) {
-            this._particleForces = new Array(this.settings.particleCount);
+        if (this.settings.common.debugForce) {
+            this._particleForces = new Array(this.settings.physics.particleCount);
             for (let i = 0; i < this._particleForces.length; i++) {
                 this._particleForces[i] = {forceX: 0, forceY: 0};
             }
@@ -41,8 +41,8 @@ class WorkerBackendImpl extends BackendImpl {
      * @protected
      */
     _beforeStep() {
-        if (this.settings.debugForce) {
-            for (let i = 0; i < this.settings.particleCount; i++) {
+        if (this.settings.common.debugForce) {
+            for (let i = 0; i < this.settings.physics.particleCount; i++) {
                 this.particles[i].forceX = 0;
                 this.particles[i].forceY = 0;
             }
@@ -53,8 +53,8 @@ class WorkerBackendImpl extends BackendImpl {
      * @protected
      */
     _getCalculatedForces() {
-        if (this.settings.debugForce) {
-            for (let i = 0; i < this.settings.particleCount; i++) {
+        if (this.settings.common.debugForce) {
+            for (let i = 0; i < this.settings.physics.particleCount; i++) {
                 this._particleForces[i] = {
                     forceX: this.particles[i].forceX,
                     forceY: this.particles[i].forceY

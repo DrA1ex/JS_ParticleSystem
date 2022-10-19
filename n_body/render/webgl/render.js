@@ -43,7 +43,7 @@ const CONFIGURATION = [
 export class Webgl2Renderer extends RendererBase {
     /**
      * @param {HTMLCanvasElement} canvas
-     * @param {Settings} settings
+     * @param {AppSimulationSettings} settings
      */
     constructor(canvas, settings) {
         super(canvas, settings);
@@ -51,13 +51,13 @@ export class Webgl2Renderer extends RendererBase {
         this.gl = canvas.getContext("webgl2");
         this._stateConfig = {};
 
-        this._positionBufferData = new Float32Array(this.settings.particleCount * 2);
-        this._velocityBufferData = new Float32Array(this.settings.particleCount * 2);
-        this._massBufferData = new Float32Array(this.settings.particleCount);
-        this._maxSpeed = this.settings.gravity / 100;
+        this._positionBufferData = new Float32Array(this.settings.physics.particleCount * 2);
+        this._velocityBufferData = new Float32Array(this.settings.physics.particleCount * 2);
+        this._massBufferData = new Float32Array(this.settings.physics.particleCount);
+        this._maxSpeed = this.settings.physics.gravity / 100;
 
         this.initWebgl();
-        if (this.settings.debug) {
+        if (this.settings.common.debug) {
             this.initDebugCanvas();
         }
     }
@@ -69,7 +69,7 @@ export class Webgl2Renderer extends RendererBase {
             program: "render",
             uniforms: [
                 {name: "point_size", values: [this.dpr]},
-                {name: "max_mass", values: [this.settings.particleMass + 1]},
+                {name: "max_mass", values: [this.settings.physics.particleMass + 1]},
                 {name: "max_speed", values: [this._maxSpeed]},
                 {name: "scale", values: [this.scale]},
                 {name: "offset", values: [this.xOffset, this.yOffset]},
@@ -81,7 +81,7 @@ export class Webgl2Renderer extends RendererBase {
         this.gl.clearColor(0, 0, 0, 1);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
 
-        if (this.settings.enableBlending) {
+        if (this.settings.render.enableBlending) {
             this.gl.enable(GL.BLEND);
             this.gl.blendFunc(GL.SRC_COLOR, GL.ONE);
         }
@@ -106,7 +106,7 @@ export class Webgl2Renderer extends RendererBase {
 
     reset() {
         super.reset();
-        this._maxSpeed = this.settings.gravity / 100;
+        this._maxSpeed = this.settings.physics.gravity / 100;
     }
 
     clear() {
@@ -126,7 +126,7 @@ export class Webgl2Renderer extends RendererBase {
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
         this.gl.useProgram(this._stateConfig.render.program);
         this.gl.bindVertexArray(this._stateConfig.render.vertexArrays["particle"]);
-        this.gl.drawArrays(this.gl.POINTS, 0, this.settings.particleCount);
+        this.gl.drawArrays(this.gl.POINTS, 0, this.settings.physics.particleCount);
 
         this.stats.renderTime = performance.now() - t;
     }

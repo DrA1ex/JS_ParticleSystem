@@ -8,7 +8,7 @@ import {SpatialTree} from "./tree.js";
 
 export class PhysicsEngine {
     /**
-     * @param {Settings} settings
+     * @param {AppSimulationSettings} settings
      */
     constructor(settings) {
         this.settings = settings;
@@ -29,8 +29,9 @@ export class PhysicsEngine {
     step(particles) {
         let t = performance.now();
 
-        const tree = new SpatialTree(particles, this.settings.segmentMaxCount, this.settings.segmentDivider, this.settings.segmentRandomness);
-        if (this.settings.stats) {
+        const tree = new SpatialTree(particles,
+            this.settings.simulation.segmentMaxCount, this.settings.simulation.segmentDivider, this.settings.simulation.segmentRandomness);
+        if (this.settings.common.stats) {
             this.stats.treeTime = performance.now() - t;
         }
 
@@ -41,7 +42,7 @@ export class PhysicsEngine {
             this._physicsStep(particles[i]);
         }
 
-        if (this.settings.stats) {
+        if (this.settings.common.stats) {
             this.stats.physicsTime = performance.now() - t;
             this._calcTreeStats(tree);
         }
@@ -70,7 +71,7 @@ export class PhysicsEngine {
         } else {
             this._calculateLeafData(leaf, pForce);
 
-            if (this.settings.enableCollision) {
+            if (this.settings.physics.enableCollision) {
                 this._processCollisions(leaf);
             }
         }
@@ -91,7 +92,7 @@ export class PhysicsEngine {
             for (let j = 0; j < blocks.length; j++) {
                 if (i === j) continue;
 
-                const g = this.settings.particleGravity * blocks[j].mass;
+                const g = this.settings.physics.particleGravity * blocks[j].mass;
                 this._calculateForce(blockCenter, blocks[j].boundaryRect.center(), g, iForce);
             }
 
@@ -106,7 +107,7 @@ export class PhysicsEngine {
      * @protected
      */
     _calculateLeafData(leaf, pForce) {
-        const accumulateForce = this.settings.debugForce;
+        const accumulateForce = this.settings.common.debugForce;
         for (let i = 0; i < leaf.length; i++) {
             const attractor = leaf.data[i];
             attractor.velX += pForce[0];
@@ -116,7 +117,7 @@ export class PhysicsEngine {
                 if (i === j) continue;
 
                 const particle = leaf.data[j];
-                this._calculateForce(particle, attractor, this.settings.particleGravity * attractor.mass, particle, accumulateForce);
+                this._calculateForce(particle, attractor, this.settings.physics.particleGravity * attractor.mass, particle, accumulateForce);
             }
         }
     }
@@ -140,7 +141,7 @@ export class PhysicsEngine {
                     dy = p1.y - p2.y;
                 const distSquare = dx * dx + dy * dy;
 
-                if (distSquare < this.settings.minInteractionDistanceSq) {
+                if (distSquare < this.settings.physics.minInteractionDistanceSq) {
                     const massFactor = 2 * p2.mass / (p1.mass + p2.mass);
                     const dot = massFactor * ((nextVelX - p2.velX) * dx + (nextVelY - p2.velY) * dy);
                     nextVelX -= dot / distSquare * dx;
@@ -151,7 +152,7 @@ export class PhysicsEngine {
             }
 
             if (hasCollision) {
-                nextVelocity[i] = [nextVelX * this.settings.collisionRestitution, nextVelY * this.settings.collisionRestitution];
+                nextVelocity[i] = [nextVelX * this.settings.physics.collisionRestitution, nextVelY * this.settings.physics.collisionRestitution];
             } else {
                 nextVelocity[i] = [nextVelX, nextVelY];
             }
@@ -161,7 +162,7 @@ export class PhysicsEngine {
             const p = leaf.data[i];
             const [nextVelX, nextVelY] = nextVelocity[i];
 
-            if (this.settings.debugForce) {
+            if (this.settings.common.debugForce) {
                 p.forceX += nextVelX - p.velX;
                 p.forceY += nextVelY - p.velY;
             }
@@ -186,7 +187,7 @@ export class PhysicsEngine {
         const distSquare = dx * dx + dy * dy;
 
         let force = 0;
-        if (distSquare >= this.settings.minInteractionDistanceSq) {
+        if (distSquare >= this.settings.physics.minInteractionDistanceSq) {
             force = -g / distSquare;
 
             if (out.velX !== undefined) {
@@ -209,8 +210,8 @@ export class PhysicsEngine {
      * @private
      */
     _physicsStep(particle) {
-        particle.velX *= this.settings.resistance;
-        particle.velY *= this.settings.resistance;
+        particle.velX *= this.settings.physics.resistance;
+        particle.velY *= this.settings.physics.resistance;
         particle.x += particle.velX;
         particle.y += particle.velY;
     }
