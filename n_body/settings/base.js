@@ -167,7 +167,7 @@ export class QueryParameterParser {
 
         const results = {};
         for (const [name, prop] of Object.entries(type.Properties)) {
-            if (prop.exportable && defaults?.hasOwnProperty(name)) {
+            if (prop.exportable && defaults?.hasOwnProperty(name) && !queryParams.hasOwnProperty(prop.key)) {
                 results[name] = prop.parse(defaults[name]);
             } else {
                 results[name] = prop.parse(queryParams[prop.key]);

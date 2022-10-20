@@ -1,9 +1,12 @@
-import {Debug} from "./utils/debug.js";
 import {DFRIHelper} from "./utils/dfri.js";
 import {ITEM_SIZE} from "./backend/base.js";
 import {SimulationController} from "./controllers/simulation.js";
 import {SimulationStateEnum} from "./controllers/enums.js";
+import {AppSimulationSettings} from "./settings/app.js";
+import {Debug} from "./utils/debug.js";
 import {InteractionHandler} from "./render/interactions.js";
+import {RendererInitializer} from "./render/init.js";
+import {BackendInitializer} from "./backend/init.js";
 
 export class Application {
     /** @type{RendererBase} */
@@ -13,8 +16,8 @@ export class Application {
     /** @type{Particle[]} */
     particles;
 
-    _canvasInteraction;
-    _dfriHelper;
+    canvasInteraction;
+    dfriHelper;
     debug;
 
     aheadBuffers = [];
@@ -25,24 +28,45 @@ export class Application {
 
     /**
      * @param {AppSimulationSettings} settings
-     * @param {RendererBase} renderer
-     * @param {BackendBase} backend
      */
-    constructor(settings, renderer, backend) {
+    constructor(settings) {
         this.settings = settings;
-        this.renderer = renderer;
-        this.backend = backend;
-
         this.refreshTime = 1000 / this.settings.world.fps;
-
-        this.debug = new Debug(this.renderer, this.backend, this.settings);
-        this._dfriHelper = new DFRIHelper(this.renderer, this.settings);
-        this._canvasInteraction = new InteractionHandler(this.renderer);
-
         this.simulationCtrl = new SimulationController(document.body, this);
     }
 
+    reloadFromState(state) {
+        this.dfriHelper.dispose();
+        this.dfriHelper = null;
+
+        this.canvasInteraction.dispose();
+        this.canvasInteraction = null;
+
+        this.renderer.dispose();
+        this.renderer = null;
+
+        this.backend.dispose();
+        this.backend = null;
+
+        this.debug.dispose();
+        this.debug = null;
+
+        this.settings = AppSimulationSettings.fromQueryParams(state.settings);
+
+        this.aheadBuffers = [];
+        this.pendingBufferCount = 0;
+
+        this.init(state);
+    }
+
     init(state = null) {
+        this.renderer = RendererInitializer.initRenderer(document.getElementById("canvas"), this.settings.render.render, this.settings);
+        this.backend = BackendInitializer.initBackend(this.settings.simulation.backend);
+
+        this.debug = new Debug(this.renderer, this.backend, this.settings);
+        this.dfriHelper = new DFRIHelper(this.renderer, this.settings);
+        this.canvasInteraction = new InteractionHandler(this.renderer);
+
         if (state?.renderer?.scale) {
             this.renderer.scale = state.renderer.scale * this.renderer.dpr;
         }
@@ -60,10 +84,10 @@ export class Application {
         this.backend.init(this.onData.bind(this), this.requestNextStep.bind(this), this.settings, state?.particles);
 
         this.lastRenderTime = performance.now() - this.refreshTime;
-        this._canvasInteraction.enable();
+        this.canvasInteraction.enable();
 
         if (this.settings.render.enableDFRI) {
-            this._dfriHelper.enable();
+            this.dfriHelper.enable();
         }
     }
 
@@ -73,13 +97,13 @@ export class Application {
 
     onData(data) {
         const stepLatency = performance.now() - data.timestamp;
-        this._dfriHelper.postStepTime(stepLatency);
+        this.dfriHelper.postStepTime(stepLatency);
 
         this.debug.postFrameLatency(Math.max(stepLatency, this.debug.elapsed));
 
         this.simulationCtrl.onNewBuffer(data.buffer);
 
-        if (this.simulationCtrl.currentState === SimulationStateEnum.unset) {
+        if (this.simulationCtrl.currentState === SimulationStateEnum.loading) {
             this.simulationCtrl.setState(SimulationStateEnum.active);
         }
 
@@ -98,7 +122,7 @@ export class Application {
             return;
         }
 
-        if (this.settings.render.enableDFRI && !this._dfriHelper.needNextFrame()) {
+        if (this.settings.render.enableDFRI && !this.dfriHelper.needNextFrame()) {
             return;
         }
 
@@ -125,8 +149,8 @@ export class Application {
         this.backend.freeBuffer(data);
         this.requestNextStep();
 
-        if (this.settings.render.enableDFRI && this._dfriHelper.needNextFrame()) {
-            this._dfriHelper.bufferSwitched(this.particles, this.aheadBuffers[0]);
+        if (this.settings.render.enableDFRI && this.dfriHelper.needNextFrame()) {
+            this.dfriHelper.bufferSwitched(this.particles, this.aheadBuffers[0]);
         }
     }
 
@@ -136,7 +160,7 @@ export class Application {
     }
 
     render(timestamp) {
-        if (this.simulationCtrl.currentState === SimulationStateEnum.unset) {
+        if (this.simulationCtrl.currentState === SimulationStateEnum.loading) {
             this.lastRenderTime = timestamp;
             requestAnimationFrame(this.render.bind(this));
             return;
@@ -144,7 +168,7 @@ export class Application {
 
         this.prepareNextStep();
         if (this.settings.render.enableDFRI && this.simulationCtrl.currentState !== SimulationStateEnum.paused) {
-            this._dfriHelper.render(this.particles);
+            this.dfriHelper.render(this.particles);
         } else {
             this.renderer.render(this.particles);
         }
@@ -153,13 +177,13 @@ export class Application {
         if (this.settings.common.debugForce || this.settings.common.debugVelocity) this.debug.drawVelocityDebug(this.particles);
 
         const elapsed = timestamp - this.lastRenderTime;
-        this._dfriHelper.postRenderTime(elapsed);
+        this.dfriHelper.postRenderTime(elapsed);
         this.debug.postFrameTime(elapsed);
 
         if (this.settings.common.stats) {
             this.debug.renderTime = this.renderer.stats.renderTime;
             this.debug.bufferCount = this.aheadBuffers.length;
-            this.debug.interpolateFrames = this._dfriHelper.interpolateFrames;
+            this.debug.interpolateFrames = this.dfriHelper.interpolateFrames;
             this.debug.drawStats();
         }
 

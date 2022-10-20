@@ -48,6 +48,18 @@ export class Debug {
         }
     }
 
+    dispose() {
+        this.renderer = null;
+        this.backend = null;
+        this.settings = null;
+
+        this.frameRateSmoother = null;
+        this.frameLatencySmoother = null;
+        this.flopsSmoother = null;
+
+        this.infoElem.remove();
+    }
+
     drawStats() {
         const flops = CommonUtils.formatUnit(this.flops, "FLOPS");
 

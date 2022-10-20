@@ -12,6 +12,7 @@ export class InteractionHandler {
 
     constructor(renderer) {
         this.renderer = renderer;
+        this.enabled = false;
 
         this._pressed = false;
         this._pinched = false;
@@ -20,15 +21,27 @@ export class InteractionHandler {
     }
 
     enable() {
+        if (this.enabled) {
+            return;
+        }
+
         for (const [key, value] of Object.entries(this._bindings)) {
             this.renderer.canvas[key] = value;
         }
+
+        this.enabled = true;
     }
 
     disable() {
+        if (!this.enabled) {
+            return;
+        }
+
         for (const [key] of Object.entries(this._bindings)) {
             this.renderer.canvas[key] = null;
         }
+
+        this.enabled = false;
     }
 
     _beginDragInteraction(point) {
@@ -153,5 +166,10 @@ export class InteractionHandler {
         }
 
         e.preventDefault();
+    }
+
+    dispose() {
+        this.disable();
+        this.renderer = null;
     }
 }

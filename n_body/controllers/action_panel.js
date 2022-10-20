@@ -10,7 +10,8 @@ const view = await fetch(new URL("./views/action_panel.html", import.meta.url)).
  */
 export const ActionEnum = {
     exportState: 0,
-    record: 1
+    importState: 1,
+    record: 2
 }
 
 export class ActionPanelController extends StateControllerBase {
@@ -23,6 +24,9 @@ export class ActionPanelController extends StateControllerBase {
         this.exportStateBtn = Button.byId("export-state");
         this.exportStateBtn.setOnClick(() => this.emitEvent(ActionPanelController.ACTION_EVENT, ActionEnum.exportState));
 
+        this.importStateBtn = Button.byId("import-state");
+        this.importStateBtn.setOnClick(() => this.emitEvent(ActionPanelController.ACTION_EVENT, ActionEnum.importState))
+
         this.recordBtn = Button.byId("export-recording");
         this.recordBtn.setOnClick(() => this.emitEvent(ActionPanelController.ACTION_EVENT, ActionEnum.record));
     }
@@ -31,12 +35,14 @@ export class ActionPanelController extends StateControllerBase {
         switch (oldState) {
             case SimulationStateEnum.recording:
                 this.recordBtn.setEnabled(true);
+                this.importStateBtn.setEnabled(true);
                 break;
         }
 
         switch (newState) {
             case SimulationStateEnum.recording:
                 this.recordBtn.setEnabled(false);
+                this.importStateBtn.setEnabled(false);
                 break;
         }
     }

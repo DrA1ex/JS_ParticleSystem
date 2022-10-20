@@ -178,5 +178,16 @@ export class RendererBase {
         this.canvas.width = this.canvasWidth;
         this.canvas.height = this.canvasHeight;
     }
+
+    dispose() {
+        this._resizeObserver.disconnect();
+        this._resizeObserver = null;
+
+        this.coordinateTransformer = null;
+        this.settings = null;
+
+        this.canvas.style.filter = null;
+        this.canvas = null;
+    }
 }
 

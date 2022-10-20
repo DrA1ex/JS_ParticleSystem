@@ -239,4 +239,9 @@ export class PhysicsEngine {
         this.stats.tree.depth = tree.maxDepth;
         this.stats.tree.segmentCount = tree._index;
     }
+
+    dispose() {
+        this.settings = null;
+        this.stats = null;
+    }
 }

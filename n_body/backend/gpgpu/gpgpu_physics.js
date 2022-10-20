@@ -283,4 +283,19 @@ export class GPUPhysicsEngine extends PhysicsEngine {
             p.velY = this._outVelocityData[i * 2 + 1];
         }
     }
+
+    dispose() {
+        this.canvas = null;
+
+        this._stateConfig = null;
+        this._positionBufferData = null;
+        this._velocityBufferData = null;
+        this._massBufferData = null;
+        this._indexBufferData = null;
+        this._outVelocityData = null;
+        this._particleTexData = null;
+        this._particleVelocityTexData = null;
+
+        super.dispose();
+    }
 }

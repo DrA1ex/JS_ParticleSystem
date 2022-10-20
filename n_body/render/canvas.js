@@ -40,6 +40,9 @@ export class CanvasRenderer extends RendererBase {
             this._pixels[i] = 0;
         }
 
+        const canvasWidth = Math.ceil(this.canvasWidth);
+        const canvasHeight = Math.ceil(this.canvasHeight);
+
         const pos = {x: 0, y: 0};
         for (let i = 0; i < particles.length; i++) {
             const particle = particles[i];
@@ -53,7 +56,7 @@ export class CanvasRenderer extends RendererBase {
             const x = this.xOffset + pos.x * this.scale;
             const y = this.yOffset + pos.y * this.scale;
 
-            if (x < 0 || x > this.canvasWidth || y < 0 || y > this.canvasHeight) {
+            if (x < 0 || x > canvasWidth || y < 0 || y > canvasHeight) {
                 continue;
             }
 
@@ -63,7 +66,7 @@ export class CanvasRenderer extends RendererBase {
             const yVelToColor = Math.floor(255 * (0.5 + particle.velY / this._maxSpeed * 0.5));
             const color = 0xff000000 | xVelToColor << 16 | mass << 8 | yVelToColor;
 
-            const index = (Math.floor(x) + Math.floor(y) * this.canvasWidth);
+            const index = (Math.floor(x) + Math.floor(y) * canvasWidth);
             if (this.settings.render.enableBlending) {
                 this._pixels[index] = this._blendColors(this._pixels[index], color);
             } else {
@@ -108,7 +111,14 @@ export class CanvasRenderer extends RendererBase {
     }
 
     _initImageData() {
-        this._renderImageData = this.ctx.createImageData(this.canvasWidth, this.canvasHeight);
+        this._renderImageData = this.ctx.createImageData(Math.ceil(this.canvasWidth), Math.ceil(this.canvasHeight));
         this._pixels = new Uint32Array(this._renderImageData.data.buffer);
+    }
+
+    dispose() {
+        this._renderImageData = null;
+        this._pixels = null;
+
+        super.dispose();
     }
 }

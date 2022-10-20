@@ -171,4 +171,10 @@ export class DFRIHelper extends DFRIHelperBase {
         this.interpolateFramesSmoother.postValue(Math.ceil(value));
         return Math.round(this.interpolateFramesSmoother.smoothedValue);
     }
+
+    dispose() {
+        this.renderer.setCoordinateTransformer(null);
+        this.renderer = null;
+        this._deltas = null;
+    }
 }

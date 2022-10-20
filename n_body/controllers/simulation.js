@@ -57,6 +57,10 @@ export class SimulationController extends StateControllerBase {
                 this.exportState();
                 break;
 
+            case ActionEnum.importState:
+                this.importState().catch(() => {});
+                break;
+
             case ActionEnum.record:
                 this.recordSettingsCtrl.configure(this.app.settings.world.fps,
                     this.app.settings.physics.particleCount * SimulationSerializer.COMPONENTS_COUNT * Float32Array.BYTES_PER_ELEMENT,
@@ -115,6 +119,24 @@ export class SimulationController extends StateControllerBase {
             `universe_state_${new Date().toISOString()}.json`, "application/json");
     }
 
+    async importState() {
+        const file = await FileUtils.openFile("application/json", false);
+        if (!file) {
+            return;
+        }
+
+        this.setState(SimulationStateEnum.loading);
+
+        try {
+            const data = await file.text();
+            const state = JSON.parse(data);
+            this.app.reloadFromState(state);
+        } catch (e) {
+            this.setState(SimulationStateEnum.active);
+            alert(`Unable to load state: ${e.message}`);
+        }
+    }
+
     exportRecording() {
         if (this.currentState !== SimulationStateEnum.recording) {
             return;
@@ -132,7 +154,7 @@ export class SimulationController extends StateControllerBase {
 
     onStateChanged(sender, oldState, newState) {
         switch (oldState) {
-            case SimulationStateEnum.unset:
+            case SimulationStateEnum.loading:
                 this.loadingScreen.setVisibility(false);
                 this.hintLabel.setVisibility(true);
                 this.actionButton.setVisibility(true);
@@ -145,6 +167,12 @@ export class SimulationController extends StateControllerBase {
         }
 
         switch (newState) {
+            case SimulationStateEnum.loading:
+                this.loadingScreen.setVisibility(true);
+                this.hintLabel.setVisibility(false);
+                this.actionButton.setVisibility(false);
+                break;
+
             case SimulationStateEnum.recording:
                 this.recordSettingsDialog.hide();
                 this._exportSequence = new SimulationSequence(this.app.settings.physics.particleCount, SimulationSerializer.COMPONENTS_COUNT,

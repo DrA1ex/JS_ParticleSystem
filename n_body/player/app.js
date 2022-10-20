@@ -2,10 +2,10 @@ import {PlayerController} from "./controllers/player.js";
 import {PlayerStateEnum} from "./controllers/base.js";
 import {ControlStateEnum} from "./controllers/control_bar.js";
 import {SimpleDFRIHelper} from "../utils/dfri.js";
-import {Webgl2Renderer} from "../render/webgl/render.js";
 import {SimulationSequence} from "../simulation/sequence.js";
 import {FetchDataAsyncReader, FileAsyncReader, ObservableStreamLoader} from "../utils/stream.js";
 import {InteractionHandler} from "../render/interactions.js";
+import {RendererInitializer} from "../render/init.js";
 
 export class Application {
     _statesToRender = new Set([PlayerStateEnum.playing, PlayerStateEnum.paused, PlayerStateEnum.finished]);
@@ -84,12 +84,12 @@ export class Application {
 
         this.settings.physics.config.particleCount = this.sequence.particleCount;
 
-        this.renderer = new Webgl2Renderer(document.getElementById("canvas"), this.settings);
+        this.renderer = RendererInitializer.initRenderer(document.getElementById("canvas"), this.settings.render.render, this.settings);
         this.renderInteractions = new InteractionHandler(this.renderer);
         this.renderInteractions.enable();
 
         if (this.settings.render.enableDFRI) {
-            this.dfri = new SimpleDFRIHelper(this.renderer, this.sequence.particleCount, this.sequence.fps, 60);
+            this.dfri = new SimpleDFRIHelper(this.renderer, this.sequence.particleCount, this.sequence.fps, this.settings.world.fps);
             this.dfri.enable();
             this.dfri.init();
         }

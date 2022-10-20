@@ -195,4 +195,20 @@ export class Webgl2Renderer extends RendererBase {
             buffers: []
         }]);
     }
+
+    dispose() {
+        this._stateConfig = null;
+        this._positionBufferData = null;
+        this._velocityBufferData = null;
+        this._massBufferData = null;
+
+        if (this.debugCanvas) {
+            this.debugCtx = null;
+            this.debugCanvas.remove();
+
+            this.debugCanvas = null;
+        }
+
+        super.dispose();
+    }
 }

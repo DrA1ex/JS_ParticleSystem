@@ -348,6 +348,7 @@ button:disabled .record-icon {
     box-sizing: border-box;
     background: rgba(31, 31, 31, 0.5);
     border: 0.2em solid rgba(68, 67, 67, 0.5);
+    margin-right: 0.4em;
     opacity: 0;
     transform: translateX(100%);
     transition: transform 300ms, opacity 300ms;
@@ -361,7 +362,7 @@ button:disabled .record-icon {
 }
 
 .record-panel > * {
-    margin-left: 0.2em;
+    margin-left: 0.4em;
 }
 
 .record-settings {

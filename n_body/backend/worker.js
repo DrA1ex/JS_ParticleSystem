@@ -64,6 +64,12 @@ class WorkerBackendImpl extends BackendImpl {
 
         return this._particleForces;
     }
+
+    dispose() {
+        this._particleForces = null;
+
+        super.dispose();
+    }
 }
 
 const Backend = new WorkerBackendImpl();

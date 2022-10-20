@@ -55,6 +55,13 @@ export class BackendBase {
     requestNextStep() {
         this._worker.postMessage({type: "step", timestamp: performance.now()});
     }
+
+    dispose() {
+        this._worker.postMessage({type: "dispose"});
+
+        this._worker.onmessage = null;
+        this._worker.terminate();
+    }
 }
 
 export class BackendImpl {
@@ -64,7 +71,7 @@ export class BackendImpl {
 
     physicalEngine;
     particles;
-    buffers = [];
+    buffers;
 
     constructor(physicsEngineClass) {
         this.physicalEngineClass = physicsEngineClass;
@@ -87,8 +94,9 @@ export class BackendImpl {
             }
         }
 
+        this.buffers = new Array(this.settings.simulation.bufferCount);
         for (let i = 0; i < this.settings.simulation.bufferCount; i++) {
-            this.buffers.push(new Float32Array(this.settings.physics.particleCount * ITEM_SIZE));
+            this.buffers[i] = new Float32Array(this.settings.physics.particleCount * ITEM_SIZE);
         }
     }
 
@@ -130,6 +138,14 @@ export class BackendImpl {
                 }
             }
         }
+    }
+
+    dispose() {
+        this.buffers = null;
+        this.particles = null;
+
+        this.physicalEngine.dispose();
+        this.physicalEngine = null;
     }
 
     /**
@@ -181,6 +197,10 @@ export class WorkerHandler {
                     postMessage({type: "data", ...data,}, [data.buffer.buffer]);
                 }
             }
+                break;
+
+            case "dispose":
+                this.backend.dispose();
                 break;
         }
     }
