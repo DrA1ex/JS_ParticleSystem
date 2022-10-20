@@ -1,6 +1,5 @@
 import {DataSmoother} from "./smoother.js";
 import * as CommonUtils from "./common.js";
-import {BackendType} from "../settings/enum.js";
 
 export class Debug {
     depth = 0;
@@ -51,8 +50,6 @@ export class Debug {
 
     drawStats() {
         const flops = CommonUtils.formatUnit(this.flops, "FLOPS");
-        const blockSize = this.settings.simulation.backend === BackendType.gpgpu ?
-            Math.pow(this.settings.simulation.segmentMaxCount, 2) : this.settings.simulation.segmentMaxCount;
 
         this.infoElem.innerText = [
             `max depth: ${this.depth}`,
@@ -65,7 +62,7 @@ export class Debug {
             `- physics calc: ${this.physicsTime.toFixed(1)} ms`,
             `- render: ${this.renderTime.toFixed(1)} ms`,
             `renderer: ${this.renderer.constructor.name} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
-            `backend: ${this.backend.constructor.name}, block size: ${blockSize}`,
+            `backend: ${this.backend.constructor.name}, block size: ${this.settings.simulation.segmentMaxCount}`,
         ].filter(v => v).join("\n");
     }
 
