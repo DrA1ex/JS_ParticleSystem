@@ -163,7 +163,8 @@ export class Particle_initializer {
      * @private
      */
     static _bangInitializer(particles, settings) {
-        const {particleCount, worldWidth, worldHeight, gravity, particleMass} = settings;
+        const {worldWidth, worldHeight} = settings.world;
+        const {particleCount, gravity, particleMass} = settings.physics;
 
         const radius = Math.min(worldWidth, worldHeight) / 20;
         this._circleCenteredInitializer(particles, settings, radius, radius / 2);
