@@ -368,7 +368,7 @@ button:disabled .record-icon {
 .record-settings {
     display: grid;
     grid-template-columns: 2fr 1fr;
-    grid-template-rows: repeat(7, 2em);
+    grid-template-rows: repeat(8, 2em);
     align-items: center;
     justify-content: space-between;
     gap: 0 1em;

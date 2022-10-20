@@ -42,14 +42,14 @@ export class RecordSettingsController extends ControllerBase {
         this.startRecordBtn.setOnClick(() => this.emitEvent(RecordSettingsController.START_RECORDING_EVENT));
 
         this.frameRateSelect = Select.byId("framerate-select");
-        this.frameRateSelect.setOptions(["1", "5", "10", "20", "30", "60"]);
+        this.frameRateSelect.setOptions(["1", "2", "3", "5", "10", "15", "20", "30", "60"]);
         this.frameRateSelect.select("10");
         this.frameRateSelect.setOnChange(this._update.bind(this));
 
         this.recodDurationSelect = Select.byId("duration-select");
         this.recodDurationSelect.setOptions([
             {key: "-1", label: "infinite"},
-            ...[1, 3, 5, 10, 30, 60, 180, 300, 600]
+            ...[1, 3, 5, 10, 20, 30, 60, 180, 300, 600, 1200, 1800, 3600]
                 .map(v => ({key: v.toString(), label: CommonUtils.formatTimeSpan(v * 1000)}))
         ]);
         this.recodDurationSelect.select("-1")
@@ -58,6 +58,7 @@ export class RecordSettingsController extends ControllerBase {
         this.refFramerateLbl = Label.byId("reference-framerate");
         this.frameTimeLbl = Label.byId("frame-time");
         this.frameSizeLbl = Label.byId("frame-size");
+        this.frameCountLbl = Label.byId("frame-count");
         this.totalSizeLbl = Label.byId("total-size");
         this.totalDurationLbl = Label.byId("total-duration");
     }
@@ -77,11 +78,12 @@ export class RecordSettingsController extends ControllerBase {
 
     _update() {
         this._fpsRatio = Math.round(this.fps / this.frameRate);
-        this._totalFrames = this.duration > 0 ? this.fps * this.duration : -1;
+        this._totalFrames = this.duration > 0 ? this.frameRate * this.duration : -1;
 
         if (this.totalFrames > 0) {
             const totalSize = this.metaSize + this.frameSize * this.totalFrames;
             this.totalSizeLbl.setText(`${CommonUtils.formatByteSize(totalSize)}`);
+            this.frameCountLbl.setText(this.totalFrames);
             if (totalSize > RecordSettingsController.RECOMMENDED_MAX_SIZE) {
                 this.totalSizeLbl.addClass("warning")
                 this.totalSizeLbl.setTooltip(`Recommended maximum size is ${CommonUtils.formatByteSize(RecordSettingsController.RECOMMENDED_MAX_SIZE)}`);
@@ -90,10 +92,11 @@ export class RecordSettingsController extends ControllerBase {
                 this.totalSizeLbl.setTooltip("");
             }
 
-            this.totalDurationLbl.setText(`~${CommonUtils.formatTimeSpan(this.totalFrames * this.frameRateRatio * this.frameTime)}`);
+            this.totalDurationLbl.setText(CommonUtils.formatTimeSpan(this.totalFrames * this.frameRateRatio * this.frameTime));
         } else {
+            this.frameCountLbl.setText("∞");
             this.totalSizeLbl.setText(`${CommonUtils.formatByteSize(this.frameSize)}+`);
-            this.totalDurationLbl.setText("infinite");
+            this.totalDurationLbl.setText("∞");
         }
     }
 }
