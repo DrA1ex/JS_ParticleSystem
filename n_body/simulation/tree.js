@@ -105,7 +105,7 @@ export class SpatialTree {
         this.divideFactor = divideFactor;
         this.randomness = randomness;
 
-        this._populate(this.root, data)
+        this._populate(this.root, data);
     }
 
     _populate(current) {

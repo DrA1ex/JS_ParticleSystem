@@ -12,6 +12,8 @@ import {ITEM_SIZE} from "../backend/base.js";
 import {RecordPanelController} from "./record_panel.js";
 import {RecordSettingsController} from "./record_settings.js";
 import {Dialog} from "../ui/controls/dialog.js";
+import {SettingsController} from "./settings.js";
+import {AppSimulationSettings} from "../settings/app.js";
 
 /**
  * @extends StateControllerBase<SimulationStateEnum>
@@ -49,6 +51,11 @@ export class SimulationController extends StateControllerBase {
 
         this.recordSettingsDialog = Dialog.byId("record-settings", this.recordSettingsCtrl.root);
         this.recordSettingsDialog.setOnDismissed(() => this.setState(SimulationStateEnum.active));
+
+        this.settingsCtrl = new SettingsController(document.getElementById("settings-content"), this);
+        this.settingsCtrl.subscribe(this, SettingsController.RECONFIGURE_EVENT, (sender, data) => this.reconfigure(data));
+
+        this.settingsDialog = Dialog.byId("settings", this.settingsCtrl.root);
     }
 
     _onAction(sender, action) {
@@ -69,6 +76,10 @@ export class SimulationController extends StateControllerBase {
 
                 this.setState(SimulationStateEnum.paused);
                 break;
+
+            case ActionEnum.settings:
+                this.settingsCtrl.configure(this.app.settings);
+                this.settingsDialog.show();
         }
 
         this.actionPanelPopup.hide();
@@ -125,7 +136,7 @@ export class SimulationController extends StateControllerBase {
             return;
         }
 
-        this.setState(SimulationStateEnum.loading);
+        this.setState(SimulationStateEnum.reconfigure);
 
         try {
             const data = await file.text();
@@ -152,14 +163,13 @@ export class SimulationController extends StateControllerBase {
         this.setState(SimulationStateEnum.active);
     }
 
+    reconfigure(settings) {
+        this.app.reconfigure(AppSimulationSettings.deserialize(settings));
+        this.settingsDialog.hide();
+    }
+
     onStateChanged(sender, oldState, newState) {
         switch (oldState) {
-            case SimulationStateEnum.loading:
-                this.loadingScreen.setVisibility(false);
-                this.hintLabel.setVisibility(true);
-                this.actionButton.setVisibility(true);
-                break;
-
             case SimulationStateEnum.recording:
                 this._exportSequence = null;
                 this._exportFrameNumber = 0;
@@ -167,7 +177,14 @@ export class SimulationController extends StateControllerBase {
         }
 
         switch (newState) {
+            case SimulationStateEnum.active:
+                this.loadingScreen.setVisibility(false);
+                this.hintLabel.setVisibility(true);
+                this.actionButton.setVisibility(true);
+                break;
+
             case SimulationStateEnum.loading:
+            case SimulationStateEnum.reconfigure:
                 this.loadingScreen.setVisibility(true);
                 this.hintLabel.setVisibility(false);
                 this.actionButton.setVisibility(false);

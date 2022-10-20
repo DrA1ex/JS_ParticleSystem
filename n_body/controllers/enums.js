@@ -8,4 +8,5 @@ export const SimulationStateEnum = {
     active: 0,
     paused: 1,
     recording: 2,
+    reconfigure: 3,
 }

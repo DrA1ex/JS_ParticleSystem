@@ -3,11 +3,16 @@ import {BackendType} from "./enum.js";
 
 export class SimulationSettings extends SettingsBase {
     static Properties = {
-        backend: Property.enum("backend", BackendType, BackendType.worker),
-        segmentDivider: Property.int("segment_divider", 2),
-        segmentSize: Property.int("segment_max_count", null),
-        segmentRandomness: Property.float("segment_random", 0.25),
-        bufferCount: Property.int("buffers", 3),
+        backend: Property.enum("backend", BackendType, BackendType.worker).setName("Backend")
+            .setDescription("Choice backend to calculate particle interactions"),
+        segmentDivider: Property.int("segment_divider", 2).setName("Segment divider")
+            .setDescription("Spatial subdivision factor while segmentation, larger values increase accuracy"),
+        segmentSize: Property.int("segment_max_count", null).setName("Segment size")
+            .setDescription(" Max particle count in segment, larger values increase accuracy"),
+        segmentRandomness: Property.float("segment_random", 0.25).setName("Segmentation randomness")
+            .setDescription("Spatial subdivision randomness factor"),
+        bufferCount: Property.int("buffers", 3).setDescription("Buffer count")
+            .setDescription("How many physics frames will be requested ahead of time"),
     }
 
     get backend() {return this.config.backend;}

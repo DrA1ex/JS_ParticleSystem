@@ -91,6 +91,23 @@ select {
     padding: 0.2em;
 }
 
+input {
+    background: transparent;
+    border: none;
+    border-bottom: 0.1em solid white;
+    color: white;
+    text-align: right;
+    outline: none;
+}
+
+input:focus {
+    border-bottom: 0.1em solid rgb(41, 127, 255);
+}
+
+input[invalid=true] {
+    border-bottom: 0.1em solid rgb(255, 41, 41);
+}
+
 .fill {
     position: absolute;
     top: 0;
@@ -151,8 +168,10 @@ select {
 .dialog {
     padding: 1em;
     min-width: 20vw;
-    max-height: 80vw;
+    max-width: 80vw;
+    max-height: 80vh;
     overflow: auto;
+    z-index: 10000;
 
     background: #111111;
     border: 0.1em solid rgba(255, 255, 255, 0.5);
@@ -365,6 +384,11 @@ button:disabled .record-icon {
     margin-left: 0.4em;
 }
 
+.settings-base {
+    font-size: 1em;
+    font-family: system-ui;
+}
+
 .record-settings {
     display: grid;
     grid-template-columns: 2fr 1fr;
@@ -372,17 +396,88 @@ button:disabled .record-icon {
     align-items: center;
     justify-content: space-between;
     gap: 0 1em;
-    font-size: 1em;
-    font-family: system-ui;
 }
 
 .record-settings > div,
-.record-settings > select {
+.record-settings > select,
+.settings-dialog > div,
+.settings-dialog > select {
     padding: 0.2em;
 }
 
 .record-settings .warning {
     background: #5e0000;
+}
+
+.settings-block {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0 1em;
+    justify-items: start;
+}
+
+.settings-block .settings-caption {
+    position: relative;
+    pointer-events: none;
+}
+
+.settings-block .settings-input {
+    justify-self: end;
+    text-align: right;
+}
+
+.settings-block .settings-caption[data-tooltip]:after {
+    content: "i";
+    pointer-events: all;
+
+    display: inline-block;
+    text-align: center;
+    vertical-align: super;
+
+    margin-left: 1em;
+    width: 0.8rem;
+    height: 0.8rem;
+    line-height: 0.8rem;
+
+    border-radius: 50%;
+    font-size: 0.6em;
+    color: black;
+    background: #ffffff;
+}
+
+[data-tooltip]:before {
+    content: attr(data-tooltip);
+    pointer-events: none;
+    display: none;
+
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    margin: 0.2em;
+    max-width: 100%;
+    width: max-content;
+    height: max-content;
+    z-index: 10;
+
+    background: #1f1f1f;
+    border: 0.1em solid #2c2c2c;
+    padding: 0.2em;
+    opacity: 0;
+    transition: opacity 100ms 0ms;
+}
+
+[data-tooltip]:hover::before {
+    display: block;
+    opacity: 1;
+    transition: opacity 200ms 300ms;
+}
+
+[data-tooltip]:active::before {
+    display: block;
+    opacity: 1;
+    transition: opacity 200ms 0ms;
 }
 
 @keyframes pulsation {

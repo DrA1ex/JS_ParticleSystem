@@ -36,6 +36,14 @@ export class Application {
     }
 
     reloadFromState(state) {
+        const newSettings = AppSimulationSettings.deserialize(state.settings);
+
+        this.reconfigure(newSettings, state.particles, state.renderer);
+    }
+
+    reconfigure(newSettings, particles, renderer) {
+        this.simulationCtrl.setState(SimulationStateEnum.reconfigure);
+
         this.dfriHelper.dispose();
         this.dfriHelper = null;
 
@@ -51,21 +59,36 @@ export class Application {
         this.debug.dispose();
         this.debug = null;
 
-        this.settings = AppSimulationSettings.fromQueryParams(state.settings);
+        if (!particles && newSettings.physics.particleCount <= this.settings.physics.particleCount) {
+            particles = this.particles.slice(0, newSettings.physics.particleCount).map(p => [p.x, p.y, p.velX, p.velY, p.mass]);
+        }
+
+        if (newSettings.render.render !== this.settings.render.render) {
+            const oldCanvas = document.getElementById("canvas");
+            const newCanvas = oldCanvas.cloneNode(false);
+            oldCanvas.parentNode.replaceChild(newCanvas, oldCanvas);
+            oldCanvas.remove();
+        }
+
+        this.settings = newSettings;
 
         this.aheadBuffers = [];
         this.pendingBufferCount = 0;
-
-        this.init(state);
+        this.init({
+            particles,
+            renderer
+        });
     }
 
     init(state = null) {
-        this.renderer = RendererInitializer.initRenderer(document.getElementById("canvas"), this.settings.render.render, this.settings);
-        this.backend = BackendInitializer.initBackend(this.settings.simulation.backend);
+        this.simulationCtrl.setState(SimulationStateEnum.loading);
 
-        this.debug = new Debug(this.renderer, this.backend, this.settings);
-        this.dfriHelper = new DFRIHelper(this.renderer, this.settings);
-        this.canvasInteraction = new InteractionHandler(this.renderer);
+        this.renderer = this.renderer ?? RendererInitializer.initRenderer(document.getElementById("canvas"), this.settings.render.render, this.settings);
+        this.backend = this.backend ?? BackendInitializer.initBackend(this.settings.simulation.backend);
+
+        this.debug = this.debug ?? new Debug(this.renderer, this.backend, this.settings);
+        this.dfriHelper = this.dfriHelper ?? new DFRIHelper(this.renderer, this.settings);
+        this.canvasInteraction = this.canvasInteraction ?? new InteractionHandler(this.renderer);
 
         if (state?.renderer?.scale) {
             this.renderer.scale = state.renderer.scale * this.renderer.dpr;
@@ -96,6 +119,10 @@ export class Application {
     }
 
     onData(data) {
+        if (this.simulationCtrl.currentState === SimulationStateEnum.reconfigure) {
+            return;
+        }
+
         const stepLatency = performance.now() - data.timestamp;
         this.dfriHelper.postStepTime(stepLatency);
 

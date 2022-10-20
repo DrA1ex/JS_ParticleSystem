@@ -3,11 +3,11 @@ import {Property, SettingsBase} from "./base.js";
 
 export class CommonSettings extends SettingsBase {
     static Properties = {
-        debug: Property.bool("debug", false),
-        debugTree: Property.bool("debug_tree", null),
-        debugVelocity: Property.bool("debug_velocity", false),
-        debugForce: Property.bool("debug_force", null),
-        stats: Property.bool("stats", true)
+        debug: Property.bool("debug", false).setName("Debug mode"),
+        debugTree: Property.bool("debug_tree", null).setName("Debug tree").setDescription("Show Spatial Tree segments"),
+        debugVelocity: Property.bool("debug_velocity", false).setName("Debug velocity").setDescription("Show velocity vectors"),
+        debugForce: Property.bool("debug_force", null).setName("Debug momentum").setDescription("Show momentum vectors"),
+        stats: Property.bool("stats", true).setName("Show statistics"),
     }
 
     get debug() {return this.config.debug};

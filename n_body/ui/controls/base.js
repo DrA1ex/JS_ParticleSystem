@@ -89,3 +89,13 @@ export class View {
     }
 
 }
+
+
+export class InputControl extends Control {
+    /**
+     * @abstract
+     */
+    getValue() {
+
+    }
+}

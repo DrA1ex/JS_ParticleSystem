@@ -1,6 +1,6 @@
-import {Control} from "./base.js";
+import {InputControl} from "./base.js";
 
-export class Select extends Control {
+export class Select extends InputControl {
     _onChangeFn = null;
     options = [];
 
@@ -21,7 +21,7 @@ export class Select extends Control {
     }
 
     _onChangeHandler(e) {
-        this._selected = this.options.find(o => o.key === this.element.value);
+        this._selected = this.options.find(o => o.strKey === this.element.value);
         if (this._onChangeFn) {
             this._onChangeFn(this.selected);
         }
@@ -38,16 +38,23 @@ export class Select extends Control {
 
         for (let option of options) {
             const e = document.createElement("option");
-            if (!(option instanceof Object)) {
-                option = {key: option.toString(), label: option.toString()}
+            const entry = {e};
+
+            if (option instanceof Object) {
+                entry.key = option.key
+                entry.strKey = option.strKey ?? option.key.toString();
+                entry.label = option.label ?? option.key.toString();
+            } else {
+                entry.key = option
+                entry.strKey = option.toString();
+                entry.label = option.toString();
             }
 
-            e.value = option.key;
-            e.text = option.label;
+            e.value = entry.strKey;
+            e.text = entry.label;
 
             this.element.appendChild(e);
-
-            this.options.push(Object.assign({}, option, {e}));
+            this.options.push(entry);
         }
 
         this.select(selectedKey);
@@ -58,10 +65,13 @@ export class Select extends Control {
             this.selected.e.removeAttribute("selected");
         }
 
-        const option = this.options.find(o => o.key === key);
+        const option = this.options.find(o => o.key === key || o.strKey === key);
         if (option) {
             option.e.setAttribute("selected", "");
             this._selected = option;
         }
+    }
+    getValue() {
+        return this.selected;
     }
 }

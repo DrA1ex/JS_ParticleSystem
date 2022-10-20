@@ -4,6 +4,27 @@ import {SimulationSettings} from "./simulation.js";
 import {PhysicsSettings} from "./physics.js";
 import {RenderSettings} from "./render.js";
 
+class SettingsGroup {
+    constructor(type) {
+        this.type = type;
+
+        this.name = name;
+    }
+
+    setName(name) {
+        this.name = name;
+
+        return this;
+    }
+
+    static of(type) {
+        return new SettingsGroup(type);
+    }
+}
+
+/**
+ * @template {AppSettingsBase} T
+ */
 class AppSettingsBase {
     /** @abstract */
     static Types = {};
@@ -12,6 +33,9 @@ class AppSettingsBase {
     constructor() {
     }
 
+    /**
+     * @returns {object}
+     */
     serialize() {
         const result = {};
         for (const [name, _] of Object.entries(this.constructor.Types)) {
@@ -21,22 +45,28 @@ class AppSettingsBase {
         return result;
     }
 
+    /**
+     * @returns {T}
+     */
     static deserialize(data) {
         const instance = new this();
-        for (const [name, type] of Object.entries(this.Types)) {
-            instance.config[name] = type.deserialize(data[name]);
+        for (const [name, group] of Object.entries(this.Types)) {
+            instance.config[name] = group.type.deserialize(data[name]);
         }
 
-        return instance;
+        return /** @type {T} */ instance;
     }
 
+    /**
+     * @returns {T}
+     */
     static fromQueryParams(defaults = null) {
         const instance = new this();
-        for (const [name, type] of Object.entries(this.Types)) {
-            instance.config[name] = type.fromQueryParams(defaults);
+        for (const [name, group] of Object.entries(this.Types)) {
+            instance.config[name] = group.type.fromQueryParams(defaults);
         }
 
-        return instance;
+        return /** @type {T} */ instance;
     }
 
     export() {
@@ -48,42 +78,60 @@ class AppSettingsBase {
         return result;
     }
 
+    /**
+     * @returns {T}
+     */
     static import(data) {
         const instance = new this();
-        for (const [name, type] of Object.entries(this.Types)) {
-            instance.config[name] = type.import(data);
+        for (const [name, group] of Object.entries(this.Types)) {
+            instance.config[name] = group.type.import(data);
         }
 
-        return instance;
+        return /** @type {T} */ instance;
     }
 }
 
+/**
+ * @extends {AppSettingsBase<AppSimulationSettings>}
+ */
 export class AppSimulationSettings extends AppSettingsBase {
     static Types = {
-        common: CommonSettings,
-        world: WorldSettings,
-        simulation: SimulationSettings,
-        physics: PhysicsSettings,
-        render: RenderSettings,
+        common: SettingsGroup.of(CommonSettings).setName("Common"),
+        world: SettingsGroup.of(WorldSettings),
+        simulation: SettingsGroup.of(SimulationSettings).setName("Simulation"),
+        physics: SettingsGroup.of(PhysicsSettings).setName("Physics"),
+        render: SettingsGroup.of(RenderSettings).setName("Render"),
     }
 
+    /** @returns {CommonSettings} */
     get common() {return this.config.common;}
+    /** @returns {WorldSettings} */
     get world() {return this.config.world;}
+    /** @returns {SimulationSettings} */
     get simulation() {return this.config.simulation;}
+    /** @returns {PhysicsSettings} */
     get physics() {return this.config.physics;}
+    /** @returns {RenderSettings} */
     get render() {return this.config.render;}
 }
 
+/**
+ * @extends {AppSettingsBase<AppPlayerSettings>}
+ */
 export class AppPlayerSettings extends AppSettingsBase {
     static Types = {
-        common: CommonSettings,
-        world: WorldSettings,
-        physics: PhysicsSettings,
-        render: RenderSettings,
+        common: SettingsGroup.of(CommonSettings),
+        world: SettingsGroup.of(WorldSettings),
+        physics: SettingsGroup.of(PhysicsSettings),
+        render: SettingsGroup.of(RenderSettings),
     }
 
+    /** @returns {CommonSettings} */
     get common() {return this.config.common;}
+    /** @returns {WorldSettings} */
     get world() {return this.config.world;}
+    /** @returns {PhysicsSettings} */
     get physics() {return this.config.physics;}
+    /** @returns {RenderSettings} */
     get render() {return this.config.render;}
 }
