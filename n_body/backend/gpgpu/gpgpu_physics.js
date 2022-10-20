@@ -118,7 +118,7 @@ export class GPUPhysicsEngine extends PhysicsEngine {
         this.gl = this.canvas.getContext("webgl2");
         this._stateConfig = {};
 
-        this.segmentMaxCount = Math.pow(this.settings.simulation.segmentMaxCount, 2);
+        this.segmentMaxCount = this.settings.simulation.segmentMaxCount;
 
         this._positionBufferData = new Float32Array(this.segmentMaxCount * 2);
         this._velocityBufferData = new Float32Array(this.segmentMaxCount * 2);

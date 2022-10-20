@@ -17,6 +17,8 @@ class GPUBackendImpl extends BackendImpl {
     }
 
     async init(settings, state) {
+        settings.simulation.segmentMaxCount = Math.pow(settings.simulation.segmentMaxCount, 2);
+
         super.init(settings, state);
         await this.physicalEngine.init(this.settings);
     }
