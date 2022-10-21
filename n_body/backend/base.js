@@ -28,6 +28,13 @@ export class BackendBase {
         this._worker.postMessage({type: "init", settings: settings.serialize(), state: particles});
     }
 
+    /**
+     * @param {AppSimulationSettings} settings
+     */
+    reconfigure(settings) {
+        this._worker.postMessage({type: "reconfigure", settings: settings.serialize()});
+    }
+
     subscribe(dataFn, readyFn) {
         this._worker.onmessage = (e) => {
             switch (e.data.type) {
@@ -140,6 +147,17 @@ export class BackendImpl {
         }
     }
 
+    reconfigure(settings) {
+        this.settings = AppSimulationSettings.deserialize(settings);
+
+        if (this.physicalEngine.canReconfigure(this.settings)) {
+            this.physicalEngine.reconfigure(this.settings);
+        } else {
+            this.physicalEngine.dispose();
+            this.physicalEngine = new this.physicalEngineClass(this.settings);
+        }
+    }
+
     dispose() {
         this.buffers = null;
         this.particles = null;
@@ -196,6 +214,12 @@ export class WorkerHandler {
                 if (data) {
                     postMessage({type: "data", ...data,}, [data.buffer.buffer]);
                 }
+            }
+                break;
+
+            case "reconfigure": {
+                const {settings} = e.data;
+                this.backend.reconfigure(settings);
             }
                 break;
 

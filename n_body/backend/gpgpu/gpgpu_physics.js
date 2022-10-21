@@ -179,6 +179,31 @@ export class GPUPhysicsEngine extends PhysicsEngine {
         this.gl.enable(GL.RASTERIZER_DISCARD);
     }
 
+    canReconfigure(settings) {
+        const segmentCountChanged = this.settings.simulation.segmentMaxCount !== settings.simulation.segmentMaxCount;
+
+        return !segmentCountChanged;
+    }
+
+    reconfigure(settings) {
+        super.reconfigure(settings);
+
+        WebglUtils.loadDataFromConfig(this.gl, this._stateConfig, [{
+            program: "calc",
+            uniforms: [
+                {name: "gravity", values: [this.settings.physics.particleGravity]},
+                {name: "p_force", values: [0, 0]},
+                {name: "min_dist_square", values: [this.settings.physics.minInteractionDistanceSq]},
+            ],
+        }, {
+            program: "collision",
+            uniforms: [
+                {name: "min_dist_square", values: [this.settings.physics.minInteractionDistanceSq]},
+                {name: "restitution", values: [this.settings.physics.collisionRestitution]},
+            ]
+        }]);
+    }
+
     _calculateLeafData(leaf, pForce) {
         for (let i = 0; i < leaf.length; i++) {
             const p = leaf.data[i];

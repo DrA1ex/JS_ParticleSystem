@@ -104,6 +104,17 @@ export class Webgl2Renderer extends RendererBase {
         this._updateDebugCanvasSize();
     }
 
+    reconfigure(settings) {
+        super.reconfigure(settings);
+
+        if (this.settings.render.enableBlending) {
+            this.gl.enable(GL.BLEND);
+            this.gl.blendFunc(GL.SRC_COLOR, GL.ONE);
+        } else {
+            this.gl.disable(GL.BLEND);
+        }
+    }
+
     reset() {
         super.reset();
         this._maxSpeed = this.settings.physics.gravity / 100;

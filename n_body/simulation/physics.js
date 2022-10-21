@@ -23,6 +23,14 @@ export class PhysicsEngine {
         };
     }
 
+    canReconfigure(settings) {
+        return true;
+    }
+
+    reconfigure(settings) {
+        this.settings = settings;
+    }
+
     /**
      * @param {Particle[]} particles
      */

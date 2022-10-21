@@ -36,6 +36,13 @@ export class RendererBase {
         this._resizeObserver.observe(document.body);
     }
 
+    reconfigure(settings) {
+        this.settings = settings;
+
+        this.canvas.style.filter = null;
+        this._updateCanvasSize();
+    }
+
     reset() {
         this._hueAngle = 0;
     }
