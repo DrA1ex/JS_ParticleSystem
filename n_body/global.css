@@ -94,10 +94,12 @@ select {
 input {
     text-align: right;
     border: none;
-    border-bottom: 0.1em solid white;
-    color: white;
+    border-radius: 0;
+    border-bottom: 0.1em solid #c8c8c8;
+    color: #c8c8c8;
     background: transparent;
     outline: none;
+    appearance: none;
     font-size: 1em;
     font-family: system-ui;
 }
@@ -445,8 +447,9 @@ button:disabled .record-icon {
 
     border-radius: 50%;
     font-size: 0.6em;
-    color: black;
-    background: #ffffff;
+    font-weight: bold;
+    color: #111111;
+    background: #efefef;
 }
 
 [data-tooltip]:before {
