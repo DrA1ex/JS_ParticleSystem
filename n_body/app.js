@@ -110,6 +110,7 @@ export class Application {
         const initRenderer = this.renderer === null;
         const initDfri = this.dfriHelper === null;
         const initInteractions = this.canvasInteraction === null;
+        const initDebug = this.debug === null;
 
         if (initRenderer) {
             this.renderer = RendererInitializer.initRenderer(document.getElementById("canvas"), this.settings.render.render, this.settings);
@@ -118,9 +119,13 @@ export class Application {
         }
 
         this.backend = this.backend ?? BackendInitializer.initBackend(this.settings.simulation.backend);
-        this.debug = this.debug ?? new Debug(this.renderer, this.backend, this.settings);
         this.dfriHelper = this.dfriHelper ?? new DFRIHelper(this.renderer, this.settings);
         this.canvasInteraction = this.canvasInteraction ?? new InteractionHandler(this.renderer);
+        if (initDebug) {
+            this.debug = this.debug ?? new Debug(this.renderer, this.backend, this.settings);
+        } else {
+            this.debug.settings = this.settings;
+        }
 
         if (state?.renderer?.scale) {
             this.renderer.scale = state.renderer.scale * this.renderer.dpr;
