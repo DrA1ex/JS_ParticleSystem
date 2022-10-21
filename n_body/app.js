@@ -77,7 +77,7 @@ export class Application {
             this.backend = null;
         }
 
-        if (rendererChanged || backendChanged || debugChanged) {
+        if (debugChanged || rendererChanged || backendChanged) {
             this.debug.dispose();
             this.debug = null;
         }

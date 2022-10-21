@@ -105,7 +105,12 @@ export class Webgl2Renderer extends RendererBase {
     }
 
     reconfigure(settings) {
+        const oldSettings = this.settings;
         super.reconfigure(settings);
+
+        if (!oldSettings.common.debug && settings.common.debug) {
+            this.initDebugCanvas();
+        }
 
         if (this.settings.render.enableBlending) {
             this.gl.enable(GL.BLEND);
