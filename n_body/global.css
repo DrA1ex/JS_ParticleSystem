@@ -6,7 +6,7 @@
 
 @media screen and (min-width: 768px) and (max-width: 1024px) {
     html {
-        font-size: 22px;
+        font-size: 20px;
     }
 
     #stats {
@@ -16,7 +16,7 @@
 
 @media screen and (max-width: 768px) {
     html {
-        font-size: 22px;
+        font-size: 18px;
     }
 
     #stats {
