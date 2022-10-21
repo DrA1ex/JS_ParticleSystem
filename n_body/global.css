@@ -80,24 +80,26 @@ button:disabled {
 }
 
 select {
-    background: transparent;
     user-select: none;
-    font-size: 1em;
+    padding: 0.2em;
+    background: transparent;
     color: rgb(41, 127, 255);
     outline: none;
     border: none;
     appearance: none;
+    font-size: 1em;
     font-family: system-ui;
-    padding: 0.2em;
 }
 
 input {
-    background: transparent;
+    text-align: right;
     border: none;
     border-bottom: 0.1em solid white;
     color: white;
-    text-align: right;
+    background: transparent;
     outline: none;
+    font-size: 1em;
+    font-family: system-ui;
 }
 
 input:focus {
