@@ -92,10 +92,23 @@ export class View {
 
 
 export class InputControl extends Control {
+
+    /**
+     * @param {HTMLInputElement} element
+     */
+    constructor(element) {
+        super(element);
+
+    }
+
     /**
      * @abstract
      */
     getValue() {
 
+    }
+
+    setValue(value) {
+        this.element.value = value;
     }
 }

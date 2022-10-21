@@ -91,7 +91,7 @@ select {
     font-family: system-ui;
 }
 
-input {
+input[type=text] {
     text-align: right;
     border: none;
     border-radius: 0;
@@ -104,13 +104,36 @@ input {
     font-family: system-ui;
 }
 
+input[type=checkbox] {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 1.2em;
+    height: 1.2em;
+    border: 0.1em solid #c8c8c8;
+    border-radius: 0;
+    background: transparent;
+    outline: none;
+    appearance: none;
+    color: red;
+}
+
+input:checked::before {
+    content: "";
+    background: rgb(41, 127, 255);
+    width: 0.8em;
+    height: 0.8em;
+}
+
 input:focus {
-    border-bottom: 0.1em solid rgb(41, 127, 255);
+    border-color: rgb(41, 127, 255);
 }
 
 input[invalid=true] {
-    border-bottom: 0.1em solid rgb(255, 41, 41);
+    border-color: rgb(255, 41, 41);
 }
+
 
 .fill {
     position: absolute;

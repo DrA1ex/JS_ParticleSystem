@@ -4,6 +4,7 @@ import {Button} from "../ui/controls/button.js";
 import {PropertyType} from "../settings/base.js";
 import {Select} from "../ui/controls/select.js";
 import {Input, InputType} from "../ui/controls/input.js";
+import {Checkbox} from "../ui/controls/checkbox.js";
 
 const view = await fetch(new URL("./views/settings.html", import.meta.url)).then(d => d.text());
 
@@ -125,13 +126,8 @@ export class SettingsController extends ControllerBase {
                 control = this._createInput(value, InputType.float)
                 break;
 
-            case PropertyType.bool: {
-                const options = [
-                    {key: true, label: "on"},
-                    {key: false, label: "off"},
-                ];
-                control = this._createSelect(options, value);
-            }
+            case PropertyType.bool:
+                control = this._createCheckbox(value);
                 break;
 
             default:
@@ -145,6 +141,15 @@ export class SettingsController extends ControllerBase {
 
     _createInput(value, type) {
         const input = new Input(document.createElement("input"), type);
+        input.setValue(value);
+
+        return input;
+    }
+
+    _createCheckbox(value) {
+        const e = document.createElement("input");
+        e.type = "checkbox";
+        const input = new Checkbox(e);
         input.setValue(value);
 
         return input;

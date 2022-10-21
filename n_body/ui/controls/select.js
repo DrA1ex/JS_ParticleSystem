@@ -71,6 +71,11 @@ export class Select extends InputControl {
             this._selected = option;
         }
     }
+
+    setValue(value) {
+        this.select(value);
+    }
+
     getValue() {
         return this.selected;
     }

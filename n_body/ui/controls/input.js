@@ -18,11 +18,9 @@ export class Input extends InputControl {
         super(element);
 
         this.type = type;
-        this.element.onchange = this._onChange.bind(this);
-    }
 
-    setValue(value) {
-        this.element.value = value;
+        this.element.type = "text";
+        this.element.onchange = this._onChange.bind(this);
     }
 
     getValue() {
