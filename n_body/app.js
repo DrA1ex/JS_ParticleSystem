@@ -36,13 +36,20 @@ export class Application {
     }
 
     reloadFromState(state) {
-        const newSettings = AppSimulationSettings.deserialize(state.settings);
+        const newSettings = AppSimulationSettings.import(state.settings);
 
         this.reconfigure(newSettings, state.particles, state.renderer);
     }
 
     reconfigure(newSettings, particles, renderer) {
         this.simulationCtrl.setState(SimulationStateEnum.reconfigure);
+
+        if (!renderer && this.renderer) {
+            renderer = {
+                scale: this.renderer.scale / this.renderer.dpr,
+                relativeOffset: this.renderer.centeredRelativeOffset()
+            }
+        }
 
         this.dfriHelper.dispose();
         this.dfriHelper = null;
