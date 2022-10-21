@@ -112,10 +112,8 @@ export class SettingsController extends ControllerBase {
     _createBlockInput(property, value) {
         let control;
         switch (property.type) {
-            case PropertyType.enum: {
-                const options = Object.entries(property.enumType).map(([key, value]) => ({key: value, label: key}));
-                control = this._createSelect(options, value);
-            }
+            case PropertyType.enum:
+                control = this._createSelect(property.enumType, value);
                 break;
 
             case PropertyType.int:
@@ -155,10 +153,14 @@ export class SettingsController extends ControllerBase {
         return input;
     }
 
-    _createSelect(options, value) {
+    _createSelect(type, value) {
         const select = new Select(document.createElement("select"));
-        select.setOptions(options);
-        select.select(value !== null ? value.toString() : "null");
+        select.setOptions(Object.keys(type));
+
+        const entry = value && Object.entries(type).find(([k, v]) => v === value);
+        if (entry) {
+            select.select(entry[0]);
+        }
 
         return select;
     }

@@ -26,7 +26,10 @@ class SettingsGroup {
  * @template {AppSettingsBase} T
  */
 class AppSettingsBase {
-    /** @abstract */
+    /**
+     * @abstract
+     * @type {{[string]: SettingsGroup}}
+     */
     static Types = {};
 
     config = {};
@@ -88,6 +91,32 @@ class AppSettingsBase {
         }
 
         return /** @type {T} */ instance;
+    }
+
+    /**
+     * @param {SettingsGroup} newSettings
+     * @returns {{breaks: Set<ComponentType>, affects: Set<ComponentType>}}
+     */
+    compare(newSettings) {
+        const affects = new Set();
+        const breaks = new Set();
+        for (const [groupName, group] of Object.entries(this.constructor.Types)) {
+            for (const [name, prop] of Object.entries(group.type.Properties)) {
+                if (this[groupName][name] !== newSettings[groupName][name]) {
+                    for (const component of prop.affects) {
+                        affects.add(component);
+                    }
+                    for (const component of prop.breaks) {
+                        breaks.add(component);
+                    }
+                }
+            }
+        }
+
+        return {
+            affects: affects,
+            breaks: breaks
+        }
     }
 }
 

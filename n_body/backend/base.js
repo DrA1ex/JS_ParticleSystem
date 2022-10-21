@@ -20,7 +20,7 @@ export class BackendBase {
      * @param {function(StepResult):void} onDataFn
      * @param {function():void} onReadyFn
      * @param {AppSimulationSettings} settings
-     * @param {Particle[]=null} particles
+     * @param {Particle[]} [particles=null]
      * @return {void}
      */
     async init(onDataFn, onReadyFn, settings, particles = null) {
@@ -30,9 +30,10 @@ export class BackendBase {
 
     /**
      * @param {AppSimulationSettings} settings
+     * @param {Particle[]} [particles=null]
      */
-    reconfigure(settings) {
-        this._worker.postMessage({type: "reconfigure", settings: settings.serialize()});
+    reconfigure(settings, particles = null) {
+        this._worker.postMessage({type: "reconfigure", settings: settings.serialize(), state: particles});
     }
 
     subscribe(dataFn, readyFn) {
@@ -74,7 +75,6 @@ export class BackendBase {
 export class BackendImpl {
     /** @type{AppSimulationSettings} */
     settings;
-    state;
 
     physicalEngine;
     particles;
@@ -88,18 +88,7 @@ export class BackendImpl {
         this.settings = AppSimulationSettings.deserialize(settings);
         this.physicalEngine = new this.physicalEngineClass(this.settings);
         this.particles = Particle_initializer.initialize(this.settings);
-
-        if (state && state.length > 0) {
-            const size = Math.min(state.length, this.settings.physics.particleCount);
-            for (let i = 0; i < size; i++) {
-                const [x, y, velX, velY, mass] = state[i];
-                this.particles[i].x = x;
-                this.particles[i].y = y;
-                this.particles[i].velX = velX;
-                this.particles[i].velY = velY;
-                this.particles[i].mass = mass;
-            }
-        }
+        this._applyParticlesState(state);
 
         this.buffers = new Array(this.settings.simulation.bufferCount);
         for (let i = 0; i < this.settings.simulation.bufferCount; i++) {
@@ -147,15 +136,11 @@ export class BackendImpl {
         }
     }
 
-    reconfigure(settings) {
+    reconfigure(settings, state) {
         this.settings = AppSimulationSettings.deserialize(settings);
+        this._applyParticlesState(state);
 
-        if (this.physicalEngine.canReconfigure(this.settings)) {
-            this.physicalEngine.reconfigure(this.settings);
-        } else {
-            this.physicalEngine.dispose();
-            this.physicalEngine = new this.physicalEngineClass(this.settings);
-        }
+        this.physicalEngine.reconfigure(this.settings);
     }
 
     dispose() {
@@ -164,6 +149,23 @@ export class BackendImpl {
 
         this.physicalEngine.dispose();
         this.physicalEngine = null;
+    }
+
+    /**
+     * @protected
+     */
+    _applyParticlesState(state) {
+        if (state && state.length > 0) {
+            const size = Math.min(state.length, this.settings.physics.particleCount);
+            for (let i = 0; i < size; i++) {
+                const [x, y, velX, velY, mass] = state[i];
+                this.particles[i].x = x;
+                this.particles[i].y = y;
+                this.particles[i].velX = velX;
+                this.particles[i].velY = velY;
+                this.particles[i].mass = mass;
+            }
+        }
     }
 
     /**
@@ -218,8 +220,8 @@ export class WorkerHandler {
                 break;
 
             case "reconfigure": {
-                const {settings} = e.data;
-                this.backend.reconfigure(settings);
+                const {settings, state} = e.data;
+                this.backend.reconfigure(settings, state);
             }
                 break;
 

@@ -1,18 +1,24 @@
-import {Property, SettingsBase} from "./base.js";
+import {ComponentType, Property, SettingsBase} from "./base.js";
 import {BackendType} from "./enum.js";
 
 export class SimulationSettings extends SettingsBase {
     static Properties = {
-        backend: Property.enum("backend", BackendType, BackendType.worker).setName("Backend")
-            .setDescription("Choice backend to calculate particle interactions"),
-        segmentDivider: Property.int("segment_divider", 2).setName("Segment divider")
-            .setDescription("Spatial subdivision factor while segmentation, larger values increase accuracy"),
-        segmentSize: Property.int("segment_max_count", null).setName("Segment size")
-            .setDescription(" Max particle count in segment, larger values increase accuracy"),
-        segmentRandomness: Property.float("segment_random", 0.25).setName("Segmentation randomness")
-            .setDescription("Spatial subdivision randomness factor"),
-        bufferCount: Property.int("buffers", 3).setDescription("Buffer count")
-            .setDescription("How many physics frames will be requested ahead of time"),
+        backend: Property.enum("backend", BackendType, BackendType.worker)
+            .setName("Backend").setDescription("Choice backend to calculate particle interactions")
+            .setBreaks(ComponentType.backend, ComponentType.debug),
+        segmentDivider: Property.int("segment_divider", 2)
+            .setName("Segment divider").setDescription("Spatial subdivision factor while segmentation, larger values increase accuracy")
+            .setAffects(ComponentType.backend),
+        segmentSize: Property.int("segment_max_count", null)
+            .setName("Segment size").setDescription(" Max particle count in segment, larger values increase accuracy")
+            .setBreaks(ComponentType.backend)
+            .setAffects(ComponentType.debug),
+        segmentRandomness: Property.float("segment_random", 0.25)
+            .setName("Segmentation randomness").setDescription("Spatial subdivision randomness factor")
+            .setAffects(ComponentType.backend),
+        bufferCount: Property.int("buffers", 3)
+            .setName("Buffer count").setDescription("How many physics frames will be requested ahead of time")
+            .setBreaks(ComponentType.backend, ComponentType.debug),
     }
 
     get backend() {return this.config.backend;}

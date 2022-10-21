@@ -40,7 +40,7 @@ export class RendererBase {
         this.settings = settings;
 
         this.canvas.style.filter = null;
-        this._updateCanvasSize();
+        this._handleResize();
     }
 
     reset() {

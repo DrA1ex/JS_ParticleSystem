@@ -1,13 +1,24 @@
-import {Property, SettingsBase} from "./base.js";
+import {ComponentType, Property, SettingsBase} from "./base.js";
 
 
 export class CommonSettings extends SettingsBase {
     static Properties = {
-        debug: Property.bool("debug", false).setName("Debug mode"),
-        debugTree: Property.bool("debug_tree", null).setName("Debug tree").setDescription("Show Spatial Tree segments"),
-        debugVelocity: Property.bool("debug_velocity", false).setName("Debug velocity").setDescription("Show velocity vectors"),
-        debugForce: Property.bool("debug_force", null).setName("Debug momentum").setDescription("Show momentum vectors"),
-        stats: Property.bool("stats", true).setName("Show statistics"),
+        debug: Property.bool("debug", false)
+            .setName("Debug mode")
+            .setBreaks(ComponentType.debug)
+            .setAffects(ComponentType.renderer, ComponentType.backend),
+        debugTree: Property.bool("debug_tree", null)
+            .setName("Debug tree").setDescription("Show Spatial Tree segments")
+            .setAffects(ComponentType.debug, ComponentType.backend),
+        debugVelocity: Property.bool("debug_velocity", false)
+            .setName("Debug velocity").setDescription("Show velocity vectors")
+            .setAffects(ComponentType.debug),
+        debugForce: Property.bool("debug_force", null)
+            .setName("Debug momentum").setDescription("Show momentum vectors")
+            .setAffects(ComponentType.debug, ComponentType.backend),
+        stats: Property.bool("stats", true)
+            .setName("Show statistics")
+            .setBreaks(ComponentType.debug),
     }
 
     get debug() {return this.config.debug};

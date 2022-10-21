@@ -7,6 +7,7 @@ import {Debug} from "./utils/debug.js";
 import {InteractionHandler} from "./render/interactions.js";
 import {RendererInitializer} from "./render/init.js";
 import {BackendInitializer} from "./backend/init.js";
+import {ComponentType} from "./settings/base.js";
 
 export class Application {
     /** @type{RendererBase} */
@@ -24,7 +25,6 @@ export class Application {
     pendingBufferCount = 0;
     refreshTime;
     lastRenderTime;
-    ready = false;
 
     /**
      * @param {AppSimulationSettings} settings
@@ -44,14 +44,9 @@ export class Application {
     reconfigure(newSettings, particles, renderer) {
         this.simulationCtrl.setState(SimulationStateEnum.reconfigure);
 
-        const rendererChanged = newSettings.render.render !== this.settings.render.render;
-        const particleCountChanged = newSettings.physics.particleCount !== this.settings.physics.particleCount;
-        const particleInitChanged = newSettings.physics.particleInitType !== this.settings.physics.particleInitType;
-        const backendChanged = newSettings.simulation.backend !== this.settings.simulation.backend ||
-            newSettings.simulation.bufferCount !== this.settings.simulation.bufferCount;
-        const debugChanged = newSettings.common.debug !== this.settings.common.debug;
+        const diff = this.settings.compare(newSettings);
 
-        if (!renderer && this.renderer && rendererChanged) {
+        if (diff.breaks.has(ComponentType.renderer) && !renderer && this.renderer) {
             renderer = {
                 scale: this.renderer.scale / this.renderer.dpr,
                 relativeOffset: this.renderer.centeredRelativeOffset()
@@ -59,12 +54,12 @@ export class Application {
         }
 
 
-        if (particleCountChanged || rendererChanged) {
+        if (diff.breaks.has(ComponentType.dfri)) {
             this.dfriHelper.dispose();
             this.dfriHelper = null;
         }
 
-        if (rendererChanged || particleCountChanged) {
+        if (diff.breaks.has(ComponentType.renderer)) {
             this.canvasInteraction.dispose();
             this.canvasInteraction = null;
 
@@ -72,97 +67,94 @@ export class Application {
             this.renderer = null;
         }
 
-        if (backendChanged || particleCountChanged || particleInitChanged) {
+        if (diff.breaks.has(ComponentType.backend)) {
             this.backend.dispose();
             this.backend = null;
         }
 
-        if (debugChanged || rendererChanged || backendChanged) {
+        if (diff.breaks.has(ComponentType.debug)) {
             this.debug.dispose();
             this.debug = null;
         }
 
-        if (!particles && (backendChanged || particleCountChanged) && !particleInitChanged) {
+        if (!particles && !diff.breaks.has(ComponentType.particles)) {
             particles = this.particles.slice(0, newSettings.physics.particleCount).map(p => [p.x, p.y, p.velX, p.velY, p.mass]);
         }
 
-        if (rendererChanged) {
+        if (diff.breaks.has(ComponentType.renderer)) {
             const oldCanvas = document.getElementById("canvas");
             const newCanvas = oldCanvas.cloneNode(false);
             oldCanvas.parentNode.replaceChild(newCanvas, oldCanvas);
             oldCanvas.remove();
         }
 
-        if (backendChanged) {
+        if (diff.breaks.has(ComponentType.backend)) {
             this.aheadBuffers = [];
             this.pendingBufferCount = 0;
         }
 
         this.settings = newSettings;
-        this.init({
-            particles,
-            renderer
-        });
+        this.init({particles, renderer}, diff);
     }
 
-    init(state = null) {
-        const initBackend = this.backend === null || this.particles === null;
-        const initRenderer = this.renderer === null;
-        const initDfri = this.dfriHelper === null;
-        const initInteractions = this.canvasInteraction === null;
-        const initDebug = this.debug === null;
-
-        if (initRenderer) {
+    init(state, diff) {
+        if (!diff || diff.breaks.has(ComponentType.renderer)) {
             this.renderer = RendererInitializer.initRenderer(document.getElementById("canvas"), this.settings.render.render, this.settings);
-        } else {
+            this.canvasInteraction = new InteractionHandler(this.renderer);
+            this.canvasInteraction.enable();
+        } else if (diff.affects.has(ComponentType.renderer)) {
             this.renderer.reconfigure(this.settings);
         }
 
-        this.backend = this.backend ?? BackendInitializer.initBackend(this.settings.simulation.backend);
-        this.dfriHelper = this.dfriHelper ?? new DFRIHelper(this.renderer, this.settings);
-        this.canvasInteraction = this.canvasInteraction ?? new InteractionHandler(this.renderer);
-        if (initDebug) {
+        if (!diff || diff.breaks.has(ComponentType.backend)) {
+            this.backend = BackendInitializer.initBackend(this.settings.simulation.backend);
+        }
+
+        if (!diff || diff.breaks.has(ComponentType.dfri)) {
+            this.dfriHelper = this.dfriHelper ?? new DFRIHelper(this.renderer, this.settings);
+        }
+
+        if (!diff || diff.breaks.has(ComponentType.debug)) {
             this.debug = this.debug ?? new Debug(this.renderer, this.backend, this.settings);
         } else {
             this.debug.settings = this.settings;
         }
 
-        if (state?.renderer?.scale) {
-            this.renderer.scale = state.renderer.scale * this.renderer.dpr;
+        if (state?.renderer) {
+            if (state.renderer.scale) {
+                this.renderer.scale = state.renderer.scale * this.renderer.dpr;
+            }
+
+            if (state.renderer.relativeOffset) {
+                const {xCenterOffset: x, yCenterOffset: y} = state.renderer.relativeOffset;
+                this.renderer.setCenterRelativeOffset(x, y);
+            }
         }
 
-        if (state?.renderer?.relativeOffset) {
-            const {xCenterOffset: x, yCenterOffset: y} = state.renderer.relativeOffset;
-            this.renderer.setCenterRelativeOffset(x, y);
-        }
-
-        if (initBackend) {
+        if (!diff || diff.breaks.has(ComponentType.backend)) {
             this.particles = new Array(this.settings.physics.particleCount);
             for (let i = 0; i < this.settings.physics.particleCount; i++) {
                 this.particles[i] = {x: 0, y: 0, velX: 0, velY: 0, mass: 0};
             }
 
             this.backend.init(this.onData.bind(this), this.requestNextStep.bind(this), this.settings, state?.particles);
-        } else {
-            this.backend.reconfigure(this.settings);
+        } else if (diff.affects.has(ComponentType.backend)) {
+            this.backend.reconfigure(this.settings, state?.particles);
         }
 
-        this.lastRenderTime = performance.now() - this.refreshTime;
-        if (initInteractions || initRenderer) {
-            this.canvasInteraction.enable();
-        }
-
-        if (initDfri && this.settings.render.enableDFRI) {
+        if ((!diff || diff.breaks.has(ComponentType.dfri)) && this.settings.render.enableDFRI) {
             this.dfriHelper.enable();
-        } else {
+        } else if (diff?.affects?.has(ComponentType.dfri)) {
             this.dfriHelper.reset();
         }
 
-        if (initBackend) {
+        if (!diff || diff.breaks.has(ComponentType.backend)) {
             this.simulationCtrl.setState(SimulationStateEnum.loading);
         } else {
             this.simulationCtrl.setState(SimulationStateEnum.active);
         }
+
+        this.lastRenderTime = performance.now() - this.refreshTime;
     }
 
     run() {

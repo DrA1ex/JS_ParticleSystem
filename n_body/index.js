@@ -10,5 +10,5 @@ const state = await SettingsUtils.loadState();
 const SettingsInstance = AppSimulationSettings.fromQueryParams(state?.settings);
 
 const ApplicationInstance = new Application(SettingsInstance);
-ApplicationInstance.init(state);
+ApplicationInstance.init(state, null);
 ApplicationInstance.run();

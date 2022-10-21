@@ -57,7 +57,7 @@ export class Debug {
         this.frameLatencySmoother = null;
         this.flopsSmoother = null;
 
-        this.infoElem.remove();
+        this.infoElem?.remove();
     }
 
     drawStats() {

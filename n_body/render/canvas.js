@@ -99,10 +99,6 @@ export class CanvasRenderer extends RendererBase {
         return this.ctx;
     }
 
-    _updateCanvasSize() {
-        super._updateCanvasSize();
-    }
-
     _handleResize() {
         super._handleResize();
 

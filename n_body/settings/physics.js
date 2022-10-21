@@ -1,22 +1,39 @@
-import {Property, SettingsBase} from "./base.js";
+import {ComponentType, Property, SettingsBase} from "./base.js";
 import {ParticleInitType} from "./enum.js";
 
 
 export class PhysicsSettings extends SettingsBase {
     static Properties = {
-        particleInitType: Property.enum("particle_init", ParticleInitType, ParticleInitType.circle).setName("Particle initializer"),
-        particleCount: Property.int("particle_count", null).setExportable(true).setName("Particle count"),
-        particleMassFactor: Property.int("particle_mass", 0).setName("Particle mass factor")
-            .setDescription("Particle mass variance, exponential"),
-        resistance: Property.float("resistance", 1).setExportable(true).setName("Resistance")
-            .setDescription("Resistance of environment, 1 - means no resistance"),
-        gravity: Property.float("g", 1).setExportable(true).setName("Gravity").setDescription("Attraction force"),
-        enableCollision: Property.bool("collision", false).setExportable(true).setName("Collisions")
-            .setDescription("Enable particle collision"),
-        collisionRestitution: Property.float("collision_r", 1).setExportable(true).setName("Collision restitution")
-            .setDescription("Sets collision restitution, 1 - means no energy loss during collision"),
-        minInteractionDistance: Property.float("min_distance", 1).setExportable(true).setName("Min interaction distance")
-            .setDescription("Minimal distance (pixels) to process interactions also determine collision distance"),
+        particleInitType: Property.enum("particle_init", ParticleInitType, ParticleInitType.circle)
+            .setName("Particle initializer")
+            .setBreaks(ComponentType.backend, ComponentType.particles),
+        particleCount: Property.int("particle_count", null)
+            .setExportable(true)
+            .setName("Particle count")
+            .setBreaks(ComponentType.backend, ComponentType.renderer, ComponentType.debug, ComponentType.dfri, ComponentType.particles),
+        particleMassFactor: Property.int("particle_mass", 0)
+            .setName("Particle mass factor").setDescription("Particle mass variance, exponential")
+            .setBreaks(ComponentType.backend, ComponentType.particles),
+        resistance: Property.float("resistance", 1)
+            .setExportable(true)
+            .setName("Resistance").setDescription("Resistance of environment, 1 - means no resistance")
+            .setAffects(ComponentType.backend),
+        gravity: Property.float("g", 1)
+            .setExportable(true)
+            .setName("Gravity").setDescription("Attraction force")
+            .setAffects(ComponentType.backend),
+        enableCollision: Property.bool("collision", false)
+            .setExportable(true)
+            .setName("Collisions").setDescription("Enable particle collision")
+            .setAffects(ComponentType.backend),
+        collisionRestitution: Property.float("collision_r", 1)
+            .setExportable(true)
+            .setName("Collision restitution").setDescription("Sets collision restitution, 1 - means no energy loss during collision")
+            .setAffects(ComponentType.backend),
+        minInteractionDistance: Property.float("min_distance", 1)
+            .setExportable(true)
+            .setName("Min interaction distance").setDescription("Minimal distance (pixels) to process interactions also determine collision distance")
+            .setAffects(ComponentType.backend),
     }
 
 

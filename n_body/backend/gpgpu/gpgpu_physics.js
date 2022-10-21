@@ -2,6 +2,8 @@ import {PhysicsEngine} from "../../simulation/physics.js";
 import * as WebglUtils from "../../utils/webgl.js";
 
 const GL = WebGL2RenderingContext;
+
+let configInitialized = false;
 const CONFIGURATION1 = [{
     program: "calc",
     vs: "./gpgpu/shaders/calc_vs.glsl",
@@ -133,17 +135,21 @@ export class GPUPhysicsEngine extends PhysicsEngine {
     }
 
     async initGl() {
-        const lineSize = Math.ceil(Math.sqrt(this.segmentMaxCount));
-        for (let i = 0; i < CONFIGURATION1.length; i++) {
-            const conf = CONFIGURATION1[i];
-            conf.vs = await fetch(conf.vs).then(r => r.text())
-            conf.fs = await fetch(conf.fs).then(r => r.text());
+        if (!configInitialized) {
+            const lineSize = Math.ceil(Math.sqrt(this.segmentMaxCount));
+            for (let i = 0; i < CONFIGURATION1.length; i++) {
+                const conf = CONFIGURATION1[i];
+                conf.vs = await fetch(conf.vs).then(r => r.text())
+                conf.fs = await fetch(conf.fs).then(r => r.text());
 
-            for (let j = 0; j < conf.textures.length; j++) {
-                conf.textures[j].width = lineSize;
-                conf.textures[j].height = lineSize;
+                for (let j = 0; j < conf.textures.length; j++) {
+                    conf.textures[j].width = lineSize;
+                    conf.textures[j].height = lineSize;
+                }
             }
         }
+
+        configInitialized = true;
 
         for (let i = 0; i < this.segmentMaxCount; i++) {
             this._indexBufferData[i] = i;
@@ -177,12 +183,6 @@ export class GPUPhysicsEngine extends PhysicsEngine {
 
         this.gl.viewport(0, 0, this.settings.world.worldWidth, this.settings.world.worldHeight);
         this.gl.enable(GL.RASTERIZER_DISCARD);
-    }
-
-    canReconfigure(settings) {
-        const segmentCountChanged = this.settings.simulation.segmentMaxCount !== settings.simulation.segmentMaxCount;
-
-        return !segmentCountChanged;
     }
 
     reconfigure(settings) {

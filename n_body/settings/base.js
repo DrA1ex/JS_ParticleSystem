@@ -9,6 +9,17 @@ export const PropertyType = {
     enum: "enum",
 }
 
+/**
+ * @enum{string}
+ */
+export const ComponentType = {
+    backend: "backend",
+    renderer: "renderer",
+    dfri: "dfri",
+    debug: "debug",
+    particles: "particles"
+}
+
 export class PropertyParser {
     static string(prop) {
         return (param) => {
@@ -76,10 +87,14 @@ export class PropertyParser {
 
     static enum(prop) {
         return (param) => {
-            const value = param && param.trim();
-            const enumValue = prop.enumType[value];
+            if (param === undefined) {
+                return prop.defaultValue
+            }
 
-            return enumValue ?? prop.defaultValue;
+            const value = param instanceof String ? param.trim() : param;
+            const entry = Object.entries(prop.enumType).find(([k, v]) => k === value || v === value);
+
+            return entry?.at(1) ?? prop.defaultValue;
         }
     }
 }
@@ -99,6 +114,8 @@ export class Property {
         this.defaultValue = defaultValue;
 
         this.exportable = false;
+        this.affects = [];
+        this.breaks = [];
         this.name = "";
         this.description = "";
 
@@ -136,6 +153,22 @@ export class Property {
 
     setDescription(description) {
         this.description = description;
+        return this;
+    }
+
+    /**
+     * @param {ComponentType} affects
+     */
+    setAffects(...affects) {
+        this.affects = affects;
+        return this;
+    }
+
+    /**
+     * @param {ComponentType} breaks
+     */
+    setBreaks(...breaks) {
+        this.breaks = breaks;
         return this;
     }
 
