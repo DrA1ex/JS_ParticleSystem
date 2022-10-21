@@ -212,7 +212,12 @@ export class SettingsBase {
 
 
     static deserialize(serialized) {
-        return new this(serialized);
+        const values = {};
+        for (const [name, prop] of Object.entries(this.Properties)) {
+            values[name] = prop.parse(serialized[name]);
+        }
+
+        return new this(values);
     }
 
     export() {
