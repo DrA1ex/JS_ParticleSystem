@@ -64,7 +64,7 @@ export class Application {
             this.dfriHelper = null;
         }
 
-        if (rendererChanged) {
+        if (rendererChanged || particleCountChanged) {
             this.canvasInteraction.dispose();
             this.canvasInteraction = null;
 
