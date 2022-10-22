@@ -1,7 +1,6 @@
 import {InputControl} from "./base.js";
 
 export class Select extends InputControl {
-    _onChangeFn = null;
     options = [];
 
     constructor(element) {
@@ -16,15 +15,9 @@ export class Select extends InputControl {
         return this._selected?.key ?? null;
     }
 
-    setOnChange(fn) {
-        this._onChangeFn = fn;
-    }
-
-    _onChangeHandler(e) {
+    _onChangeHandler() {
         this._selected = this.options.find(o => o.strKey === this.element.value);
-        if (this._onChangeFn) {
-            this._onChangeFn(this.selected);
-        }
+        this._emitChanged(this.selected);
     }
 
     /**

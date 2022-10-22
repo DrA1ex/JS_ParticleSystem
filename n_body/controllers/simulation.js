@@ -11,9 +11,10 @@ import {SimulationSequence} from "../simulation/sequence.js";
 import {ITEM_SIZE} from "../backend/base.js";
 import {RecordPanelController} from "./record_panel.js";
 import {RecordSettingsController} from "./record_settings.js";
-import {Dialog} from "../ui/controls/dialog.js";
+import {Dialog, DialogPositionEnum, DialogTypeEnum} from "../ui/controls/dialog.js";
 import {SettingsController} from "./settings.js";
 import {AppSimulationSettings} from "../settings/app.js";
+import {Frame} from "../ui/controls/frame.js";
 
 /**
  * @extends StateControllerBase<SimulationStateEnum>
@@ -26,6 +27,8 @@ export class SimulationController extends StateControllerBase {
         super(root);
 
         this.app = app;
+
+        this.rootContent = Frame.byId("root-content");
 
         this.actionPanelCtrl = new ActionPanelController(document.getElementById("action-panel-content"), this);
         this.actionPanelCtrl.subscribe(this, ActionPanelController.ACTION_EVENT, this._onAction.bind(this));
@@ -51,11 +54,15 @@ export class SimulationController extends StateControllerBase {
 
         this.recordSettingsDialog = Dialog.byId("record-settings", this.recordSettingsCtrl.root);
         this.recordSettingsDialog.setOnDismissed(() => this.setState(SimulationStateEnum.active));
+        this.recordSettingsDialog.type = DialogTypeEnum.closable;
 
         this.settingsCtrl = new SettingsController(document.getElementById("settings-content"), this);
         this.settingsCtrl.subscribe(this, SettingsController.RECONFIGURE_EVENT, (sender, data) => this.reconfigure(data));
 
         this.settingsDialog = Dialog.byId("settings", this.settingsCtrl.root);
+        this.settingsDialog.setOnDismissed(this.onSettingsClosed.bind(this));
+        this.settingsDialog.type = this.app.settings.common.isMobile() ? DialogTypeEnum.modal : DialogTypeEnum.popover;
+        this.settingsDialog.position = this.app.settings.common.isMobile() ? DialogPositionEnum.center : DialogPositionEnum.left;
     }
 
     _onAction(sender, action) {
@@ -80,9 +87,29 @@ export class SimulationController extends StateControllerBase {
             case ActionEnum.settings:
                 this.settingsCtrl.configure(this.app.settings);
                 this.settingsDialog.show();
+                this.actionButton.setVisibility(false);
+                this.actionPanelPopup.setVisibility(false);
+                this._resizeCanvasForSettings();
+                break;
         }
 
         this.actionPanelPopup.hide();
+    }
+
+    onSettingsClosed() {
+        this.actionButton.setVisibility(true);
+        this.actionPanelPopup.setVisibility(true);
+        this._resizeCanvasForSettings();
+    }
+
+    _resizeCanvasForSettings() {
+        if (this.app.settings.common.isMobile()) {
+            return;
+        }
+
+        const rect = this.settingsDialog.dialogElement.getBoundingClientRect();
+        this.rootContent.element.style.width = `calc(100% - ${rect.right}px)`;
+        this.rootContent.element.style.transform = `translateX(${rect.right}px)`
     }
 
     /**
@@ -165,7 +192,6 @@ export class SimulationController extends StateControllerBase {
 
     reconfigure(settings) {
         this.app.reconfigure(AppSimulationSettings.deserialize(settings));
-        this.settingsDialog.hide();
     }
 
     onStateChanged(sender, oldState, newState) {

@@ -183,8 +183,12 @@ input[invalid=true] {
 
 .dialog-container {
     display: none;
-    justify-content: center;
     align-items: center;
+    pointer-events: none;
+}
+
+.dialog-container.dialog-modal {
+    pointer-events: initial;
     background: rgba(0, 0, 0, 0.5);
 }
 
@@ -193,13 +197,14 @@ input[invalid=true] {
 }
 
 .dialog {
+    pointer-events: initial;
     padding: 1em;
+    margin: 1em;
     min-width: 20vw;
     max-width: 80vw;
     max-height: 80vh;
     overflow: auto;
     z-index: 10000;
-
     background: #111111;
     border: 0.1em solid rgba(255, 255, 255, 0.5);
 }
@@ -426,14 +431,17 @@ button:disabled .record-icon {
 }
 
 .record-settings > div,
-.record-settings > select,
-.settings-dialog > div,
-.settings-dialog > select {
+.record-settings > select {
     padding: 0.2em;
 }
 
 .record-settings .warning {
     background: #5e0000;
+}
+
+.settings-dialog .dialog {
+    box-sizing: border-box;
+    max-height: calc(100vh - 2em);
 }
 
 .settings-block {

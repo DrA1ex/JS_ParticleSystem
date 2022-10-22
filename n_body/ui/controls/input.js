@@ -54,6 +54,11 @@ export class Input extends InputControl {
     }
 
     _onChange(e) {
-        this.element.setAttribute("invalid", `${!this.isValid()}`);
+        const valid = this.isValid();
+        this.element.setAttribute("invalid", `${!valid}`);
+
+        if (valid) {
+            this._emitChanged(this.getValue());
+        }
     }
 }

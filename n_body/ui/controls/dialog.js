@@ -2,11 +2,30 @@ import {Control, View} from "./base.js";
 
 const view = await fetch(new URL("./views/dialog.html", import.meta.url)).then(d => d.text());
 
+/**
+ * @enum{number}
+ */
+export const DialogPositionEnum = {
+    center: 0,
+    left: 1,
+    right: 2
+}
+
+/**
+ * @enum{number}
+ */
+export const DialogTypeEnum = {
+    modal: 0,
+    closable: 1,
+    popover: 2,
+}
+
 export class Dialog extends Control {
     _shown = false;
     _onDismissed = null;
 
-    modal = false;
+    position = DialogPositionEnum.center;
+    type = DialogTypeEnum.modal;
 
     get shown() {
         return this._shown;
@@ -45,9 +64,30 @@ export class Dialog extends Control {
             return;
         }
 
-        if (!this.modal) {
-            document.addEventListener("mousedown", this._docClickListener);
-            document.addEventListener("touchstart", this._docClickListener);
+        switch (this.type) {
+            case DialogTypeEnum.modal:
+                this.element.classList.add("dialog-modal");
+                break;
+
+            case DialogTypeEnum.closable:
+                this.element.classList.add("dialog-modal");
+                document.addEventListener("mousedown", this._docClickListener);
+                document.addEventListener("touchstart", this._docClickListener);
+                break;
+        }
+
+        switch (this.position) {
+            case DialogPositionEnum.left:
+                this.element.style.justifyContent = "left";
+                break;
+
+            case DialogPositionEnum.center:
+                this.element.style.justifyContent = "center";
+                break;
+
+            case DialogPositionEnum.right:
+                this.element.style.justifyContent = "right";
+                break;
         }
 
         this._shown = true;
@@ -62,9 +102,11 @@ export class Dialog extends Control {
         this._shown = false;
         this.element.classList.remove("dialog-shown");
 
-        if (!this.modal) {
-            document.removeEventListener("mousedown", this._docClickListener);
-            document.removeEventListener("touchstart", this._docClickListener);
+        switch (this.type) {
+            case DialogTypeEnum.closable:
+                document.removeEventListener("mousedown", this._docClickListener);
+                document.removeEventListener("touchstart", this._docClickListener);
+                break;
         }
     }
 

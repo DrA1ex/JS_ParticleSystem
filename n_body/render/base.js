@@ -33,7 +33,7 @@ export class RendererBase {
         this._hueAngle = 0;
 
         this._resizeObserver = new ResizeObserver(this._handleResize.bind(this));
-        this._resizeObserver.observe(document.body);
+        this._resizeObserver.observe(this.canvas);
     }
 
     reconfigure(settings) {

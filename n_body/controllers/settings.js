@@ -1,6 +1,5 @@
 import {ControllerBase} from "./base.js";
 import {View} from "../ui/controls/base.js";
-import {Button} from "../ui/controls/button.js";
 import {PropertyType} from "../settings/base.js";
 import {Select} from "../ui/controls/select.js";
 import {Input, InputType} from "../ui/controls/input.js";
@@ -20,8 +19,7 @@ export class SettingsController extends ControllerBase {
 
         this.content = this.root.getElementsByClassName("settings-content")[0];
 
-        this.applyBtn = Button.byId("apply");
-        this.applyBtn.setOnClick(() => this.emitEvent(SettingsController.RECONFIGURE_EVENT, this.getConfig()));
+        this._onChangHandler = this.onParameterChanged.bind(this);
     }
 
     /**
@@ -41,6 +39,10 @@ export class SettingsController extends ControllerBase {
                 this._createBlock(this.config[key], group, this.settings[key]);
             }
         }
+    }
+
+    onParameterChanged() {
+        this.emitEvent(SettingsController.RECONFIGURE_EVENT, this.getConfig());
     }
 
     getConfig() {
@@ -95,6 +97,8 @@ export class SettingsController extends ControllerBase {
 
             const control = this._createBlockInput(prop, value[key]);
             control.addClass("settings-input");
+            control.setOnChange(this._onChangHandler);
+
             parent.appendChild(control.element);
 
             config[key] = control;
@@ -107,6 +111,7 @@ export class SettingsController extends ControllerBase {
     /**
      * @param {Property} property
      * @param {*} value
+     * @returns {InputControl}
      * @private
      */
     _createBlockInput(property, value) {
@@ -146,7 +151,6 @@ export class SettingsController extends ControllerBase {
 
     _createCheckbox(value) {
         const e = document.createElement("input");
-        e.type = "checkbox";
         const input = new Checkbox(e);
         input.setValue(value);
 

@@ -43,7 +43,7 @@ export class Debug {
             const div = document.createElement("div");
             div.id = "stats";
 
-            document.body.appendChild(div);
+            document.getElementById("root-content").appendChild(div);
             this.infoElem = div;
         }
     }

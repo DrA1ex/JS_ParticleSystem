@@ -88,19 +88,22 @@ export class Webgl2Renderer extends RendererBase {
     }
 
     initDebugCanvas() {
-        const debugCanvas = document.createElement("canvas");
+        if (!this.debugCanvas) {
+            const debugCanvas = document.createElement("canvas");
 
-        debugCanvas.style.position = "absolute";
-        debugCanvas.style.top = "0";
-        debugCanvas.style.left = "0";
-        debugCanvas.style.width = "100%"
-        debugCanvas.style.height = "100%"
-        debugCanvas.style.pointerEvents = "none";
+            debugCanvas.style.position = "absolute";
+            debugCanvas.style.top = "0";
+            debugCanvas.style.left = "0";
+            debugCanvas.style.width = "100%"
+            debugCanvas.style.height = "100%"
+            debugCanvas.style.pointerEvents = "none";
 
-        document.body.appendChild(debugCanvas);
+            document.body.appendChild(debugCanvas);
 
-        this.debugCanvas = debugCanvas;
-        this.debugCtx = this.debugCanvas.getContext("2d");
+            this.debugCanvas = debugCanvas;
+            this.debugCtx = this.debugCanvas.getContext("2d");
+        }
+
         this._updateDebugCanvasSize();
     }
 

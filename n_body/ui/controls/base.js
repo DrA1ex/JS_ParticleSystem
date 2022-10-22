@@ -84,31 +84,48 @@ export class View {
             parent = true;
         }
 
+        const originalClasses = this.element.classList;
+
         this.element.outerHTML = outerHTML;
         this.element = parent ? ref.firstElementChild : ref.nextElementSibling;
+
+        this.element.classList.add(...originalClasses);
     }
 
 }
 
 
 export class InputControl extends Control {
+    _onChangeFn = null;
 
     /**
      * @param {HTMLInputElement} element
      */
     constructor(element) {
         super(element);
-
     }
 
     /**
      * @abstract
      */
     getValue() {
-
     }
 
     setValue(value) {
         this.element.value = value;
+    }
+
+    setOnChange(fn) {
+        this._onChangeFn = fn;
+    }
+
+    /**
+     * @param {*} value
+     * @protected
+     */
+    _emitChanged(value) {
+        if (this._onChangeFn) {
+            this._onChangeFn(value);
+        }
     }
 }
