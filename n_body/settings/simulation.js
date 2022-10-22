@@ -5,13 +5,13 @@ export class SimulationSettings extends SettingsBase {
     static Properties = {
         backend: Property.enum("backend", BackendType, BackendType.worker)
             .setName("Backend").setDescription("Choice backend to calculate particle interactions")
-            .setBreaks(ComponentType.backend, ComponentType.debug),
+            .setBreaks(ComponentType.backend, ComponentType.dfri, ComponentType.debug),
         segmentDivider: Property.int("segment_divider", 2)
             .setName("Segment divider").setDescription("Spatial subdivision factor while segmentation, larger values increase accuracy")
-            .setAffects(ComponentType.backend),
+            .setAffects(ComponentType.backend, ComponentType.dfri),
         segmentSize: Property.int("segment_max_count", null)
             .setName("Segment size").setDescription(" Max particle count in segment, larger values increase accuracy")
-            .setBreaks(ComponentType.backend)
+            .setBreaks(ComponentType.backend, ComponentType.dfri)
             .setAffects(ComponentType.debug),
         segmentRandomness: Property.float("segment_random", 0.25)
             .setName("Segmentation randomness").setDescription("Spatial subdivision randomness factor")
