@@ -98,7 +98,8 @@ export class Webgl2Renderer extends RendererBase {
             debugCanvas.style.height = "100%"
             debugCanvas.style.pointerEvents = "none";
 
-            document.body.appendChild(debugCanvas);
+            const root = document.getElementById("root-content") ?? document.body;
+            root.appendChild(debugCanvas);
 
             this.debugCanvas = debugCanvas;
             this.debugCtx = this.debugCanvas.getContext("2d");
