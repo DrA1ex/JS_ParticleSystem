@@ -174,7 +174,32 @@ export class RendererBase {
     }
 
     _handleResize() {
+        const oldWidth = this.canvasWidth;
+        const oldHeight = this.canvasHeight;
+        const oldPos = this.centeredRelativeOffset();
+
         this._updateCanvasSize();
+
+        const xDiff = this.canvasWidth / oldWidth;
+        const yDiff = this.canvasHeight / oldHeight;
+
+        let resizeScale;
+        if (this.canvasWidth !== oldWidth && this.canvasHeight === this.canvasHeight) {
+            resizeScale = this.canvasWidth / oldWidth;
+        } else if (this.canvasWidth === oldWidth && this.canvasHeight !== this.canvasHeight) {
+            resizeScale = this.canvasHeight / oldHeight;
+        } else {
+            const xDiff = this.canvasWidth / oldWidth;
+            const yDiff = this.canvasHeight / oldHeight;
+            if (Math.abs(1 - xDiff) > Math.abs(1 - yDiff)) {
+                resizeScale = xDiff;
+            } else {
+                resizeScale = yDiff
+            }
+        }
+
+        this.scale *= resizeScale;
+        this.setCenterRelativeOffset(oldPos.xCenterOffset, oldPos.yCenterOffset);
     }
 
     _updateCanvasSize() {
