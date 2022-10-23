@@ -109,8 +109,8 @@ input[type=checkbox] {
     display: flex;
     justify-content: center;
     align-items: center;
-    width: 1.2em;
-    height: 1.2em;
+    width: 2.8em;
+    height: 1.4em;
     border: 0.1em solid #c8c8c8;
     border-radius: 0;
     background: transparent;
@@ -119,11 +119,19 @@ input[type=checkbox] {
     color: red;
 }
 
-input:checked::before {
+input[type=checkbox]::before {
     content: "";
-    background: rgb(41, 127, 255);
-    width: 0.8em;
-    height: 0.8em;
+    transform: translateX(-70%);
+    background: #c8c8c8;
+    width: 1em;
+    height: 1em;
+    transition: transform 100ms, background-color 100ms ease;
+}
+
+
+input[type=checkbox]:checked::before {
+    transform: translateX(70%);
+    background: #297fff;
 }
 
 input:focus {
