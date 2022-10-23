@@ -54,8 +54,8 @@ export class Select extends InputControl {
     }
 
     select(key) {
-        if (this.selected) {
-            this.selected.e.removeAttribute("selected");
+        if (this._selected) {
+            this._selected.e.removeAttribute("selected");
         }
 
         const option = this.options.find(o => o.key === key || o.strKey === key);
