@@ -38,7 +38,6 @@ export class SimulationController extends StateControllerBase {
         this.actionButton = Button.byId("action-button");
         this.actionPanelPopup.anchor = this.actionButton.element;
         this.actionButton.setOnClick(() => this.actionPanelPopup.show());
-        this.actionButton.setVisibility(false);
 
         this.loadingScreen = Control.byId("loading-screen");
 
@@ -212,14 +211,12 @@ export class SimulationController extends StateControllerBase {
             case SimulationStateEnum.active:
                 this.loadingScreen.setVisibility(false);
                 this.hintLabel.setVisibility(true);
-                this.actionButton.setVisibility(true);
                 break;
 
             case SimulationStateEnum.loading:
             case SimulationStateEnum.reconfigure:
                 this.loadingScreen.setVisibility(true);
                 this.hintLabel.setVisibility(false);
-                this.actionButton.setVisibility(false);
                 break;
 
             case SimulationStateEnum.recording:
