@@ -4,6 +4,7 @@ import {PropertyType} from "../settings/base.js";
 import {Select} from "../ui/controls/select.js";
 import {Input, InputType} from "../ui/controls/input.js";
 import {Checkbox} from "../ui/controls/checkbox.js";
+import {AppSimulationSettings} from "../settings/app.js";
 
 const view = await fetch(new URL("./views/settings.html", import.meta.url)).then(d => d.text());
 
@@ -18,8 +19,6 @@ export class SettingsController extends ControllerBase {
         super(viewControl.element, parentCtrl);
 
         this.content = this.root.getElementsByClassName("settings-content")[0];
-
-        this._onChangHandler = this.onParameterChanged.bind(this);
     }
 
     /**
@@ -36,13 +35,15 @@ export class SettingsController extends ControllerBase {
         for (const [key, group] of Object.entries(this.settings.constructor.Types)) {
             if (group.name) {
                 this.config[key] = {};
-                this._createBlock(this.config[key], group, this.settings[key]);
+                this._createBlock(this.config[key], key, group, this.settings[key]);
             }
         }
     }
 
-    onParameterChanged() {
-        this.emitEvent(SettingsController.RECONFIGURE_EVENT, this.getConfig());
+    onParameterChanged(sender, groupKey, propKey) {
+        const config = this.getConfig();
+        sender.setValue(config[groupKey][propKey]);
+        this.emitEvent(SettingsController.RECONFIGURE_EVENT, config);
     }
 
     getConfig() {
@@ -62,28 +63,29 @@ export class SettingsController extends ControllerBase {
             config[blockKey] = blockConfig;
         }
 
-        return config;
+        return AppSimulationSettings.deserialize(config);
     }
 
-    _createBlock(config, group, value) {
+    _createBlock(config, groupKey, group, value) {
         const h3 = document.createElement("h3");
         h3.innerText = group.name;
         this.content.appendChild(h3);
 
         const block = document.createElement("div");
         block.classList.add("settings-block");
-        this._createBlockEntry(config, group, block, value);
+        this._createBlockEntry(config, groupKey, group, block, value);
         this.content.appendChild(block);
     }
 
     /**
      * @param {object} config
+     * @param {string} groupKey
      * @param {SettingsGroup} group
      * @param {HTMLElement} parent
      * @param {SettingsBase} value
      * @private
      */
-    _createBlockEntry(config, group, parent, value) {
+    _createBlockEntry(config, groupKey, group, parent, value) {
         let count = 0;
         for (const [key, prop] of Object.entries(value.constructor.Properties)) {
             const caption = document.createElement("div");
@@ -97,7 +99,7 @@ export class SettingsController extends ControllerBase {
 
             const control = this._createBlockInput(prop, value[key]);
             control.addClass("settings-input");
-            control.setOnChange(this._onChangHandler);
+            control.setOnChange(() => this.onParameterChanged(control, groupKey, key));
 
             parent.appendChild(control.element);
 

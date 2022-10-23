@@ -21,7 +21,8 @@ export class SimulationSettings extends SettingsBase {
             .setConstraints(0, 1),
         bufferCount: Property.int("buffers", 3)
             .setName("Buffer count").setDescription("How many physics frames will be requested ahead of time")
-            .setBreaks(ComponentType.backend, ComponentType.debug),
+            .setBreaks(ComponentType.backend, ComponentType.debug)
+            .setConstraints(1, 20),
     }
 
     get backend() {return this.config.backend;}

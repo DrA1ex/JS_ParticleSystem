@@ -13,7 +13,6 @@ import {RecordPanelController} from "./record_panel.js";
 import {RecordSettingsController} from "./record_settings.js";
 import {Dialog, DialogPositionEnum, DialogTypeEnum} from "../ui/controls/dialog.js";
 import {SettingsController} from "./settings.js";
-import {AppSimulationSettings} from "../settings/app.js";
 import {Frame} from "../ui/controls/frame.js";
 
 /**
@@ -22,6 +21,7 @@ import {Frame} from "../ui/controls/frame.js";
 export class SimulationController extends StateControllerBase {
     _exportSequence = null;
     _exportFrameNumber = 0;
+    _reconfigureTimer = 0;
 
     constructor(root, app) {
         super(root);
@@ -196,7 +196,15 @@ export class SimulationController extends StateControllerBase {
     }
 
     reconfigure(settings) {
-        this.app.reconfigure(AppSimulationSettings.deserialize(settings));
+        if (this.currentState === SimulationStateEnum.active) {
+            this.app.reconfigure(settings);
+        } else {
+            if (this._reconfigureTimer) {
+                clearTimeout(this._reconfigureTimer);
+            }
+
+            this._reconfigureTimer = setTimeout(() => this.reconfigure(settings), 1000);
+        }
     }
 
     onStateChanged(sender, oldState, newState) {
