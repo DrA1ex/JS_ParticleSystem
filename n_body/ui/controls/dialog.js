@@ -48,7 +48,7 @@ export class Dialog extends Control {
         this.dialogElement.appendChild(this.contentNode);
 
         for (const el of this.contentNode.getElementsByClassName("dialog-close")) {
-            el.onclick = this._dismissed.bind(this);
+            el.onclick = this.hide.bind(this);
         }
 
         this._docClickListener = this._onDocumentClick.bind(this);
@@ -79,14 +79,17 @@ export class Dialog extends Control {
         switch (this.position) {
             case DialogPositionEnum.left:
                 this.element.style.justifyContent = "left";
+                this.dialogElement.style.animationName = "dialog-show-left";
                 break;
 
             case DialogPositionEnum.center:
                 this.element.style.justifyContent = "center";
+                this.dialogElement.style.animationName = "dialog-show-center";
                 break;
 
             case DialogPositionEnum.right:
                 this.element.style.justifyContent = "right";
+                this.dialogElement.style.animationName = "dialog-show-right";
                 break;
         }
 
@@ -99,15 +102,24 @@ export class Dialog extends Control {
             return;
         }
 
-        this._shown = false;
-        this.element.classList.remove("dialog-shown");
-
         switch (this.type) {
             case DialogTypeEnum.closable:
                 document.removeEventListener("mousedown", this._docClickListener);
                 document.removeEventListener("touchstart", this._docClickListener);
                 break;
         }
+
+        this.element.classList.remove("dialog-shown");
+        this.dialogElement.onanimationend = () => {
+            this.dialogElement.onanimationend = null;
+            this.element.classList.remove("dialog-fading");
+
+            this._shown = false;
+            this._dismissed();
+        }
+        setTimeout(() => {
+            this.element.classList.add("dialog-fading")
+        });
     }
 
     _onDocumentClick(e) {
@@ -115,12 +127,10 @@ export class Dialog extends Control {
             return;
         }
 
-        this._dismissed();
+        this.hide();
     }
 
     _dismissed() {
-        this.hide();
-
         if (this._onDismissed) {
             this._onDismissed();
         }

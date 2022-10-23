@@ -134,7 +134,6 @@ input[invalid=true] {
     border-color: rgb(255, 41, 41);
 }
 
-
 .fill {
     position: absolute;
     top: 0;
@@ -192,7 +191,8 @@ input[invalid=true] {
     background: rgba(0, 0, 0, 0.5);
 }
 
-.dialog-container.dialog-shown {
+.dialog-container.dialog-shown,
+.dialog-container.dialog-fading {
     display: flex;
 }
 
@@ -207,6 +207,17 @@ input[invalid=true] {
     z-index: 10000;
     background: #111111;
     border: 0.1em solid rgba(255, 255, 255, 0.5);
+}
+
+.dialog-shown .dialog {
+    animation: 225ms;
+    animation-name: dialog-show-center;
+    animation-timing-function: ease-out;
+}
+
+.dialog-fading .dialog {
+    animation: 195ms reverse;
+    animation-timing-function: ease-in;
 }
 
 .dialog .dialog-caption {
@@ -530,5 +541,56 @@ button:disabled .record-icon {
     100% {
         transform: scale(0.95);
         box-shadow: 0 0 0 0 rgba(var(--color), 0);
+    }
+}
+
+@keyframes dialog-show-center {
+    0% {
+        opacity: 0;
+        transform: scale(1);
+    }
+
+    5% {
+        transform: scale(0.8);
+    }
+
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes dialog-show-left {
+    0% {
+        opacity: 0;
+        transform: translateX(0);
+    }
+
+    5% {
+        transform: translateX(-50%);
+    }
+
+
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes dialog-show-right {
+    0% {
+        opacity: 0;
+        transform: translateX(0);
+    }
+
+    5% {
+        transform: translateX(50%);
+    }
+
+
+    100% {
+        opacity: 1;
+        transform: translateX(0);
     }
 }
