@@ -104,6 +104,11 @@ input[type=text] {
     font-family: system-ui;
 }
 
+input[type=text]:disabled {
+    border-color: #8a8a8a;
+    color: #8a8a8a;
+}
+
 input[type=checkbox] {
     margin: 0;
     display: flex;
@@ -126,6 +131,14 @@ input[type=checkbox]::before {
     width: 1em;
     height: 1em;
     transition: transform 100ms, background-color 100ms ease;
+}
+
+input[type=checkbox]:disabled {
+    border-color: #8a8a8a;
+}
+
+input[type=checkbox]:disabled::before {
+    background: #8a8a8a !important;
 }
 
 

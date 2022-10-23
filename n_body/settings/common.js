@@ -21,6 +21,10 @@ export class CommonSettings extends SettingsBase {
             .setBreaks(ComponentType.debug),
     }
 
+    static PropertiesDependencies = new Map([
+        [this.Properties.debug, [this.Properties.debugTree, this.Properties.debugVelocity, this.Properties.debugForce]]
+    ]);
+
     get debug() {return this.config.debug};
     get debugTree() {return this.config.debugTree;}
     get debugVelocity() {return this.config.debugVelocity;}

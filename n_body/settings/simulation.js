@@ -1,4 +1,4 @@
-import {ComponentType, Property, SettingsBase} from "./base.js";
+import {ComponentType, Property, ReadOnlyProperty, SettingsBase} from "./base.js";
 import {BackendType} from "./enum.js";
 
 export class SimulationSettings extends SettingsBase {
@@ -24,6 +24,15 @@ export class SimulationSettings extends SettingsBase {
             .setBreaks(ComponentType.backend, ComponentType.debug)
             .setConstraints(1, 20),
     }
+
+    static ReadOnlyProperties = {
+        segmentMaxCount: ReadOnlyProperty.float().setName("Actual segment size"),
+    }
+
+    static PropertiesDependencies = new Map([
+        [this.Properties.backend, [this.ReadOnlyProperties.segmentMaxCount]],
+        [this.Properties.segmentSize, [this.ReadOnlyProperties.segmentMaxCount]],
+    ]);
 
     get backend() {return this.config.backend;}
     get segmentDivider() {return this.config.segmentDivider;}

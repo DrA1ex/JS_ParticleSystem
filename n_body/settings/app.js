@@ -126,7 +126,7 @@ class AppSettingsBase {
 export class AppSimulationSettings extends AppSettingsBase {
     static Types = {
         common: SettingsGroup.of(CommonSettings).setName("Common"),
-        world: SettingsGroup.of(WorldSettings),
+        world: SettingsGroup.of(WorldSettings).setName("World"),
         simulation: SettingsGroup.of(SimulationSettings).setName("Simulation"),
         physics: SettingsGroup.of(PhysicsSettings).setName("Physics"),
         render: SettingsGroup.of(RenderSettings).setName("Render"),

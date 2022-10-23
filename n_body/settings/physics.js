@@ -1,4 +1,4 @@
-import {ComponentType, Property, SettingsBase} from "./base.js";
+import {ComponentType, Property, ReadOnlyProperty, SettingsBase} from "./base.js";
 import {ParticleInitType} from "./enum.js";
 
 
@@ -41,6 +41,17 @@ export class PhysicsSettings extends SettingsBase {
             .setAffects(ComponentType.backend)
             .setConstraints(1e-6, 1e3),
     }
+
+    static ReadOnlyProperties = {
+        particleGravity: ReadOnlyProperty.float().setName("Particle Gravity"),
+        particleMass: ReadOnlyProperty.bool().setName("Max particle mass")
+    }
+
+    static PropertiesDependencies = new Map([
+        [this.Properties.enableCollision, [this.Properties.collisionRestitution]],
+        [this.Properties.gravity, [this.ReadOnlyProperties.particleGravity]],
+        [this.Properties.particleMassFactor, [this.ReadOnlyProperties.particleMass]],
+    ]);
 
 
     get particleInitType() {return this.config.particleInitType;}

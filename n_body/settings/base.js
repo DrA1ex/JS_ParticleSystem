@@ -101,7 +101,7 @@ export class PropertyParser {
 
 export class Property {
     /**
-     * @param {string} key
+     * @param {string} [key]
      * @param {PropertyType} [type=PropertyType.string]
      * @param {*} [enumType=null]
      * @param {*} [defaultValue=null]
@@ -201,6 +201,19 @@ export class Property {
     }
 }
 
+export class ReadOnlyProperty extends Property {
+    constructor(type = PropertyType.string, enumType = null) {
+        super("", type, enumType);
+    }
+
+    static string() { return new ReadOnlyProperty(PropertyType.string);}
+    static bool() { return new ReadOnlyProperty(PropertyType.bool);}
+    static int() { return new ReadOnlyProperty(PropertyType.int);}
+    static float() { return new ReadOnlyProperty(PropertyType.float);}
+    static enum(enumType) { return new ReadOnlyProperty(PropertyType.enum, enumType);}
+}
+
+
 export class QueryParameterParser {
     static parse(type, defaults) {
         const urlSearchParams = new URLSearchParams(window.location.search);
@@ -220,8 +233,26 @@ export class QueryParameterParser {
 }
 
 export class SettingsBase {
-    /** @abstract */
+    /**
+     *  @abstract
+     *
+     *  @type {{[string]: Property}}
+     */
     static Properties = {};
+
+    /**
+     *  @abstract
+     *
+     *  @type {{[string]: ReadOnlyProperty}}
+     */
+    static ReadOnlyProperties = {};
+
+    /**
+     * @abstract
+     *
+     * @type {Map<Property, Array<Property|ReadOnlyProperty>>}
+     */
+    static PropertiesDependencies = new Map();
 
     isMobile() {
         if (globalThis.window) {

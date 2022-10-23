@@ -1,18 +1,23 @@
 import {ControllerBase} from "./base.js";
 import {View} from "../ui/controls/base.js";
-import {PropertyType} from "../settings/base.js";
+import {PropertyType, ReadOnlyProperty} from "../settings/base.js";
 import {Select} from "../ui/controls/select.js";
 import {Input, InputType} from "../ui/controls/input.js";
 import {Checkbox} from "../ui/controls/checkbox.js";
 import {AppSimulationSettings} from "../settings/app.js";
+import {Label} from "../ui/controls/label.js";
 
 const view = await fetch(new URL("./views/settings.html", import.meta.url)).then(d => d.text());
 
 export class SettingsController extends ControllerBase {
     static RECONFIGURE_EVENT = "start_recording";
 
+    /** @type {AppSettingsBase} */
     settings;
+    /** @type {{[string]: {[string]: InputControl}}} */
     config;
+    /** @type {Map<Property, {key: string, groupKey: string, group: SettingsGroup, control: InputControl}>} */
+    propData;
 
     constructor(root, parentCtrl) {
         const viewControl = new View(root, view)
@@ -27,6 +32,7 @@ export class SettingsController extends ControllerBase {
     configure(settings) {
         this.settings = settings;
         this.config = {};
+        this.propData = new Map();
 
         while (this.content.firstChild) {
             this.content.removeChild(this.content.lastChild);
@@ -38,12 +44,45 @@ export class SettingsController extends ControllerBase {
                 this._createBlock(this.config[key], key, group, this.settings[key]);
             }
         }
+
+        for (const prop of this.propData.keys()) {
+            const {key, groupKey} = this.propData.get(prop);
+            const deps = this.settings[groupKey].constructor.PropertiesDependencies.get(prop);
+            if (deps && deps.length > 0) {
+                for (const depProp of deps) {
+                    if (!(depProp instanceof ReadOnlyProperty)) {
+                        const value = this.settings[groupKey][key];
+                        this.propData.get(depProp).control.setEnabled(!!value);
+                    }
+                }
+            }
+        }
     }
 
-    onParameterChanged(sender, groupKey, propKey) {
+    onParameterChanged(prop, suppressEvent = false) {
         const config = this.getConfig();
-        sender.setValue(config[groupKey][propKey]);
-        this.emitEvent(SettingsController.RECONFIGURE_EVENT, config);
+        const {control, key, groupKey} = this.propData.get(prop);
+        const value = config[groupKey][key];
+
+        if (prop instanceof ReadOnlyProperty) {
+            control.setText(value);
+        } else {
+            control.setValue(value);
+            if (!suppressEvent) {
+                this.emitEvent(SettingsController.RECONFIGURE_EVENT, config);
+            }
+
+            const deps = config[groupKey].constructor.PropertiesDependencies.get(prop);
+            if (deps && deps.length > 0) {
+                for (const depProp of deps) {
+                    this.onParameterChanged(depProp, true);
+
+                    if (!(depProp instanceof ReadOnlyProperty)) {
+                        this.propData.get(depProp).control.setEnabled(!!value);
+                    }
+                }
+            }
+        }
     }
 
     getConfig() {
@@ -73,7 +112,7 @@ export class SettingsController extends ControllerBase {
 
         const block = document.createElement("div");
         block.classList.add("settings-block");
-        this._createBlockEntry(config, groupKey, group, block, value);
+        this._createBlockEntries(config, groupKey, group, block, value);
         this.content.appendChild(block);
     }
 
@@ -82,12 +121,12 @@ export class SettingsController extends ControllerBase {
      * @param {string} groupKey
      * @param {SettingsGroup} group
      * @param {HTMLElement} parent
-     * @param {SettingsBase} value
+     * @param {SettingsBase} groupValue
      * @private
      */
-    _createBlockEntry(config, groupKey, group, parent, value) {
+    _createBlockEntries(config, groupKey, group, parent, groupValue) {
         let count = 0;
-        for (const [key, prop] of Object.entries(value.constructor.Properties)) {
+        for (const [key, prop] of Object.entries(groupValue.constructor.Properties)) {
             const caption = document.createElement("div");
             caption.innerText = prop.name || key;
             caption.classList.add("settings-caption")
@@ -97,13 +136,44 @@ export class SettingsController extends ControllerBase {
             parent.appendChild(caption);
 
 
-            const control = this._createBlockInput(prop, value[key]);
+            const control = this._createBlockInput(prop, groupValue[key]);
             control.addClass("settings-input");
-            control.setOnChange(() => this.onParameterChanged(control, groupKey, key));
+            control.setOnChange(() => this.onParameterChanged(prop));
+
+            this.propData.set(prop, {
+                key,
+                groupKey,
+                group,
+                control
+            });
 
             parent.appendChild(control.element);
 
             config[key] = control;
+            count += 1;
+        }
+
+        for (const [key, prop] of Object.entries(groupValue.constructor.ReadOnlyProperties)) {
+            const caption = document.createElement("div");
+            caption.innerText = prop.name || key;
+            caption.classList.add("settings-caption")
+            if (prop.description) {
+                caption.setAttribute("data-tooltip", prop.description);
+            }
+            parent.appendChild(caption);
+
+            const label = new Label(document.createElement("div"));
+            label.setText(groupValue[key]);
+            label.addClass("settings-input");
+            parent.appendChild(label.element);
+
+            this.propData.set(prop, {
+                key,
+                groupKey,
+                group,
+                control: label
+            });
+
             count += 1;
         }
 

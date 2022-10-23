@@ -32,6 +32,11 @@ export class RenderSettings extends SettingsBase {
             .setConstraints(1, 240),
     };
 
+    static PropertiesDependencies = new Map([
+        [this.Properties.useDpr, [this.Properties.dprRate]],
+        [this.Properties.enableDFRI, [this.Properties.DFRIMaxFrames]]
+    ]);
+
     get render() {return this.config.render}
     get useDpr() {return this.config.useDpr}
     get enableFilter() {return this.config.enableFilter}
