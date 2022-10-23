@@ -10,18 +10,22 @@ export class PhysicsSettings extends SettingsBase {
         particleCount: Property.int("particle_count", null)
             .setExportable(true)
             .setName("Particle count")
-            .setBreaks(ComponentType.backend, ComponentType.renderer, ComponentType.debug, ComponentType.dfri, ComponentType.particles),
+            .setBreaks(ComponentType.backend, ComponentType.renderer, ComponentType.debug, ComponentType.dfri, ComponentType.particles)
+            .setConstraints(2, Number.MAX_SAFE_INTEGER),
         particleMassFactor: Property.int("particle_mass", 0)
             .setName("Particle mass factor").setDescription("Particle mass variance, exponential")
-            .setBreaks(ComponentType.backend, ComponentType.particles),
+            .setBreaks(ComponentType.backend, ComponentType.particles)
+            .setConstraints(0, 24),
         resistance: Property.float("resistance", 1)
             .setExportable(true)
             .setName("Resistance").setDescription("Resistance of environment, 1 - means no resistance")
-            .setAffects(ComponentType.backend),
+            .setAffects(ComponentType.backend)
+            .setConstraints(0.01, 1),
         gravity: Property.float("g", 1)
             .setExportable(true)
             .setName("Gravity").setDescription("Attraction force")
-            .setAffects(ComponentType.backend),
+            .setAffects(ComponentType.backend)
+            .setConstraints(1e-6, 1e6),
         enableCollision: Property.bool("collision", false)
             .setExportable(true)
             .setName("Collisions").setDescription("Enable particle collision")
@@ -29,11 +33,13 @@ export class PhysicsSettings extends SettingsBase {
         collisionRestitution: Property.float("collision_r", 1)
             .setExportable(true)
             .setName("Collision restitution").setDescription("Sets collision restitution, 1 - means no energy loss during collision")
-            .setAffects(ComponentType.backend),
+            .setAffects(ComponentType.backend)
+            .setConstraints(0, 2),
         minInteractionDistance: Property.float("min_distance", 1)
             .setExportable(true)
             .setName("Min interaction distance").setDescription("Minimal distance (pixels) to process interactions also determine collision distance")
-            .setAffects(ComponentType.backend),
+            .setAffects(ComponentType.backend)
+            .setConstraints(1e-6, 1e3),
     }
 
 
@@ -57,8 +63,6 @@ export class PhysicsSettings extends SettingsBase {
         if (!this.particleCount) {
             this.config.particleCount = this.isMobile() ? 10000 : 20000;
         }
-
-        this.config.resistance = Math.max(0.001, Math.min(1, this.resistance));
 
         let totalMass = this.particleCount;
         if (this.particleMassFactor > 0) {

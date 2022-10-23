@@ -53,14 +53,14 @@ export class SimulationController extends StateControllerBase {
             () => this.setState(SimulationStateEnum.recording));
 
         this.recordSettingsDialog = Dialog.byId("record-settings", this.recordSettingsCtrl.root);
-        this.recordSettingsDialog.setOnDismissed(() => this.setState(SimulationStateEnum.active));
+        this.recordSettingsDialog.setOnDismissed(this._onRecordSettingsClosed.bind(this));
         this.recordSettingsDialog.type = DialogTypeEnum.closable;
 
         this.settingsCtrl = new SettingsController(document.getElementById("settings-content"), this);
         this.settingsCtrl.subscribe(this, SettingsController.RECONFIGURE_EVENT, (sender, data) => this.reconfigure(data));
 
         this.settingsDialog = Dialog.byId("settings", this.settingsCtrl.root);
-        this.settingsDialog.setOnDismissed(this.onSettingsClosed.bind(this));
+        this.settingsDialog.setOnDismissed(this._onSettingsClosed.bind(this));
         this.settingsDialog.type = this.app.settings.common.isMobile() ? DialogTypeEnum.modal : DialogTypeEnum.popover;
         this.settingsDialog.position = this.app.settings.common.isMobile() ? DialogPositionEnum.center : DialogPositionEnum.left;
     }
@@ -96,7 +96,13 @@ export class SimulationController extends StateControllerBase {
         this.actionPanelPopup.hide();
     }
 
-    onSettingsClosed() {
+    _onRecordSettingsClosed() {
+        if (this.currentState === SimulationStateEnum.paused) {
+            this.setState(SimulationStateEnum.active)
+        }
+    }
+
+    _onSettingsClosed() {
         this.actionButton.setVisibility(true);
         this.actionPanelPopup.setVisibility(true);
         this._resizeCanvasForSettings();

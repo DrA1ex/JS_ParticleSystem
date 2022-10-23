@@ -8,14 +8,17 @@ export class SimulationSettings extends SettingsBase {
             .setBreaks(ComponentType.backend, ComponentType.dfri, ComponentType.debug),
         segmentDivider: Property.int("segment_divider", 2)
             .setName("Segment divider").setDescription("Spatial subdivision factor while segmentation, larger values increase accuracy")
-            .setAffects(ComponentType.backend, ComponentType.dfri),
+            .setAffects(ComponentType.backend, ComponentType.dfri)
+            .setConstraints(2, 16),
         segmentSize: Property.int("segment_max_count", null)
             .setName("Segment size").setDescription(" Max particle count in segment, larger values increase accuracy")
             .setBreaks(ComponentType.backend, ComponentType.dfri)
-            .setAffects(ComponentType.debug),
+            .setAffects(ComponentType.debug)
+            .setConstraints(1, 1e6),
         segmentRandomness: Property.float("segment_random", 0.25)
             .setName("Segmentation randomness").setDescription("Spatial subdivision randomness factor")
-            .setAffects(ComponentType.backend),
+            .setAffects(ComponentType.backend)
+            .setConstraints(0, 1),
         bufferCount: Property.int("buffers", 3)
             .setName("Buffer count").setDescription("How many physics frames will be requested ahead of time")
             .setBreaks(ComponentType.backend, ComponentType.debug),
@@ -37,9 +40,7 @@ export class SimulationSettings extends SettingsBase {
 
         this.config.segmentMaxCount = this.segmentSize;
         if (this.backend === BackendType.gpgpu) {
-            this.config.segmentMaxCount = Math.pow(this.segmentSize, 2);
+            this.config.segmentMaxCount = Math.pow(Math.min(this.segmentSize, 1024), 2);
         }
-
-        this.config.segmentRandomness = Math.max(0, Math.min(1, this.segmentRandomness));
     }
 }

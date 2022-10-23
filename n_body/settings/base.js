@@ -52,14 +52,14 @@ export class PropertyParser {
     static int(prop) {
         return (param) => {
             if (Number.isInteger(param)) {
-                return param;
+                return Math.min(prop.max ?? param, Math.max(prop.min ?? param, param));
             }
 
             const value = param && param.trim();
             if (value && value.length > 0) {
                 const parsed = Number.parseInt(value);
                 if (Number.isFinite(parsed)) {
-                    return parsed;
+                    return Math.min(prop.max ?? parsed, Math.max(prop.min ?? parsed, parsed));
                 }
             }
 
@@ -70,14 +70,14 @@ export class PropertyParser {
     static float(prop) {
         return (param) => {
             if (Number.isFinite(param)) {
-                return param;
+                return Math.min(prop.max ?? param, Math.max(prop.min ?? param, param));
             }
 
             const value = param && param.trim();
             if (value && value.length > 0) {
                 const parsed = Number.parseFloat(value);
                 if (Number.isFinite(parsed)) {
-                    return parsed;
+                    return Math.min(prop.max ?? parsed, Math.max(prop.min ?? parsed, parsed));
                 }
             }
 
@@ -118,6 +118,8 @@ export class Property {
         this.breaks = [];
         this.name = "";
         this.description = "";
+        this.min = null;
+        this.max = null;
 
         if (this.type === PropertyType.enum) {
             if (!this.enumType) {
@@ -169,6 +171,12 @@ export class Property {
      */
     setBreaks(...breaks) {
         this.breaks = breaks;
+        return this;
+    }
+
+    setConstraints(min, max) {
+        this.min = min;
+        this.max = max;
         return this;
     }
 
