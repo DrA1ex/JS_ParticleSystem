@@ -1,3 +1,6 @@
+import * as EnumUtils from "../utils/enum.js";
+
+
 /**
  * @enum{string}
  */
@@ -103,7 +106,7 @@ export class Property {
     /**
      * @param {string} [key]
      * @param {PropertyType} [type=PropertyType.string]
-     * @param {*} [enumType=null]
+     * @param {Enum} [enumType=null]
      * @param {*} [defaultValue=null]
      */
     constructor(key, type = PropertyType.string, enumType = null, defaultValue = null) {
@@ -291,7 +294,11 @@ export class SettingsBase {
         const result = [];
         for (const [prop, value] of params.entries()) {
             if (value !== prop.defaultValue) {
-                result.push({key: prop.key, value});
+                if (prop.type === PropertyType.enum) {
+                    result.push({key: prop.key, value: EnumUtils.findKey(prop.enumType, value)});
+                } else {
+                    result.push({key: prop.key, value});
+                }
             }
         }
 
