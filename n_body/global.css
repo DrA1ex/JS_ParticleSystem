@@ -456,7 +456,7 @@ button:disabled .record-icon {
 .record-settings {
     display: grid;
     grid-template-columns: 2fr 1fr;
-    grid-template-rows: repeat(8, 2em);
+    grid-template-rows: repeat(9, 2em);
     align-items: center;
     justify-content: space-between;
     gap: 0 1em;
@@ -465,6 +465,11 @@ button:disabled .record-icon {
 .record-settings > div,
 .record-settings > select {
     padding: 0.2em;
+}
+
+.record-settings > *:nth-child(even) {
+    justify-self: end;
+    text-align: right;
 }
 
 .record-settings .warning {

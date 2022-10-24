@@ -230,7 +230,8 @@ export class SimulationController extends StateControllerBase {
             case SimulationStateEnum.recording:
                 this.recordSettingsDialog.hide();
                 this._exportSequence = new SimulationSequence(this.app.settings.physics.particleCount, SimulationSerializer.COMPONENTS_COUNT,
-                    this.recordSettingsCtrl.frameRate);
+                    this.recordSettingsCtrl.timelapse ? this.app.settings.world.fps : this.recordSettingsCtrl.frameRate
+                );
         }
     }
 }

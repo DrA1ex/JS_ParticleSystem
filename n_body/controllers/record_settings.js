@@ -4,6 +4,7 @@ import {Button} from "../ui/controls/button.js";
 import {Select} from "../ui/controls/select.js";
 import {Label} from "../ui/controls/label.js";
 import * as CommonUtils from "../utils/common.js";
+import {Checkbox} from "../ui/controls/checkbox.js";
 
 const view = await fetch(new URL("./views/record_settings.html", import.meta.url)).then(d => d.text());
 
@@ -34,6 +35,10 @@ export class RecordSettingsController extends ControllerBase {
         return this._fpsRatio;
     }
 
+    get timelapse() {
+        return this.timelapseCheck.getValue();
+    }
+
     constructor(root, parentCtrl) {
         const viewControl = new View(root, view)
         super(viewControl.element, parentCtrl);
@@ -54,6 +59,9 @@ export class RecordSettingsController extends ControllerBase {
         ]);
         this.recodDurationSelect.select("-1")
         this.recodDurationSelect.setOnChange(this._update.bind(this));
+
+        this.timelapseCheck = Checkbox.byId("timelapse-check");
+        this.timelapseCheck.setOnChange(this._update.bind(this));
 
         this.refFramerateLbl = Label.byId("reference-framerate");
         this.frameTimeLbl = Label.byId("frame-time");
