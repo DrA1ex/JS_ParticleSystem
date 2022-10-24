@@ -180,9 +180,6 @@ export class RendererBase {
 
         this._updateCanvasSize();
 
-        const xDiff = this.canvasWidth / oldWidth;
-        const yDiff = this.canvasHeight / oldHeight;
-
         let resizeScale;
         if (this.canvasWidth !== oldWidth && this.canvasHeight === this.canvasHeight) {
             resizeScale = this.canvasWidth / oldWidth;

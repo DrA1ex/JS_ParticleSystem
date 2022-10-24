@@ -116,6 +116,13 @@ export class Webgl2Renderer extends RendererBase {
             this.initDebugCanvas();
         }
 
+        WebglUtils.loadDataFromConfig(this.gl, this._stateConfig, [{
+            program: "render",
+            uniforms: [
+                {name: "max_mass", values: [this.settings.physics.particleMass + 1]}
+            ]
+        }]);
+
         if (this.settings.render.enableBlending) {
             this.gl.enable(GL.BLEND);
             this.gl.blendFunc(GL.SRC_COLOR, GL.ONE);
