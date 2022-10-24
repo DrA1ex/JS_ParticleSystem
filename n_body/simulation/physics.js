@@ -145,7 +145,7 @@ export class PhysicsEngine {
                     dy = p1.y - p2.y;
                 const distSquare = dx * dx + dy * dy;
 
-                if (distSquare < this.settings.physics.minInteractionDistanceSq) {
+                if (distSquare < this.settings.physics.collisionSizeSq) {
                     const massFactor = 2 * p2.mass / (p1.mass + p2.mass);
                     const dot = massFactor * ((nextVelX - p2.velX) * dx + (nextVelY - p2.velY) * dy);
                     nextVelX -= dot / distSquare * dx;

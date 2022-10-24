@@ -170,7 +170,7 @@ export class GPUPhysicsEngine extends PhysicsEngine {
         }, {
             program: "collision",
             uniforms: [
-                {name: "min_dist_square", values: [this.settings.physics.minInteractionDistanceSq]},
+                {name: "min_dist_square", values: [this.settings.physics.collisionSizeSq]},
                 {name: "restitution", values: [this.settings.physics.collisionRestitution]},
             ],
             buffers: [
@@ -198,7 +198,7 @@ export class GPUPhysicsEngine extends PhysicsEngine {
         }, {
             program: "collision",
             uniforms: [
-                {name: "min_dist_square", values: [this.settings.physics.minInteractionDistanceSq]},
+                {name: "min_dist_square", values: [this.settings.physics.collisionSizeSq]},
                 {name: "restitution", values: [this.settings.physics.collisionRestitution]},
             ]
         }]);

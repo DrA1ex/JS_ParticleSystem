@@ -31,12 +31,17 @@ export class PhysicsSettings extends SettingsBase {
             .setExportable(true)
             .setName("Collisions").setDescription("Enable particle collision")
             .setAffects(ComponentType.backend),
+        collisionSize: Property.float("collision_size", 1)
+            .setExportable(true)
+            .setName("Particle collision size").setDescription("Sets particle collider size in pixels")
+            .setAffects(ComponentType.backend)
+            .setConstraints(1e-6, 1e3),
         collisionRestitution: Property.float("collision_r", 1)
             .setExportable(true)
             .setName("Collision restitution").setDescription("Sets collision restitution, 1 - means no energy loss during collision")
             .setAffects(ComponentType.backend)
             .setConstraints(0, 2),
-        minInteractionDistance: Property.float("min_distance", 1)
+        minInteractionDistance: Property.float("min_distance", 0.01)
             .setExportable(true)
             .setName("Min interaction distance").setDescription("Minimal distance (pixels) to process interactions also determine collision distance")
             .setAffects(ComponentType.backend)
@@ -50,7 +55,7 @@ export class PhysicsSettings extends SettingsBase {
     }
 
     static PropertiesDependencies = new Map([
-        [this.Properties.enableCollision, [this.Properties.collisionRestitution]],
+        [this.Properties.enableCollision, [this.Properties.collisionSize, this.Properties.collisionRestitution]],
         [this.Properties.gravity, [this.ReadOnlyProperties.particleGravity]],
         [this.Properties.particleMassFactor, [this.ReadOnlyProperties.particleMass]],
     ]);
@@ -62,6 +67,7 @@ export class PhysicsSettings extends SettingsBase {
     get resistance() {return this.config.resistance;}
     get gravity() {return this.config.gravity;}
     get enableCollision() {return this.config.enableCollision;}
+    get collisionSize() {return this.config.collisionSize;}
     get collisionRestitution() {return this.config.collisionRestitution;}
     get minInteractionDistance() {return this.config.minInteractionDistance;}
 
@@ -69,6 +75,7 @@ export class PhysicsSettings extends SettingsBase {
     particleMass = 0;
     massDistribution = [];
     minInteractionDistanceSq;
+    collisionSizeSq;
 
     constructor(values) {
         super(values);
@@ -95,5 +102,6 @@ export class PhysicsSettings extends SettingsBase {
 
         this.particleGravity = this.gravity / totalMass;
         this.minInteractionDistanceSq = Math.pow(this.minInteractionDistance, 2);
+        this.collisionSizeSq = Math.pow(this.collisionSize, 2);
     }
 }
