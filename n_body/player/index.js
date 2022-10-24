@@ -1,5 +1,5 @@
 import {Application} from "./app.js";
-import {AppPlayerSettings} from "../settings/app.js";
+import {AppPlayerSettings} from "./settings/app.js";
 
 
 const SettingsInstance = AppPlayerSettings.fromQueryParams();

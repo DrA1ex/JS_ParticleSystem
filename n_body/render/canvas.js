@@ -26,7 +26,7 @@ export class CanvasRenderer extends RendererBase {
     clear() {
         super.clear();
 
-        this.canvas.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+        this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
     }
 
     /**

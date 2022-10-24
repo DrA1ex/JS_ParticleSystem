@@ -16,7 +16,7 @@ export class SettingsController extends ControllerBase {
     settings;
     /** @type {{[string]: {[string]: InputControl}}} */
     config;
-    /** @type {Map<Property, {key: string, groupKey: string, group: SettingsGroup, control: InputControl}>} */
+    /** @type {Map<Property, {key: string, groupKey: string, group: SettingsGroup, control: InputControl|Label}>} */
     propData;
 
     constructor(root, parentCtrl) {

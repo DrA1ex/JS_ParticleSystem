@@ -4,7 +4,7 @@ import {SimulationSettings} from "./simulation.js";
 import {PhysicsSettings} from "./physics.js";
 import {RenderSettings} from "./render.js";
 
-class SettingsGroup {
+export class SettingsGroup {
     constructor(type) {
         this.type = type;
 
@@ -25,7 +25,7 @@ class SettingsGroup {
 /**
  * @template {AppSettingsBase} T
  */
-class AppSettingsBase {
+export class AppSettingsBase {
     /**
      * @abstract
      * @type {{[string]: SettingsGroup}}
@@ -138,27 +138,6 @@ export class AppSimulationSettings extends AppSettingsBase {
     get world() {return this.config.world;}
     /** @returns {SimulationSettings} */
     get simulation() {return this.config.simulation;}
-    /** @returns {PhysicsSettings} */
-    get physics() {return this.config.physics;}
-    /** @returns {RenderSettings} */
-    get render() {return this.config.render;}
-}
-
-/**
- * @extends {AppSettingsBase<AppPlayerSettings>}
- */
-export class AppPlayerSettings extends AppSettingsBase {
-    static Types = {
-        common: SettingsGroup.of(CommonSettings),
-        world: SettingsGroup.of(WorldSettings),
-        physics: SettingsGroup.of(PhysicsSettings),
-        render: SettingsGroup.of(RenderSettings),
-    }
-
-    /** @returns {CommonSettings} */
-    get common() {return this.config.common;}
-    /** @returns {WorldSettings} */
-    get world() {return this.config.world;}
     /** @returns {PhysicsSettings} */
     get physics() {return this.config.physics;}
     /** @returns {RenderSettings} */
