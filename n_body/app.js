@@ -37,12 +37,12 @@ export class Application {
 
     reloadFromState(state) {
         const newSettings = AppSimulationSettings.import(state.settings);
-
         this.reconfigure(newSettings, state.particles, state.renderer);
     }
 
     reconfigure(newSettings, particles, renderer) {
         this.simulationCtrl.setState(SimulationStateEnum.reconfigure);
+        this._updateUrl(newSettings);
 
         const diff = this.settings.compare(newSettings);
 
@@ -95,6 +95,22 @@ export class Application {
 
         this.settings = newSettings;
         this.init({particles, renderer}, diff);
+    }
+
+    _updateUrl(newSettings) {
+        const params = newSettings.toQueryParams();
+        const url = new URL(window.location.pathname, window.location.origin);
+        for (const param of params) {
+            url.searchParams.set(param.key, param.value ?? "");
+        }
+
+        const urlSearchParams = new URLSearchParams(window.location.search);
+        const existingParams = Object.fromEntries(urlSearchParams.entries());
+        if (existingParams.state) {
+            url.searchParams.set("state", existingParams.state);
+        }
+
+        window.history.replaceState('', '', url);
     }
 
     init(state, diff) {

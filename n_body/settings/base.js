@@ -273,6 +273,31 @@ export class SettingsBase {
         }
     }
 
+    toQueryParams() {
+        const params = new Map();
+        for (const [name, prop] of Object.entries(this.constructor.Properties)) {
+            params.set(prop, this[name])
+        }
+
+        for (const [prop, deps] of this.constructor.PropertiesDependencies.entries()) {
+            const value = params.get(prop);
+            if (!value) {
+                for (const depProp of deps) {
+                    params.delete(depProp);
+                }
+            }
+        }
+
+        const result = [];
+        for (const [prop, value] of params.entries()) {
+            if (value !== prop.defaultValue) {
+                result.push({key: prop.key, value});
+            }
+        }
+
+        return result;
+    }
+
     static fromQueryParams(defaults = null) {
         const values = QueryParameterParser.parse(this, defaults);
         return new this(values);

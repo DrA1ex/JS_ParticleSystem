@@ -60,6 +60,15 @@ export class AppSettingsBase {
         return /** @type {T} */ instance;
     }
 
+    toQueryParams() {
+        const params = [];
+        for (const [name, _] of Object.entries(this.constructor.Types)) {
+            params.push(...this.config[name].toQueryParams());
+        }
+
+        return params;
+    }
+
     /**
      * @returns {T}
      */
