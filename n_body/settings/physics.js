@@ -44,7 +44,8 @@ export class PhysicsSettings extends SettingsBase {
     }
 
     static ReadOnlyProperties = {
-        particleGravity: ReadOnlyProperty.float().setName("Particle Gravity"),
+        particleGravity: ReadOnlyProperty.float().setName("Particle Gravity")
+            .setFormatter(value => value.toExponential(2)),
         particleMass: ReadOnlyProperty.bool().setName("Max particle mass")
     }
 

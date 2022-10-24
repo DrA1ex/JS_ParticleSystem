@@ -65,7 +65,7 @@ export class SettingsController extends ControllerBase {
         const value = config[groupKey][key];
 
         if (prop instanceof ReadOnlyProperty) {
-            control.setText(value);
+            control.setText(prop.format(value));
         } else {
             control.setValue(value);
             if (!suppressEvent) {
@@ -163,7 +163,7 @@ export class SettingsController extends ControllerBase {
             parent.appendChild(caption);
 
             const label = new Label(document.createElement("div"));
-            label.setText(groupValue[key]);
+            label.setText(prop.format(groupValue[key]));
             label.addClass("settings-input");
             parent.appendChild(label.element);
 

@@ -106,7 +106,7 @@ export class Property {
     /**
      * @param {string} [key]
      * @param {PropertyType} [type=PropertyType.string]
-     * @param {Enum} [enumType=null]
+     * @param {object} [enumType=null]
      * @param {*} [defaultValue=null]
      */
     constructor(key, type = PropertyType.string, enumType = null, defaultValue = null) {
@@ -207,6 +207,20 @@ export class Property {
 export class ReadOnlyProperty extends Property {
     constructor(type = PropertyType.string, enumType = null) {
         super("", type, enumType);
+        this.formatter = null;
+    }
+
+    format(value) {
+        if (this.formatter) {
+            return this.formatter(value);
+        }
+
+        return value
+    }
+
+    setFormatter(fn) {
+        this.formatter = fn;
+        return this;
     }
 
     static string() { return new ReadOnlyProperty(PropertyType.string);}
