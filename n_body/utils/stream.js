@@ -1,4 +1,7 @@
+import {ChunkedArrayBuffer} from "./array_buffer.js";
+
 export class ObservableStreamLoader {
+    static CHUCK_SIZE = 1024 * 1024 * 64;
 
     /**
      * @param asyncReader
@@ -9,6 +12,9 @@ export class ObservableStreamLoader {
         this.progressFn = progressFn;
     }
 
+    /**
+     * @return {Promise<ArrayBuffer>}
+     */
     async load() {
         const size = this.stream.size;
         const data = new Uint8Array(size);
@@ -24,6 +30,39 @@ export class ObservableStreamLoader {
         }
 
         return data.buffer;
+    }
+
+    /**
+     * @param {number} [chunkSize=ObservableStreamLoader.CHUCK_SIZE]
+     * @return {Promise<ChunkedArrayBuffer>}
+     */
+    async loadChunked(chunkSize = ObservableStreamLoader.CHUCK_SIZE) {
+        const totalSize = this.stream.size;
+        this.progressFn(0, totalSize);
+
+        const bigChunks = [];
+        let totalRead = 0;
+        let read = 0;
+        let readChunks = [];
+        for await (const chunk of this.stream) {
+            readChunks.push(chunk.buffer)
+            read += chunk.length;
+            totalRead += chunk.length;
+            if (read >= chunkSize) {
+                bigChunks.push(new ChunkedArrayBuffer(readChunks).toTypedArray(Uint8Array).buffer);
+                readChunks = [];
+                read = 0;
+            }
+
+            this.progressFn(totalRead, totalSize);
+        }
+
+        if (readChunks.length > 0) {
+            bigChunks.push(new ChunkedArrayBuffer(readChunks).toTypedArray(Uint8Array).buffer);
+            this.progressFn(totalSize, totalSize);
+        }
+
+        return new ChunkedArrayBuffer(bigChunks);
     }
 }
 
@@ -50,16 +89,11 @@ export class FileAsyncReader {
 export class FetchDataAsyncReader {
     constructor(response) {
         this.response = response;
-        this.size = response.headers.get('Content-Length');
-
-        if (this.size <= 0) {
-            throw new Error("Unsupported server response: required Content-Length header");
-        }
+        this.size = response.headers.get('Content-Length') ?? -1;
     }
 
     async* [Symbol.asyncIterator]() {
-        const reader = this.response.body.getReader()
-
+        const reader = this.response.body.getReader();
         while (true) {
             const chunk = await reader.read();
             if (chunk.done) {

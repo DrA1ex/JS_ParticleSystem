@@ -37,7 +37,7 @@ export class Application {
             if (data.ok) {
                 const reader = new FetchDataAsyncReader(data);
                 const loader = new ObservableStreamLoader(reader, this._onLoadProgress.bind(this));
-                return loader.load();
+                return loader.loadChunked();
             }
 
             throw new Error(`Download failed. Code ${data.status}: ${data.statusText}`);
@@ -48,7 +48,7 @@ export class Application {
         this.loadData(() => {
             const reader = new FileAsyncReader(file);
             const loader = new ObservableStreamLoader(reader, this._onLoadProgress.bind(this));
-            return loader.load()
+            return loader.loadChunked();
         }).catch(e => {
             alert(`Unable to load file: ${e.message}`)
         });

@@ -3,21 +3,26 @@ export class SimulationSerializer {
     static VERSION = 1;
     static COMPONENTS_COUNT = 2;
 
+    /**
+     * @param {ChunkedArrayBuffer} buffer
+     * @returns {{frames: Float32Array[], meta: {framesCount: number, metaLength: number, componentsCount: number, recordedRate: number, particleCount: number}}}
+     */
     static loadData(buffer) {
         const meta = SimulationSerializer._parseMeta(buffer);
 
         const metaBytes = meta.metaLength * Uint32Array.BYTES_PER_ELEMENT
         const frameSize = meta.particleCount * meta.componentsCount;
-        const totalDataSize = meta.framesCount * frameSize;
-        const expectedBytes = totalDataSize * Float32Array.BYTES_PER_ELEMENT + metaBytes;
+        const totalDataBytes = meta.framesCount * frameSize * Float32Array.BYTES_PER_ELEMENT;
+        const expectedBytes = totalDataBytes + metaBytes;
         if (expectedBytes > buffer.byteLength) {
             throw new Error(`Invalid size. Expected: ${expectedBytes} got: ${buffer.byteLength}`);
         }
 
         const frames = new Array(meta.framesCount);
-        const framesBuffer = new Float32Array(buffer, meta.metaLength * Uint32Array.BYTES_PER_ELEMENT, totalDataSize);
+        const framesView = buffer.slice(metaBytes, totalDataBytes);
         for (let i = 0; i < meta.framesCount; i++) {
-            frames[i] = new Float32Array(framesBuffer.subarray(i * frameSize, i * frameSize + frameSize));
+            const offset = i * frameSize;
+            frames[i] = framesView.createTypedArray(Float32Array, offset * Float32Array.BYTES_PER_ELEMENT, frameSize);
         }
 
         return {
@@ -27,7 +32,7 @@ export class SimulationSerializer {
     }
 
     static _parseMeta(buffer) {
-        const metaBuffer = new Uint32Array(buffer);
+        const metaBuffer = buffer.createTypedArray(Uint32Array, 0, this.META_SIZE);
         const metaLength = metaBuffer[0];
 
         const version = metaBuffer[1];

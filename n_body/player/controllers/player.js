@@ -63,7 +63,11 @@ export class PlayerController extends StateControllerBase {
     }
 
     setLoadingProgress(loaded, size) {
-        this.loadingStatus.setText(`Loaded ${this._getSizeLabel(loaded)} from ${this._getSizeLabel(size)}`);
+        if (size > 0) {
+            this.loadingStatus.setText(`Loaded ${this._getSizeLabel(loaded)} from ${this._getSizeLabel(size)}`);
+        } else {
+            this.loadingStatus.setText(`Loaded ${this._getSizeLabel(loaded)}`);
+        }
     }
 
     configure(settings) {
