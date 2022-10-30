@@ -161,6 +161,7 @@ export class Application {
         if ((!diff || diff.breaks.has(ComponentType.dfri)) && this.settings.render.enableDFRI) {
             this.dfriHelper.enable();
         } else if (diff?.affects?.has(ComponentType.dfri)) {
+            this.dfriHelper.reconfigure(this.settings);
             this.dfriHelper.reset();
         }
 

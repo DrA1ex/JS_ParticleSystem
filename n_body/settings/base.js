@@ -120,7 +120,7 @@ export class Property {
         this.affects = [];
         this.breaks = [];
         this.name = "";
-        this.description = "";
+        this._description = "";
         this.min = null;
         this.max = null;
 
@@ -142,6 +142,25 @@ export class Property {
         }
     }
 
+    get description() {
+        let constraints = null;
+        if (this.min !== null || this.max !== null) {
+            constraints = `- Constraints (${this.min ?? '-∞'}-${this.max ?? "∞"})`;
+        }
+
+        let type = null;
+        if ([PropertyType.string, PropertyType.int, PropertyType.float].includes(this.type)) {
+            type = `- Type: ${this.type}`;
+        }
+
+        const parts = [this._description, constraints, type].filter(v => v);
+        if (parts.length > 0) {
+            return parts.join("\n");
+        }
+
+        return null;
+    }
+
     parse(param) {
         return this._parser(param);
     }
@@ -157,7 +176,7 @@ export class Property {
     }
 
     setDescription(description) {
-        this.description = description;
+        this._description = description;
         return this;
     }
 
@@ -221,6 +240,10 @@ export class ReadOnlyProperty extends Property {
     setFormatter(fn) {
         this.formatter = fn;
         return this;
+    }
+
+    get description() {
+        return this._description;
     }
 
     static string() { return new ReadOnlyProperty(PropertyType.string);}

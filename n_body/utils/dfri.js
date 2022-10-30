@@ -19,6 +19,7 @@ export class DFRIHelperBase {
 
     /**
      * @abstract
+     * @return {number}
      */
     get actualTime() {
         throw new Error("Not implemented");
@@ -26,6 +27,7 @@ export class DFRIHelperBase {
 
     /**
      * @abstract
+     * @return {number}
      */
     get desiredTime() {
         throw new Error("Not implemented");
@@ -34,6 +36,8 @@ export class DFRIHelperBase {
     get maxCount() {
         return Number.MAX_SAFE_INTEGER;
     }
+
+    reconfigure() {}
 
     enable() {
         this.renderer.setCoordinateTransformer(this._transformParticlePosition.bind(this));
@@ -166,10 +170,15 @@ export class DFRIHelper extends DFRIHelperBase {
         this.renderTimeSmoother.postValue(time);
     }
 
+    reconfigure(settings) {
+        this.settings = settings;
+    }
+
     _getInterpolateFramesCount() {
         const value = super._getInterpolateFramesCount();
         this.interpolateFramesSmoother.postValue(Math.ceil(value));
-        return Math.round(this.interpolateFramesSmoother.smoothedValue);
+        const count = (this.interpolateFramesSmoother.smoothedValue + 1) / this.settings.render.slowMotionRate - 1;
+        return Math.round(count);
     }
 
     dispose() {

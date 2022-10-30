@@ -11,7 +11,7 @@ export class PhysicsSettings extends SettingsBase {
             .setExportable(true)
             .setName("Particle count")
             .setBreaks(ComponentType.backend, ComponentType.renderer, ComponentType.debug, ComponentType.dfri, ComponentType.particles)
-            .setConstraints(2, Number.MAX_SAFE_INTEGER),
+            .setConstraints(2, 1e9),
         particleMassFactor: Property.int("particle_mass", 0)
             .setName("Particle mass factor").setDescription("Particle mass variance, exponential")
             .setBreaks(ComponentType.backend, ComponentType.particles)

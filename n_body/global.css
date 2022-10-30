@@ -522,6 +522,7 @@ button:disabled .record-icon {
 
 [data-tooltip]:before {
     content: attr(data-tooltip);
+    white-space: pre-line;
     pointer-events: none;
     display: none;
 
@@ -529,7 +530,8 @@ button:disabled .record-icon {
     left: 50%;
     bottom: 100%;
     margin: 0.2em;
-    max-width: 100%;
+    max-width: 20em;
+    max-height: 8em;
     width: max-content;
     height: max-content;
     z-index: 10;

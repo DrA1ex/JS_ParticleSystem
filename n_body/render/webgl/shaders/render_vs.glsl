@@ -6,6 +6,7 @@ uniform float scale;
 uniform float point_size;
 uniform float max_mass;
 uniform float max_speed;
+uniform float particle_scale;
 
 in vec2 position;
 in vec2 velocity;
@@ -21,6 +22,8 @@ void main() {
     if (max_mass > 1.0) {
         gl_PointSize += 2.0 * mass / max_mass;
     }
+
+    gl_PointSize *= particle_scale;
 
     vec2 translated_velocity = 0.5 + velocity / max_speed * 0.5;
     float translated_mass = 0.25 + mass / max_mass * 0.25;

@@ -29,6 +29,7 @@ const CONFIGURATION = [
             {type: "uniform2f", name: "offset"},
             {type: "uniform1f", name: "max_mass"},
             {type: "uniform1f", name: "max_speed"},
+            {type: "uniform1f", name: "particle_scale"},
         ],
         vertexArrays: [{
             name: "particle", entries: [
@@ -73,7 +74,8 @@ export class Webgl2Renderer extends RendererBase {
                 {name: "max_speed", values: [this._maxSpeed]},
                 {name: "scale", values: [this.scale]},
                 {name: "offset", values: [this.xOffset, this.yOffset]},
-                {name: "resolution", values: [this.canvasWidth, this.canvasHeight]}],
+                {name: "resolution", values: [this.canvasWidth, this.canvasHeight]},
+                {name: "particle_scale", values: [this.settings.render.particleSizeScale]}],
             buffers: []
         }]);
 
@@ -187,7 +189,8 @@ export class Webgl2Renderer extends RendererBase {
                 program: "render", uniforms: [
                     {name: "scale", values: [this.scale]},
                     {name: "max_speed", values: [this._maxSpeed]},
-                    {name: "offset", values: [this.xOffset, this.yOffset]}
+                    {name: "offset", values: [this.xOffset, this.yOffset]},
+                    {name: "particle_scale", values: [this.settings.render.particleSizeScale]}
                 ], buffers: [
                     {name: "position", data: this._positionBufferData},
                     {name: "velocity", data: this._velocityBufferData},
