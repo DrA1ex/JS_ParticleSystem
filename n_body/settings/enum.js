@@ -7,7 +7,8 @@ export const ParticleInitType = {
     bang: 2,
     disk: 3,
     rotation: 4,
-    collision: 5
+    collision: 5,
+    swirl: 6,
 }
 
 /**

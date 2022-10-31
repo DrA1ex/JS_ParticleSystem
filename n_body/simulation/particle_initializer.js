@@ -1,5 +1,9 @@
 import {ParticleInitType} from "../settings/enum.js";
 
+/**
+ * @typedef {(particle: Particle, angle: number, radius: number) => void} CircleParticleTransformer
+ */
+
 export class Particle_initializer {
     /**
      * @param {AppSimulationSettings} settings
@@ -37,15 +41,7 @@ export class Particle_initializer {
                 break;
 
             case ParticleInitType.rotation:
-                this._multiCircleInitializerBase(particles, settings, {
-                    gravityMul: 0.5,
-                    radiusDivider: 3,
-                    subRadiusDivider: 4,
-                    startAngle: 0,
-                    velocityAngle: Math.PI / 2,
-                    circleCount: 5,
-                    wiggleDivider: 0.75
-                });
+                this._rotationInitializer(particles, settings);
                 break;
 
             case ParticleInitType.collision:
@@ -58,6 +54,10 @@ export class Particle_initializer {
                     circleCount: 2,
                     wiggleDivider: 0.55
                 });
+                break;
+
+            case ParticleInitType.swirl:
+                this._swirlInitializer(particles, settings);
                 break;
 
             case ParticleInitType.circle:
@@ -97,15 +97,65 @@ export class Particle_initializer {
 
     /**
      * @param {Particle[]} particles
+     * @param {AppSimulationSettings} settings
+     * @private
+     */
+    static _swirlInitializer(particles, settings) {
+        const {worldWidth, worldHeight} = settings.world;
+        const {particleCount, gravity} = settings.physics;
+
+        const centerX = worldWidth / 2,
+            centerY = worldHeight / 2;
+
+        const maxRadius = Math.min(worldWidth, worldHeight) / 2;
+        const minRadius = maxRadius / 64;
+        const wiggle = maxRadius / 8;
+
+        const maxAngle = Math.PI * 2;
+        const spiralSize = maxAngle / 16;
+        const step = maxAngle / particleCount;
+        let angle = 0;
+        for (let i = 0; i < particleCount; i++) {
+            const r = (minRadius + (angle / spiralSize - Math.floor(angle / spiralSize)) * (maxRadius - minRadius) + Math.random() * wiggle);
+            particles[i].x = centerX + Math.cos(angle) * r;
+            particles[i].y = centerY + Math.sin(angle) * r;
+
+            particles[i].velX = Math.cos(angle - Math.PI / 2) * (0.1 + r / maxRadius) * gravity;
+            particles[i].velY = Math.sin(angle - Math.PI / 2) * (0.1 + r / maxRadius) * gravity;
+
+            angle += step;
+        }
+    }
+
+    static _rotationInitializer(particles, settings) {
+        const {worldWidth, worldHeight} = settings.world;
+        const {gravity} = settings.physics;
+
+        const radius = Math.min(worldWidth, worldHeight) / 4;
+        const wiggle = radius / 1.5;
+        const maxRadius = radius + wiggle / 2;
+
+        const velocityMul = Math.sqrt(gravity) / maxRadius;
+        this._circleCenteredInitializer(particles, settings, radius, wiggle, {
+            transformer: (p, angle, r) => {
+                p.velX = Math.cos(angle - Math.PI / 2) * r * velocityMul;
+                p.velY = Math.sin(angle - Math.PI / 2) * r * velocityMul;
+            }
+        });
+    }
+
+    /**
+     * @param {Particle[]} particles
      * @param {number} offset
      * @param {number} count
      * @param {number} centerX
      * @param {number} centerY
      * @param {number} radius
      * @param {number} wiggle
+     * @param {CircleParticleTransformer} [transformer=null]
      * @private
      */
-    static _circleInitializerBase(particles, {offset, count, centerX, centerY, radius, wiggle}) {
+    static _circleInitializerBase(particles, {offset, count, centerX, centerY, radius, wiggle, transformer}) {
         const step = Math.PI * 2 / count;
 
         const end = Math.min(offset + count, particles.length);
@@ -114,6 +164,10 @@ export class Particle_initializer {
             const r = (radius + (Math.random() - 0.5) * wiggle)
             particles[i].x = centerX + Math.cos(angle) * r;
             particles[i].y = centerY + Math.sin(angle) * r;
+
+            if (transformer) {
+                transformer(particles[i], angle, r);
+            }
 
             angle += step;
         }
@@ -124,9 +178,10 @@ export class Particle_initializer {
      * @param {AppSimulationSettings} settings
      * @param {number} radius
      * @param {number} wiggle
+     * @param {CircleParticleTransformer} [transformer=null]
      * @private
      */
-    static _circleCenteredInitializer(particles, settings, radius, wiggle) {
+    static _circleCenteredInitializer(particles, settings, radius, wiggle, {transformer} = {}) {
         const {worldWidth, worldHeight} = settings.world;
         const {particleCount} = settings.physics;
         const centerX = worldWidth / 2,
@@ -138,7 +193,8 @@ export class Particle_initializer {
             centerX,
             centerY,
             radius,
-            wiggle
+            wiggle,
+            transformer,
         });
     }
 
