@@ -102,6 +102,9 @@ export class PropertyParser {
     }
 }
 
+/**
+ * @template {Property} T
+ */
 export class Property {
     /**
      * @param {string} [key]
@@ -142,6 +145,9 @@ export class Property {
         }
     }
 
+    /**
+     * @return {string|null}
+     */
     get description() {
         let constraints = null;
         if (this.min !== null || this.max !== null) {
@@ -161,20 +167,37 @@ export class Property {
         return null;
     }
 
+    /**
+     * @template R
+     * @param {string|R} param
+     * @return {R}
+     */
     parse(param) {
         return this._parser(param);
     }
 
+    /**
+     * @param {boolean} exportable
+     * @return {Property<T>}
+     */
     setExportable(exportable) {
         this.exportable = exportable;
         return this;
     }
 
+    /**
+     * @param {string} name
+     * @return {Property<T>}
+     */
     setName(name) {
         this.name = name;
         return this;
     }
 
+    /**
+     * @param {string} description
+     * @return {Property<T>}
+     */
     setDescription(description) {
         this._description = description;
         return this;
@@ -182,6 +205,7 @@ export class Property {
 
     /**
      * @param {ComponentType} affects
+     * @return {Property<T>}
      */
     setAffects(...affects) {
         this.affects = affects;
@@ -190,12 +214,19 @@ export class Property {
 
     /**
      * @param {ComponentType} breaks
+     * @return {Property<T>}
      */
     setBreaks(...breaks) {
         this.breaks = breaks;
         return this;
     }
 
+    /**
+     *
+     * @param {number|null} min
+     * @param {number|null} max
+     * @return {Property<T>}
+     */
     setConstraints(min, max) {
         this.min = min;
         this.max = max;
@@ -223,12 +254,19 @@ export class Property {
     }
 }
 
+/**
+ * @extends {Property<ReadOnlyProperty>}
+ */
 export class ReadOnlyProperty extends Property {
     constructor(type = PropertyType.string, enumType = null) {
         super("", type, enumType);
         this.formatter = null;
     }
 
+    /**
+     * @param value
+     * @return {string}
+     */
     format(value) {
         if (this.formatter) {
             return this.formatter(value);
@@ -237,6 +275,10 @@ export class ReadOnlyProperty extends Property {
         return value
     }
 
+    /**
+     * @param {(value:*) => string} fn
+     * @return {ReadOnlyProperty}
+     */
     setFormatter(fn) {
         this.formatter = fn;
         return this;
