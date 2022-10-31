@@ -45,6 +45,9 @@ export class Application {
         this._updateUrl(newSettings);
 
         const diff = this.settings.compare(newSettings);
+        if (particles) {
+            diff.affects.add(ComponentType.backend);
+        }
 
         if (diff.breaks.has(ComponentType.renderer) && !renderer && this.renderer) {
             renderer = {
