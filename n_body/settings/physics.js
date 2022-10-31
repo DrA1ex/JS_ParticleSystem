@@ -43,7 +43,7 @@ export class PhysicsSettings extends SettingsBase {
             .setConstraints(0, 2),
         minInteractionDistance: Property.float("min_distance", 0.01)
             .setExportable(true)
-            .setName("Min interaction distance").setDescription("Minimal distance (pixels) to process interactions also determine collision distance")
+            .setName("Min interaction distance").setDescription("Minimal distance (pixels) to process interactions")
             .setAffects(ComponentType.backend)
             .setConstraints(1e-6, 1e3),
     }
