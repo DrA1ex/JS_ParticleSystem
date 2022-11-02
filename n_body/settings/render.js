@@ -14,6 +14,9 @@ export class RenderSettings extends SettingsBase {
             .setName("Custom DPR value").setDescription("Override default Device Pixel Ratio")
             .setAffects(ComponentType.renderer, ComponentType.debug)
             .setConstraints(0, 10),
+        fixedParticleSize: Property.bool("fixed_size", true)
+            .setName("Fixed particle size").setDescription("Don't change particle size when scale")
+            .setAffects(ComponentType.renderer),
         particleSizeScale: Property.float("particle_scale", 1)
             .setName("Particle size scale")
             .setAffects(ComponentType.renderer)
@@ -48,6 +51,7 @@ export class RenderSettings extends SettingsBase {
     get render() {return this.config.render}
     get useDpr() {return this.config.useDpr}
     get particleSizeScale() {return this.config.particleSizeScale}
+    get fixedParticleSize() {return this.config.fixedParticleSize}
     get enableFilter() {return this.config.enableFilter}
     get enableBlending() {return this.config.enableBlending}
     get enableDFRI() {return this.config.enableDFRI}

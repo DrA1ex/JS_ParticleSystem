@@ -184,13 +184,16 @@ export class Webgl2Renderer extends RendererBase {
             }
         }
 
+        const particleScale = this.settings.render.fixedParticleSize ?
+            this.settings.render.particleSizeScale :
+            this.settings.render.particleSizeScale * this.scale;
         WebglUtils.loadDataFromConfig(this.gl, this._stateConfig, [
             {
                 program: "render", uniforms: [
                     {name: "scale", values: [this.scale]},
                     {name: "max_speed", values: [this._maxSpeed]},
                     {name: "offset", values: [this.xOffset, this.yOffset]},
-                    {name: "particle_scale", values: [this.settings.render.particleSizeScale]}
+                    {name: "particle_scale", values: [particleScale]}
                 ], buffers: [
                     {name: "position", data: this._positionBufferData},
                     {name: "velocity", data: this._velocityBufferData},
