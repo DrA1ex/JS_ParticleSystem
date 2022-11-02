@@ -145,6 +145,10 @@ export class Property {
         }
     }
 
+    get descriptionText() {
+        return this._description;
+    }
+
     /**
      * @return {string|null}
      */

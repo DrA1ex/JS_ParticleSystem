@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Scripts</title>
+</head>
+<body>
+<pre id="out">
+</pre>
+
+<script type="module">
+    const urlSearchParams = new URLSearchParams(window.location.search);
+    const queryParams = Object.fromEntries(urlSearchParams.entries());
+
+    const script_name = /[\w_0-9]+/.exec(queryParams.script)[0];
+    const module = await import(`./${script_name}.js`);
+
+    document.getElementById("out").innerText = module.default();
+</script>
+</body>
+</html>

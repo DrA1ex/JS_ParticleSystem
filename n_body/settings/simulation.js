@@ -11,7 +11,7 @@ export class SimulationSettings extends SettingsBase {
             .setAffects(ComponentType.backend, ComponentType.dfri)
             .setConstraints(2, 16),
         segmentSize: Property.int("segment_max_count", null)
-            .setName("Segment size").setDescription(" Max particle count in segment, larger values increase accuracy")
+            .setName("Segment size").setDescription("Max particle count in segment, larger values increase accuracy")
             .setBreaks(ComponentType.backend, ComponentType.dfri)
             .setAffects(ComponentType.debug)
             .setConstraints(1, 1e6),
