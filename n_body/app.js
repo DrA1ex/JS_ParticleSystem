@@ -49,7 +49,7 @@ export class Application {
             diff.affects.add(ComponentType.backend);
         }
 
-        if (diff.breaks.has(ComponentType.renderer) && !renderer && this.renderer) {
+        if (diff.breaks.has(ComponentType.renderer) && !diff.breaks.has(ComponentType.particles) && !renderer && this.renderer) {
             renderer = {
                 scale: this.renderer.scale / this.renderer.dpr,
                 relativeOffset: this.renderer.centeredRelativeOffset()
@@ -148,6 +148,8 @@ export class Application {
                 const {xCenterOffset: x, yCenterOffset: y} = state.renderer.relativeOffset;
                 this.renderer.setCenterRelativeOffset(x, y);
             }
+        } else if (diff && diff.breaks.has(ComponentType.particles)) {
+            this.renderer.resetScale();
         }
 
         if (!diff || diff.breaks.has(ComponentType.backend)) {

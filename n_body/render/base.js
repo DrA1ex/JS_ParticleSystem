@@ -23,12 +23,7 @@ export class RendererBase {
         this.canvas = canvas;
 
         this._updateCanvasSize();
-
-        const xDiff = this.canvasWidth / this.settings.world.worldWidth;
-        const yDiff = this.canvasHeight / this.settings.world.worldHeight;
-
-        this.scale = Math.min(xDiff, yDiff);
-        this.setCenterRelativeOffset(0, 0);
+        this.resetScale();
 
         this._hueAngle = 0;
 
@@ -45,6 +40,14 @@ export class RendererBase {
 
     reset() {
         this._hueAngle = 0;
+    }
+
+    resetScale() {
+        const xDiff = this.canvasWidth / this.settings.world.worldWidth;
+        const yDiff = this.canvasHeight / this.settings.world.worldHeight;
+
+        this.scale = Math.min(xDiff, yDiff);
+        this.setCenterRelativeOffset(0, 0);
     }
 
     scaleCentered(factor) {
