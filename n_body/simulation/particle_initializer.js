@@ -45,15 +45,7 @@ export class Particle_initializer {
                 break;
 
             case ParticleInitType.collision:
-                this._multiCircleInitializerBase(particles, settings, {
-                    gravityMul: 0.5,
-                    radiusDivider: 2,
-                    subRadiusDivider: 4,
-                    startAngle: Math.PI / 6,
-                    velocityAngle: Math.PI,
-                    circleCount: 2,
-                    wiggleDivider: 0.55
-                });
+                this._collisionInitializer(particles, settings);
                 break;
 
             case ParticleInitType.swirl:
@@ -173,6 +165,48 @@ export class Particle_initializer {
         }
     }
 
+
+    /**
+     * @param {Particle[]} particles
+     * @param {number} offset
+     * @param {number} count
+     * @param {number} centerX
+     * @param {number} centerY
+     * @param {number} minRadius
+     * @param {number} maxRadius
+     * @param {number} step
+     * @param {CircleParticleTransformer} [transformer=null]
+     * @private
+     */
+    static _uniformCircleInitializerBase(particles, {offset, count, centerX, centerY, minRadius, maxRadius, step, transformer}) {
+        const PI_2 = Math.PI * 2;
+        const n = (maxRadius - minRadius) / step;
+        const density = PI_2 * (maxRadius * (n - 1) - step / 2 * (n * n - n)) / count;
+
+        let i = offset;
+        for (let r = minRadius; r < maxRadius; r += step) {
+            let segmentCount;
+            if (r + step < maxRadius) {
+                segmentCount = 1 + Math.floor(PI_2 * r / density);
+            } else {
+                segmentCount = count - (i - offset);
+            }
+
+            const angleStep = PI_2 / segmentCount;
+            for (let j = 0; j < segmentCount; j++) {
+                const angle = j * angleStep;
+                particles[i].x = centerX + Math.cos(angle) * r;
+                particles[i].y = centerY + Math.sin(angle) * r;
+
+                if (transformer) {
+                    transformer(particles[i], angle, r);
+                }
+
+                i += 1;
+            }
+        }
+    }
+
     /**
      * @param {Particle[]} particles
      * @param {AppSimulationSettings} settings
@@ -233,54 +267,38 @@ export class Particle_initializer {
         }
     }
 
-    /**
-     * @param {Particle[]} particles
-     * @param {AppSimulationSettings} settings
-     * @param {number} [gravityMul=1]
-     * @param {number} [radiusDivider=4]
-     * @param {number} [subRadiusDivider=4]
-     * @param {number} [startAngle=0]
-     * @param {number} [velocityAngle=0]
-     * @param {number} [circleCount=2]
-     * @param {number} [wiggleDivider=2]
-     * @private
-     */
-    static _multiCircleInitializerBase(particles, settings, {
-        gravityMul = 1, radiusDivider = 4, subRadiusDivider = 4,
-        startAngle = 0, velocityAngle = 0, circleCount = 2, wiggleDivider = 2
-    }) {
+    static _collisionInitializer(particles, settings) {
+        const startAngle = Math.PI / 6,
+            velocityAngle = Math.PI,
+            circleCount = 2;
+
         const {worldWidth, worldHeight} = settings.world;
         const {particleCount, gravity, particleMass} = settings.physics;
 
         const size = Math.ceil(particleCount / circleCount);
         const centerX = worldWidth / 2;
         const centerY = worldHeight / 2;
-        const radius = Math.min(worldWidth, worldHeight) / radiusDivider;
-        const subRadius = radius / subRadiusDivider;
+        const radius = Math.min(worldWidth, worldHeight) / 2;
+        const subRadius = radius / 2;
         const angleStep = Math.PI * 2 / circleCount;
-        const velocity = Math.sqrt(gravity) / (1 + particleMass) * gravityMul;
+        const velocity = Math.sqrt(gravity) / (1 + particleMass) / (subRadius + subRadius);
+
         let angle = startAngle;
-
         for (let i = 0; i < circleCount; i++) {
-            const start = i * size;
-            const end = Math.min(start + size, particleCount);
-            const x = centerX + Math.cos(angle) * radius;
-            const y = centerY + Math.sin(angle) * radius;
-
-            this._circleInitializerBase(particles, {
-                offset: start,
-                count: size,
-                centerX: x,
-                centerY: y,
-                radius: subRadius,
-                wiggle: subRadius / wiggleDivider
+            const count = i + 1 < circleCount ? size : particleCount - i * size;
+            this._uniformCircleInitializerBase(particles, {
+                offset: i * size,
+                count,
+                centerX: centerX + Math.cos(angle) * radius,
+                centerY: centerY + Math.sin(angle) * radius,
+                maxRadius: subRadius,
+                minRadius: 0,
+                step: subRadius / 32,
+                transformer: (p, a, r) => {
+                    p.velX = velocity * Math.cos(a - Math.PI / 2) * r + Math.cos(angle + velocityAngle) / 2;
+                    p.velY = velocity * Math.sin(a - Math.PI / 2) * r + Math.sin(angle + velocityAngle) / 2;
+                }
             });
-
-            for (let j = start; j < end; j++) {
-                const p = particles[j];
-                p.velX = velocity * Math.cos(angle + velocityAngle);
-                p.velY = velocity * Math.sin(angle + velocityAngle);
-            }
 
             angle += angleStep;
         }
