@@ -23,10 +23,12 @@ export class Application {
         this.settings = settings;
 
         this.playerCtrl = new PlayerController(document.body);
-        this.playerCtrl.subscribe(this, PlayerController.CONTROL_EVENT, (sender, type) => this.handleControl(type));
-        this.playerCtrl.subscribe(this, PlayerController.DATA_EVENT, (sender, file) => this.loadDataFromFile(file));
-        this.playerCtrl.subscribe(this, PlayerController.SEEK_EVENT, (sender, value) => this.handleSeek(value));
-        this.playerCtrl.subscribe(this, PlayerController.SPEED_EVENT, (sender, value) => this.handleSpeed(value));
+        this.playerCtrl.subscribe(this, PlayerController.CONTROL_EVENT, (_, type) => this.handleControl(type));
+        this.playerCtrl.subscribe(this, PlayerController.DATA_EVENT, (_, file) => this.loadDataFromFile(file));
+        this.playerCtrl.subscribe(this, PlayerController.SEEK_EVENT, (_, value) => this.handleSeek(value));
+        this.playerCtrl.subscribe(this, PlayerController.SPEED_EVENT, (_, value) => this.handleSpeed(value));
+        this.playerCtrl.subscribe(this, PlayerController.PARTICLE_FIXED_SIZE_EVENT, (_, value) => this.settings.render.config.fixedParticleSize = value);
+        this.playerCtrl.subscribe(this, PlayerController.PARTICLE_SCALE_EVENT, (_, value) => this.settings.render.config.particleSizeScale = value);
         this.playerCtrl.setState(PlayerStateEnum.waiting);
         this.playerCtrl.configure(this.settings);
     }

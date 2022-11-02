@@ -85,7 +85,7 @@
 .settings {
     display: grid;
     grid-template-columns: auto auto;
-    grid-template-rows: 2em;
+    grid-template-rows: repeat(3, 2em);
     gap: 0.5em 1em;
     align-items: center;
     justify-items: stretch;

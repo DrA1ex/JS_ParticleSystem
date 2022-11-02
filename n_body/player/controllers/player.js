@@ -25,6 +25,8 @@ export class PlayerController extends StateControllerBase {
     static CONTROL_EVENT = "player_control";
     static SEEK_EVENT = "player_seek";
     static SPEED_EVENT = "player_speed";
+    static PARTICLE_FIXED_SIZE_EVENT = "player_particle_fixed_size";
+    static PARTICLE_SCALE_EVENT = "player_particle_scale";
 
     static MOUSE_INACTIVE_DELAY = 2000;
 
@@ -47,7 +49,10 @@ export class PlayerController extends StateControllerBase {
         this.controlBarCtrl.subscribe(this, ControlBarController.SEEK_EVENT, this._onSeek.bind(this));
 
         this.settingsCtrl = new SettingsController(document.getElementById("settings-content"), this);
-        this.settingsCtrl.subscribe(this, SettingsController.SPEED_EVENT, this._onSpeedChange.bind(this))
+
+        this.settingsCtrl.subscribe(this, SettingsController.SPEED_EVENT, (_, speed) => this.emitEvent(PlayerController.SPEED_EVENT, speed));
+        this.settingsCtrl.subscribe(this, SettingsController.PARTICLE_FIXED_SIZE_EVENT, (_, value) => this.emitEvent(PlayerController.PARTICLE_FIXED_SIZE_EVENT, value));
+        this.settingsCtrl.subscribe(this, SettingsController.PARTICLE_SCALE_EVENT, (_, value) => this.emitEvent(PlayerController.PARTICLE_SCALE_EVENT, value));
 
         this.settingsPopup = Popup.byId("settings-popup", this.settingsCtrl.root);
         this.settingsPopup.offsetY = 0.4;
@@ -114,10 +119,6 @@ export class PlayerController extends StateControllerBase {
         }
 
         this.emitEvent(PlayerController.CONTROL_EVENT, type);
-    }
-
-    _onSpeedChange(sender, speed) {
-        this.emitEvent(PlayerController.SPEED_EVENT, speed);
     }
 
     _handleHotKey(e) {
