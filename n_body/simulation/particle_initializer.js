@@ -82,9 +82,21 @@ export class Particle_initializer {
      */
     static _diskInitializer(particles, settings) {
         const {worldWidth, worldHeight} = settings.world;
+        const {particleCount} = settings.physics;
 
-        const radius = Math.min(worldWidth, worldHeight) / 4;
-        this._circleCenteredInitializer(particles, settings, radius, radius * 1.9);
+        const radius = Math.min(worldWidth, worldHeight) / 2;
+        const centerX = worldWidth / 2,
+            centerY = worldHeight / 2;
+
+        return this._uniformCircleInitializerBase(particles, {
+            offset: 0,
+            count: particleCount,
+            centerX,
+            centerY,
+            maxRadius: radius,
+            minRadius: 0,
+            step: radius / 128
+        });
     }
 
     /**
