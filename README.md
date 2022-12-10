@@ -148,3 +148,10 @@ _Simulation demo links with maximum accuracy_:
 
 ### Parameters:
 See params description here: [link](./settings.md)
+
+## Limitations:
+Application originally developed and optimized for Chrome browser. In other browsers app can have significant performance degradation.
+
+### Known issues
+- Due to lack of [WebWorker modules](https://caniuse.com/mdn-api_worker_worker_ecmascript_modules) simulation doesn't work in Firefox.
+- Due to lack of [OffscreenCanvas](https://caniuse.com/offscreencanvas) GPGPU backend doesn't work in Safari/Firefox.
