@@ -1,0 +1,12 @@
+{
+  "html": {
+    "removeAttributeQuotes": false
+  },
+  "css": {
+    "compatibility": "*"
+  },
+  "js": {
+    "ecma": 2020,
+    "module": true
+  }
+}
