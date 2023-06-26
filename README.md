@@ -35,6 +35,20 @@ _Visualization of 1,000,000 particles (click image to open YouTube video)_
 
 [<img width="720" alt="image" src="https://user-images.githubusercontent.com/1194059/195990061-9fcf8693-faea-4038-80a3-30ccd9158182.png">](https://youtu.be/Gu8Y1t5cblE)
 
+### Demo Links
+
+- Accurate simulation, galaxy-like pattern may born (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?segment_max_count=32&particle_count=131072)
+- Accurate simulation, galaxy-like pattern may born (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?segment_max_count=32&particle_count=100000)
+- Fast simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=rotation&g=1000)
+- Fast simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=collision&g=1000)
+- Big GPGPU simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=16384&segment_max_count=128&particle_init=uniform&particle_mass=10&g=10)
+- Big GPGPU simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=16384&segment_max_count=128&particle_mass=10&g=100)
+- Particle collisions CPU (accurate): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?collision=1)
+- Particle collisions CPU (fast): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?collision=1&g=10)
+- Particle collisions GPGPU (accurate): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?collision=1&backend=gpgpu&particle_count=16384&segment_max_count=128)
+- Particle collisions GPGPU (fast): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?collision=1&backend=gpgpu&particle_count=16384&segment_max_count=128&g=100)
+
+More links you can find below.
 
 ### Simulation Player
 You can use [Simulation Player](https://dra1ex.github.io/JS_ParticleSystem/n_body/player) to watch recorded simulations.
