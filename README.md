@@ -38,7 +38,7 @@ _Visualization of 1,000,000 particles (click image to open YouTube video)_
 ### Demo Links
 
 - Accurate simulation, galaxy-like pattern may born (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?segment_max_count=32&particle_count=131072)
-- Accurate simulation, galaxy-like pattern may born (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?segment_max_count=32&particle_count=100000)
+- Accurate simulation, galaxy-like pattern may born (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?segment_max_count=32&particle_count=100000&init=bang)
 - Fast simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=rotation&g=1000)
 - Fast simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=collision&g=1000)
 - Big GPGPU simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=16384&segment_max_count=128&particle_init=uniform&particle_mass=10&g=10)
