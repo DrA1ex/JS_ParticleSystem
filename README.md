@@ -5,23 +5,15 @@
 
 ## N-Body Simulation
 
-Simulation is N-Body, means all particles interacts with each other. This is what can be called a galaxy
-simulation. Of course, with some assumptions! The formation of a galaxy is a long process, the beauty of which was
-formed by millions of years of interactions. Moreover, the number of particles in a galaxy is so large that no computer
-could recreate the birth of a galaxy with high accuracy. But this simulation will allow you to enjoy the process on a
-small scale.
+The simulation is an N-Body system, where all particles interact with each other. It can be referred to as a galaxy simulation, although certain assumptions are made. The formation of a galaxy is a lengthy process, shaped over millions of years of interactions. Furthermore, the sheer number of particles in a galaxy is so immense that recreating the birth of a galaxy with high accuracy is beyond the capabilities of any computer. However, this simulation provides the opportunity to witness the process on a smaller scale.
 
 _50,000 particles forms a Galaxy-like
 image_ (Try it yourself: [#1](https://dra1ex.github.io/JS_ParticleSystem/n_body/?state=../static/galaxy1.json), [#2](https://dra1ex.github.io/JS_ParticleSystem/n_body/?state=../static/galaxy2.json), [#3](https://dra1ex.github.io/JS_ParticleSystem/n_body/?state=../static/galaxy3.json))
 
 [<img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/194406835-25e8af62-3361-45d9-8e53-836f68ae04b3.png">](https://user-images.githubusercontent.com/1194059/194406257-721f5516-9685-425c-b157-f4f28aa12c64.png) [ <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/194406943-f9996d31-2b2d-402f-b50c-6634538a7a5d.png">](https://user-images.githubusercontent.com/1194059/194406416-311b8dfc-857f-458c-8d7c-5cba1cac4636.png) <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193401669-acc131b5-9aa6-4ddb-b2b2-582986dc7320.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193060048-2f9dd976-e675-42f2-aef1-1f381a807ced.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193402299-c9728ea3-b29d-4174-a4d1-3930c85cd863.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193402786-c9d376cf-5170-47e0-974d-c31bd3710558.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193416793-244cf9ba-1218-455b-abf8-da453f3bc14e.png">
 
-Since an accurate calculation of the gravitational interaction would be too difficult, some optimizations were used. All
-particles are divided into hierarchical segments, thus creating a Spatial Tree.
-
-Each particle in a segment interacts with each other, but not with particles in other segments. Instead, the segments
-themselves are perceived as large particles and interact with each other. This allows us to achieve an acceptable
-complexity: _O(N*logN)_ instead of unoptimized _O(N*N)_.
+Given the complexity of accurately calculating gravitational interactions, several optimizations have been employed. 
+The particles are organized into hierarchical segments, forming a Spatial Tree. Each particle within a segment interacts with every other particle in the same segment, rather than engaging with particles in different segments. Consequently, the segments themselves are treated as larger particles and interact with one another. This approach ensures an acceptable complexity level: _O(N*logN)_, as opposed to the unoptimized _O(N*N)_ approach.
 
 _Visualization of Spatial tree used to optimize 100,000 particles interaction_
 
@@ -29,8 +21,7 @@ _Visualization of Spatial tree used to optimize 100,000 particles interaction_
 
 You can see Spatial Tree segmentation in real-time: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body?debug=1&segment_random=0)
 
-This means that we can simulate _100,000_ particles in just about _500,000_ operations. Without optimization, _100,000_
-particles would require _10,000,000,000_ operations (_20,000_ times more)
+In practical terms, this means that we can simulate _100,000_ particles using approximately _500,000_ operations. Without optimization, simulating _100,000_ particles would require _10,000,000,000_ operations, which is _20,000_ times more computationally intensive.
 
 _Visualization of 1,000,000 particles (click image to open YouTube video)_
 
