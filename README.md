@@ -92,10 +92,11 @@ _Debug mode:_
 
 ### Renderer
 Supported render engines:
-##### `сanvas`
-Use HMTL5 Canvas to render particles. In order to reduce the delay, rendering through the ImageBuffer is used. 
-The render performs well on mobile platforms, but loses a lot in performance at high resolutions.
-Also, Canvas does not support dynamic particle size, so particles can be difficult to see on screens with a high pixel density.
+
+##### `Canvas`
+Use HTML5 Canvas to render particles. In order to reduce delays, rendering through the ImageBuffer is utilized.
+The rendering performs well on mobile platforms but experiences a significant drop in performance at high resolutions.
+Furthermore, canvas renderer does not support dynamic particle size, making particles difficult to discern on screens with high pixel density.
 
 _Demo links_:
 
@@ -104,8 +105,8 @@ _Demo links_:
 
 
 ##### `webgl2`
-Use WebGL 2.0 to render particles. This rendering method allows to effectively display many particles in high resolution.
-Render works well on screens with high pixel density and maintain dynamic particle size. May not work on older browser versions and on older mobile devices. Rendering is very fast, so this render type is recommended for screens with high refresh rates.
+Use WebGL 2.0 to render particles. This rendering method effectively displays numerous particles in high resolution.
+The render works well on screens with high pixel density and maintains dynamic particle size. However, it may not function on older browser versions and older mobile devices. This rendering technique is highly recommended for screens with high refresh rates due to its fast performance.
 
 _Demo links_:
 
