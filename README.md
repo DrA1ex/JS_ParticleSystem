@@ -116,9 +116,10 @@ _Demo links_:
 Supported backends:
 
 ##### `worker`
-A web worker is used to calculate physics. All calculations are done separately from the main thread, so even with heavy simulation configurations, rendering will still be at a high frame rate. This method of calculation is well suited for mobile platforms or systems with basic integrated graphics.
-The calculation is done entirely by the CPU, so don't expect high performance in tasks like N-Body simulation.
-Performance can be influenced through the `segmentation_max_count` parameter. Decreasing the value also reduces the computational complexity, but degrades the accuracy of the simulation.
+A web worker is utilized for physics calculations. All computations are performed separately from the main thread, ensuring a smooth rendering experience even with complex simulation configurations. This calculation approach is particularly suitable for mobile platforms and systems with basic integrated graphics.
+Please note that since the computations are entirely handled by the CPU, it may not deliver high performance for tasks such as N-Body simulation. You should manage your expectations accordingly.
+
+You can fine-tune the performance by adjusting the `segmentation_max_count` parameter. Decreasing its value reduces the computational complexity but sacrifices the accuracy of the simulation.
 
 _Demos with different segment max sizes_:
 - Max segment size `8`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&segment_max_count=8)
@@ -135,16 +136,18 @@ _Simulation demo links with maximum accuracy_:
 
 
 ##### `gpgpu`
-GPGPU is used for calculation (General-purpose computing on graphics processing units). All calculations are performed in a separate worker, but on the GPU. Due to the high parallelization of calculations, it is possible to achieve significant acceleration for complex simulation configurations. This method most likely will not work on mobile platforms, but it will work well on desktops with discrete graphics cards.
-In this calculation method, `segmentation_max_count` parameter is interpreted as the size of the side of the 2D texture, i.e. value 128 actually means `128*128=16348` segment size. This method allows to simulate gravity with maximum accuracy and with a large number of particles.
-Unfortunately, on small segment sizes, the method works inefficiently and works worse than `worker` backend.
+GPGPU (General-purpose computing on graphics processing units) is employed for calculations in a dedicated worker, utilizing the power of the GPU. The highly parallelized nature of these computations enables significant acceleration, particularly for complex simulation configurations. However, it's worth noting that this method may not be suitable for mobile platforms but delivers excellent results on desktops equipped with discrete graphics cards.
+
+In this calculation method, the `segmentation_max_count` parameter is interpreted as the dimension of the 2D texture, indicating the size of each segment. For example, a value of 128 actually corresponds to a segment size of 16,348 (128 * 128).
+
+This method enables the simulation of gravity with utmost accuracy, accommodating a high volume of particles. However, it exhibits inefficiency and performs worse than the `worker` backend when used with small segment sizes.
 
 _Demos with different segment max sizes_:
 - Max segment size `64*64` and `32k` particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=32768&segment_max_count=64)
 - Max segment size `128*128` and `131k` particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=131072&segment_max_count=128)
 - Max segment size `256*256` and `262k` particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=262144&segment_max_count=256)
 
-Increasing `segmentation_max_count` also degrades performance for GPGPU, but allows to simulate much more particles with max accuracy.
+Although increasing the `segmentation_max_count` adversely affects GPGPU performance, it facilitates the simulation of a significantly larger number of particles while maintaining maximum accuracy.
 
 _Simulation demo links with maximum accuracy_:
 - Max segment size `96*96`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=9216&segment_max_count=96)
@@ -159,5 +162,5 @@ See params description here: [link](./settings.md)
 Application originally developed and optimized for Chrome browser. In other browsers app can have significant performance degradation.
 
 ### Known issues
-- Due to lack of [WebWorker modules](https://caniuse.com/mdn-api_worker_worker_ecmascript_modules) simulation doesn't work in Firefox.
-- Due to lack of [OffscreenCanvas](https://caniuse.com/offscreencanvas) GPGPU backend doesn't work in Safari/Firefox.
+- Due to lack of [WebWorker modules](https://caniuse.com/mdn-api_worker_worker_ecmascript_modules) the simulation may not work in Firefox.
+- Due to lack of [OffscreenCanvas](https://caniuse.com/offscreencanvas) GPGPU backend may not be available in Safari/Firefox.
