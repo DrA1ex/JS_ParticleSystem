@@ -3,7 +3,7 @@
 This is not a something like simulation of a galaxy, since in a galaxy all bodies interact with each other. The
 simulation roughly visualizes how ultralight bodies would interact with one supermassive body.
 
-The advantage of this type of simulation is the simplicity of calculations: O(N^2). Because only one body actually
+The advantage of this type of simulation is the simplicity of calculations: O(N). Because only one body actually
 attracts all the particles we can simulate hundreds of thousands of particles in the browser in real time.
 
 For a real N-Body simulation, it would be necessary to calculate the interaction of each particle with each other. For
