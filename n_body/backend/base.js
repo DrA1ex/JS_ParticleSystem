@@ -1,12 +1,13 @@
 import {Particle_initializer} from "../simulation/particle_initializer.js";
 import {AppSimulationSettings} from "../settings/app.js";
+import {ITEM_SIZE} from "../utils/particles.js";
 
 /**
  * @typedef {{physicsTime:number, treeTime: number, tree: {flops: number, depth: number, segmentCount: number}}} StepStatistics
  * @typedef {{timestamp: number, buffer: Float32Array, treeDebug: Array, forceDebug: Array, stats: StepStatistics}} StepResult
  */
 
-export const ITEM_SIZE = 5;
+export {ITEM_SIZE};
 
 export class BackendBase {
     /**
@@ -20,7 +21,7 @@ export class BackendBase {
      * @param {function(StepResult):void} onDataFn
      * @param {function():void} onReadyFn
      * @param {AppSimulationSettings} settings
-     * @param {Particle[]} [particles=null]
+     * @param {Particle[]|Float32Array|Array[]} [particles=null]
      * @return {void}
      */
     async init(onDataFn, onReadyFn, settings, particles = null) {
@@ -30,7 +31,7 @@ export class BackendBase {
 
     /**
      * @param {AppSimulationSettings} settings
-     * @param {Particle[]} [particles=null]
+     * @param {Particle[]|Float32Array|Array[]} [particles=null]
      */
     reconfigure(settings, particles = null) {
         this._worker.postMessage({type: "reconfigure", settings: settings.serialize(), state: particles});
@@ -155,16 +156,31 @@ export class BackendImpl {
      * @protected
      */
     _applyParticlesState(state) {
-        if (state && state.length > 0) {
-            const size = Math.min(state.length, this.settings.physics.particleCount);
+        if (!state || state.length === 0) {
+            return;
+        }
+
+        if (state instanceof Float32Array) {
+            const size = Math.min(state.length / ITEM_SIZE, this.settings.physics.particleCount);
             for (let i = 0; i < size; i++) {
-                const [x, y, velX, velY, mass] = state[i];
-                this.particles[i].x = x;
-                this.particles[i].y = y;
-                this.particles[i].velX = velX;
-                this.particles[i].velY = velY;
-                this.particles[i].mass = mass;
+                const offset = i * ITEM_SIZE;
+                this.particles[i].x = state[offset];
+                this.particles[i].y = state[offset + 1];
+                this.particles[i].velX = state[offset + 2];
+                this.particles[i].velY = state[offset + 3];
+                this.particles[i].mass = state[offset + 4];
             }
+            return;
+        }
+
+        const size = Math.min(state.length, this.settings.physics.particleCount);
+        for (let i = 0; i < size; i++) {
+            const [x, y, velX, velY, mass] = state[i];
+            this.particles[i].x = x;
+            this.particles[i].y = y;
+            this.particles[i].velX = velX;
+            this.particles[i].velY = velY;
+            this.particles[i].mass = mass;
         }
     }
 

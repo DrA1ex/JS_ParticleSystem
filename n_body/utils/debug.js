@@ -1,5 +1,6 @@
 import {DataSmoother} from "./smoother.js";
 import * as CommonUtils from "./common.js";
+import {getParticleCount, getParticleVelX, getParticleVelY, getParticleX, getParticleY} from "./particles.js";
 
 export class Debug {
     depth = 0;
@@ -38,6 +39,9 @@ export class Debug {
         this.frameRateSmoother = new DataSmoother(this.settings.world.fps, 3, true);
         this.frameLatencySmoother = new DataSmoother(this.settings.world.fps);
         this.flopsSmoother = new DataSmoother(this.settings.world.fps, 0, true);
+        this._lastStatsDrawTime = 0;
+        this._statsDrawInterval = 250;
+        this._maxDebugVectors = 1000;
 
         if (this.settings.common.stats) {
             const div = document.createElement("div");
@@ -58,9 +62,16 @@ export class Debug {
         this.flopsSmoother = null;
 
         this.infoElem?.remove();
+        this.infoElem = null;
     }
 
     drawStats() {
+        const now = performance.now();
+        if (now - this._lastStatsDrawTime < this._statsDrawInterval) {
+            return;
+        }
+        this._lastStatsDrawTime = now;
+
         const flops = CommonUtils.formatUnit(this.flops, "FLOPS");
 
         this.infoElem.innerText = [
@@ -99,20 +110,29 @@ export class Debug {
     }
 
     drawVelocityDebug(particles) {
+        const count = getParticleCount(particles);
+        const step = Math.max(1, Math.ceil(count / this._maxDebugVectors));
+
         if (this.settings.common.debugVelocity) {
             this.renderer.setDrawStyle("#ff00e5", null);
-            for (let i = 0; i < this.settings.physics.particleCount; i++) {
-                const p = particles[i];
-                this.renderer.drawWorldLine(p.x, p.y, p.x + p.velX * 5, p.y + p.velY * 5);
+            for (let i = 0; i < count; i += step) {
+                const x = getParticleX(particles, i);
+                const y = getParticleY(particles, i);
+                const velX = getParticleVelX(particles, i);
+                const velY = getParticleVelY(particles, i);
+                this.renderer.drawWorldLine(x, y, x + velX * 5, y + velY * 5);
             }
         }
 
         if (this.settings.common.debugForce) {
             this.renderer.setDrawStyle("#ff9900", null);
-            for (let i = 0; i < this.forceDebugData.length; i++) {
-                const p = particles[i];
+            const forceCount = Math.min(this.forceDebugData.length, count);
+            const forceStep = Math.max(1, Math.ceil(forceCount / this._maxDebugVectors));
+            for (let i = 0; i < forceCount; i += forceStep) {
+                const x = getParticleX(particles, i);
+                const y = getParticleY(particles, i);
                 const {forceX, forceY} = this.forceDebugData[i];
-                this.renderer.drawWorldLine(p.x, p.y, p.x + forceX * 50, p.y + forceY * 50);
+                this.renderer.drawWorldLine(x, y, x + forceX * 50, y + forceY * 50);
             }
         }
     }

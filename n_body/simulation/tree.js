@@ -43,10 +43,6 @@ class BoundaryRect {
         return new BoundaryRect(minX, minY, maxX, maxY);
     }
 
-    contains(particle) {
-        return particle.x >= this.left && particle.x < this.right &&
-            particle.y >= this.top && particle.y < this.bottom;
-    }
 
     center() {
         if (this._center === null) {
@@ -84,9 +80,6 @@ class Leaf {
         return leaf;
     }
 
-    filterByRect(rect) {
-        return this.data.filter(p => rect.contains(p));
-    }
 }
 
 export class SpatialTree {
@@ -109,54 +102,116 @@ export class SpatialTree {
     }
 
     _populate(current) {
-        if (current.length <= this.maxCount) {
-            if (current.depth > this.maxDepth) {
-                this.maxDepth = current.depth;
-            }
-
+        if (current.length <= this.maxCount || this._isTooSmallToSplit(current.boundaryRect)) {
+            this._markLeaf(current);
             return;
         }
 
         const boundary = current.boundaryRect;
+        const xEdges = this._buildEdges(boundary.left, boundary.width);
+        const yEdges = this._buildEdges(boundary.top, boundary.height);
+        const bucketsCount = this.divideFactor * this.divideFactor;
+        const buckets = new Array(bucketsCount);
+        let usedBuckets = 0;
 
-        let lastLeft = 0;
+        // Split once per node by assigning particles to buckets. The previous
+        // implementation filtered the same array for every child rectangle,
+        // which made high divideFactor values much more expensive.
+        for (let i = 0; i < current.length; i++) {
+            const particle = current.data[i];
+            const x = this._findEdgeIndex(particle.x, xEdges);
+            const y = this._findEdgeIndex(particle.y, yEdges);
+            const bucketIndex = x * this.divideFactor + y;
+
+            let bucket = buckets[bucketIndex];
+            if (!bucket) {
+                bucket = buckets[bucketIndex] = [];
+                usedBuckets += 1;
+            }
+            bucket.push(particle);
+        }
+
+        if (usedBuckets === 0 || (usedBuckets === 1 && this._hasSinglePoint(current.data))) {
+            this._markLeaf(current);
+            return;
+        }
+
         for (let x = 0; x < this.divideFactor; x++) {
-            let xStep
-            if (x + 1 !== this.divideFactor) {
-                xStep = this._getNextStep(boundary.width);
-            } else {
-                xStep = boundary.width - lastLeft + EPSILON;
-            }
-
-            let lastTop = 0;
             for (let y = 0; y < this.divideFactor; y++) {
-                let yStep;
-                if (y + 1 !== this.divideFactor) {
-                    yStep = this._getNextStep(boundary.height);
-                } else {
-                    yStep = boundary.height - lastTop + EPSILON;
+                const bucket = buckets[x * this.divideFactor + y];
+                if (!bucket || bucket.length === 0) {
+                    continue;
                 }
 
-                let left = boundary.left + lastLeft;
-                let top = boundary.top + lastTop;
-                const filterRect = new BoundaryRect(left, top, left + xStep, top + yStep);
-                const rectData = current.filterByRect(filterRect);
-
-                if (rectData.length > 0) {
-                    const leaf = current.appendChild(rectData, filterRect);
-                    this._populate(leaf);
-                }
-
-                lastTop += yStep;
+                const rect = new BoundaryRect(xEdges[x], yEdges[y], xEdges[x + 1], yEdges[y + 1]);
+                const leaf = current.appendChild(bucket, rect);
+                this._populate(leaf);
             }
+        }
 
-            lastLeft += xStep;
+        current.data = null;
+    }
+
+    _markLeaf(current) {
+        if (current.depth > this.maxDepth) {
+            this.maxDepth = current.depth;
         }
     }
 
-    _getNextStep(size) {
-        return size * ((1 + (this.randomness * (Math.random() - 0.5))) / this.divideFactor);
+    _isTooSmallToSplit(boundary) {
+        return boundary.width <= EPSILON && boundary.height <= EPSILON;
     }
+
+    _buildEdges(start, size) {
+        const edges = new Array(this.divideFactor + 1);
+        const weights = new Array(this.divideFactor);
+        let totalWeight = 0;
+
+        // Keep the original randomized split, but materialize all edges first
+        // so particle bucketing is deterministic within this node.
+        for (let i = 0; i < this.divideFactor; i++) {
+            const weight = 1 + this.randomness * (Math.random() - 0.5);
+            weights[i] = weight;
+            totalWeight += weight;
+        }
+
+        edges[0] = start;
+        let offset = 0;
+        for (let i = 1; i < this.divideFactor; i++) {
+            offset += size * weights[i - 1] / totalWeight;
+            edges[i] = start + offset;
+        }
+
+        edges[this.divideFactor] = start + size + EPSILON;
+        return edges;
+    }
+
+    _findEdgeIndex(value, edges) {
+        for (let i = 1; i < edges.length; i++) {
+            if (value < edges[i]) {
+                return i - 1;
+            }
+        }
+
+        return edges.length - 2;
+    }
+
+    _hasSinglePoint(data) {
+        if (data.length < 2) {
+            return true;
+        }
+
+        const x = data[0].x;
+        const y = data[0].y;
+        for (let i = 1; i < data.length; i++) {
+            if (Math.abs(data[i].x - x) > EPSILON || Math.abs(data[i].y - y) > EPSILON) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
 
     _getIndex() {
         return ++this._index;

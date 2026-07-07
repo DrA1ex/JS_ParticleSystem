@@ -1,5 +1,4 @@
 import {DFRIHelper} from "./utils/dfri.js";
-import {ITEM_SIZE} from "./backend/base.js";
 import {SimulationController} from "./controllers/simulation.js";
 import {SimulationStateEnum} from "./controllers/enums.js";
 import {AppSimulationSettings} from "./settings/app.js";
@@ -8,14 +7,16 @@ import {InteractionHandler} from "./render/interactions.js";
 import {RendererInitializer} from "./render/init.js";
 import {BackendInitializer} from "./backend/init.js";
 import {ComponentType} from "./settings/base.js";
+import {ITEM_SIZE, exportParticleState} from "./utils/particles.js";
 
 export class Application {
     /** @type{RendererBase} */
     renderer = null;
     /** @type{AppSimulationSettings} */
     settings = null;
-    /** @type{Particle[]} */
+    /** @type{Float32Array|null} */
     particles = null;
+    currentBuffer = null;
 
     canvasInteraction = null;
     dfriHelper = null;
@@ -33,6 +34,7 @@ export class Application {
         this.settings = settings;
         this.refreshTime = 1000 / this.settings.world.fps;
         this.simulationCtrl = new SimulationController(document.body, this);
+        this._renderFrame = this.render.bind(this);
     }
 
     reloadFromState(state) {
@@ -81,7 +83,7 @@ export class Application {
         }
 
         if (!particles && !diff.breaks.has(ComponentType.particles)) {
-            particles = this.particles.slice(0, newSettings.physics.particleCount).map(p => [p.x, p.y, p.velX, p.velY, p.mass]);
+            particles = exportParticleState(this.particles, newSettings.physics.particleCount);
         }
 
         if (diff.breaks.has(ComponentType.renderer)) {
@@ -94,6 +96,8 @@ export class Application {
         if (diff.breaks.has(ComponentType.backend)) {
             this.aheadBuffers = [];
             this.pendingBufferCount = 0;
+            this.currentBuffer = null;
+            this.particles = null;
         }
 
         this.settings = newSettings;
@@ -153,10 +157,7 @@ export class Application {
         }
 
         if (!diff || diff.breaks.has(ComponentType.backend)) {
-            this.particles = new Array(this.settings.physics.particleCount);
-            for (let i = 0; i < this.settings.physics.particleCount; i++) {
-                this.particles[i] = {x: 0, y: 0, velX: 0, velY: 0, mass: 0};
-            }
+            this.particles = new Float32Array(this.settings.physics.particleCount * ITEM_SIZE);
 
             this.backend.init(this.onData.bind(this), this.requestNextStep.bind(this), this.settings, state?.particles);
         } else if (diff.affects.has(ComponentType.backend)) {
@@ -180,7 +181,7 @@ export class Application {
     }
 
     run() {
-        requestAnimationFrame(this.render.bind(this));
+        requestAnimationFrame(this._renderFrame);
     }
 
     onData(data) {
@@ -202,9 +203,7 @@ export class Application {
         this.aheadBuffers.push({buffer: data.buffer, treeDebug: data.treeDebug, forceDebug: data.forceDebug});
         this.pendingBufferCount -= 1;
 
-        if (this.aheadBuffers.length + this.pendingBufferCount < this.settings.simulation.bufferCount) {
-            this.requestNextStep();
-        }
+        this.requestNextStepIfNeeded();
 
         if (this.settings.common.stats) this.debug.importPhysicsStats(data);
     }
@@ -225,21 +224,36 @@ export class Application {
             return;
         }
 
+        const previousBuffer = this.currentBuffer;
         const bufferEntry = this.aheadBuffers.shift();
         const data = bufferEntry.buffer;
-        for (let i = 0; i < this.settings.physics.particleCount; i++) {
-            this.particles[i].x = data[i * ITEM_SIZE];
-            this.particles[i].y = data[i * ITEM_SIZE + 1];
-            this.particles[i].velX = data[i * ITEM_SIZE + 2];
-            this.particles[i].velY = data[i * ITEM_SIZE + 3];
-            this.particles[i].mass = data[i * ITEM_SIZE + 4];
+
+        // With more than one worker buffer we keep the currently rendered buffer
+        // and return the previous one only after the frame switches. With a
+        // single buffer, copy the data so the backend can continue immediately.
+        if (this.settings.simulation.bufferCount <= 1) {
+            if (!this.particles) {
+                this.particles = new Float32Array(data.length);
+            }
+            if (this.particles.length !== data.length) {
+                this.particles = new Float32Array(data.length);
+            }
+            this.particles.set(data);
+            this.currentBuffer = null;
+            this.backend.freeBuffer(data);
+        } else {
+            this.currentBuffer = data;
+            this.particles = data;
+
+            if (previousBuffer) {
+                this.backend.freeBuffer(previousBuffer);
+            }
         }
 
         if (this.settings.common.debugTree) this.debug.importTreeDebugData(bufferEntry.treeDebug);
         if (this.settings.common.debugForce) this.debug.importForceDebugData(bufferEntry.forceDebug);
 
-        this.backend.freeBuffer(data);
-        this.requestNextStep();
+        this.requestNextStepIfNeeded();
 
         if (this.settings.render.enableDFRI && this.dfriHelper.needNextFrame()) {
             this.dfriHelper.bufferSwitched(this.particles, this.aheadBuffers[0]);
@@ -251,10 +265,20 @@ export class Application {
         this.backend.requestNextStep();
     }
 
+    requestNextStepIfNeeded() {
+        // A retained render buffer is not available to the worker, so the fill
+        // target is reduced by one until that buffer is acknowledged.
+        const retainedBufferCount = this.currentBuffer ? 1 : 0;
+        const targetBufferCount = Math.max(1, this.settings.simulation.bufferCount - retainedBufferCount);
+        if (this.aheadBuffers.length + this.pendingBufferCount < targetBufferCount) {
+            this.requestNextStep();
+        }
+    }
+
     render(timestamp) {
         if (this.simulationCtrl.currentState === SimulationStateEnum.loading) {
             this.lastRenderTime = timestamp;
-            requestAnimationFrame(this.render.bind(this));
+            requestAnimationFrame(this._renderFrame);
             return;
         }
 
@@ -280,6 +304,6 @@ export class Application {
         }
 
         this.lastRenderTime = timestamp;
-        requestAnimationFrame(this.render.bind(this));
+        requestAnimationFrame(this._renderFrame);
     }
 }

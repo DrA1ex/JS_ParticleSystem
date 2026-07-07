@@ -21,6 +21,8 @@ export class PhysicsEngine {
                 segmentCount: 0
             }
         };
+        this._collisionVelX = new Float32Array(0);
+        this._collisionVelY = new Float32Array(0);
     }
 
     reconfigure(settings) {
@@ -127,13 +129,18 @@ export class PhysicsEngine {
     }
 
     _processCollisions(leaf) {
-        const nextVelocity = new Array(leaf.length);
-        let hasCollision = false;
+        this._ensureCollisionBuffer(leaf.length);
+
+        const nextVelXBuffer = this._collisionVelX;
+        const nextVelYBuffer = this._collisionVelY;
+        const collisionSizeSq = this.settings.physics.collisionSizeSq;
+        const collisionRestitution = this.settings.physics.collisionRestitution;
 
         for (let i = 0; i < leaf.length; i++) {
             const p1 = leaf.data[i];
             let nextVelX = p1.velX,
-                nextVelY = p1.velY;
+                nextVelY = p1.velY,
+                hasCollision = false;
 
             for (let j = 0; j < leaf.length; j++) {
                 if (i === j) {
@@ -145,7 +152,7 @@ export class PhysicsEngine {
                     dy = p1.y - p2.y;
                 const distSquare = dx * dx + dy * dy;
 
-                if (distSquare < this.settings.physics.collisionSizeSq) {
+                if (distSquare > 0 && distSquare < collisionSizeSq) {
                     const massFactor = 2 * p2.mass / (p1.mass + p2.mass);
                     const dot = massFactor * ((nextVelX - p2.velX) * dx + (nextVelY - p2.velY) * dy);
                     nextVelX -= dot / distSquare * dx;
@@ -155,16 +162,14 @@ export class PhysicsEngine {
                 }
             }
 
-            if (hasCollision) {
-                nextVelocity[i] = [nextVelX * this.settings.physics.collisionRestitution, nextVelY * this.settings.physics.collisionRestitution];
-            } else {
-                nextVelocity[i] = [nextVelX, nextVelY];
-            }
+            nextVelXBuffer[i] = hasCollision ? nextVelX * collisionRestitution : nextVelX;
+            nextVelYBuffer[i] = hasCollision ? nextVelY * collisionRestitution : nextVelY;
         }
 
         for (let i = 0; i < leaf.length; i++) {
             const p = leaf.data[i];
-            const [nextVelX, nextVelY] = nextVelocity[i];
+            const nextVelX = nextVelXBuffer[i];
+            const nextVelY = nextVelYBuffer[i];
 
             if (this.settings.common.debugForce) {
                 p.forceX += nextVelX - p.velX;
@@ -173,6 +178,13 @@ export class PhysicsEngine {
 
             p.velX = nextVelX;
             p.velY = nextVelY;
+        }
+    }
+
+    _ensureCollisionBuffer(length) {
+        if (this._collisionVelX.length < length) {
+            this._collisionVelX = new Float32Array(length);
+            this._collisionVelY = new Float32Array(length);
         }
     }
 
@@ -247,5 +259,7 @@ export class PhysicsEngine {
     dispose() {
         this.settings = null;
         this.stats = null;
+        this._collisionVelX = null;
+        this._collisionVelY = null;
     }
 }

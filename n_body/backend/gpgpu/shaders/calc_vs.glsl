@@ -17,7 +17,7 @@ vec2 calculateForce(vec2 p1, vec2 p2, float g) {
     vec2 squareDelta = deltaPos * deltaPos;
     float distSquare = squareDelta.x + squareDelta.y;
 
-    float force;
+    float force = 0.0;
     if (distSquare >= min_dist_square) {
         force = -g / distSquare;
     }

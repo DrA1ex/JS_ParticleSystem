@@ -1,5 +1,5 @@
-import {ITEM_SIZE} from "../backend/base.js";
 import {DataSmoother} from "./smoother.js";
+import {ITEM_SIZE, getParticleVelX, getParticleVelY, getParticleX, getParticleY} from "./particles.js";
 
 export class DFRIHelperBase {
 
@@ -95,8 +95,12 @@ export class DFRIHelperBase {
     }
 
     _transformParticlePosition(index, particle, out) {
-        out.x = particle.x + this._deltas[index].x * this._currentFactor;
-        out.y = particle.y + this._deltas[index].y * this._currentFactor;
+        // Renderers pass particle objects in the legacy path and pre-filled
+        // positions in the flat-buffer path. Read from whichever is available.
+        const x = particle ? particle.x : out.x;
+        const y = particle ? particle.y : out.y;
+        out.x = x + this._deltas[index].x * this._currentFactor;
+        out.y = y + this._deltas[index].y * this._currentFactor;
     }
 }
 
@@ -157,8 +161,8 @@ export class DFRIHelper extends DFRIHelperBase {
         }
 
         this.setNextFrame((i, out) => {
-            out.x = buffer ? buffer[i * ITEM_SIZE] - particles[i].x : particles[i].velX
-            out.y = buffer ? buffer[i * ITEM_SIZE + 1] - particles[i].y : particles[i].velY;
+            out.x = buffer ? buffer[i * ITEM_SIZE] - getParticleX(particles, i) : getParticleVelX(particles, i);
+            out.y = buffer ? buffer[i * ITEM_SIZE + 1] - getParticleY(particles, i) : getParticleVelY(particles, i);
         });
     }
 

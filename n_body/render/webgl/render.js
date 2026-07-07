@@ -1,5 +1,6 @@
 import {RendererBase} from "../base.js";
 import * as WebglUtils from "../../utils/webgl.js";
+import {ITEM_SIZE, getParticleCount, isParticleBuffer} from "../../utils/particles.js";
 
 const RenderVertexShaderSource = await fetch(new URL("./shaders/render_vs.glsl", import.meta.url))
     .then(r => r.text());
@@ -18,9 +19,7 @@ const CONFIGURATION = [
             {name: "mass"}
         ],
         buffers: [
-            {name: "position", usageHint: GL.STREAM_DRAW},
-            {name: "velocity", usageHint: GL.STREAM_DRAW},
-            {name: "mass", usageHint: GL.STREAM_DRAW}
+            {name: "particles", usageHint: GL.STREAM_DRAW}
         ],
         uniforms: [
             {type: "uniform2f", name: "resolution"},
@@ -33,9 +32,9 @@ const CONFIGURATION = [
         ],
         vertexArrays: [{
             name: "particle", entries: [
-                {name: "position", type: GL.FLOAT, size: 2},
-                {name: "velocity", type: GL.FLOAT, size: 2},
-                {name: "mass", type: GL.FLOAT, size: 1},
+                {name: "position", buffer: "particles", type: GL.FLOAT, size: 2, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 0},
+                {name: "velocity", buffer: "particles", type: GL.FLOAT, size: 2, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 2 * Float32Array.BYTES_PER_ELEMENT},
+                {name: "mass", buffer: "particles", type: GL.FLOAT, size: 1, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 4 * Float32Array.BYTES_PER_ELEMENT},
             ]
         }],
     }
@@ -52,9 +51,7 @@ export class Webgl2Renderer extends RendererBase {
         this.gl = canvas.getContext("webgl2");
         this._stateConfig = {};
 
-        this._positionBufferData = new Float32Array(this.settings.physics.particleCount * 2);
-        this._velocityBufferData = new Float32Array(this.settings.physics.particleCount * 2);
-        this._massBufferData = new Float32Array(this.settings.physics.particleCount);
+        this._particleBufferData = new Float32Array(this.settings.physics.particleCount * ITEM_SIZE);
         this._maxSpeed = this.settings.physics.gravity / 100;
 
         this.initWebgl();
@@ -150,35 +147,63 @@ export class Webgl2Renderer extends RendererBase {
         super.render(particles);
 
         this.debugCtx?.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-        this._updateData(particles)
+        const count = this._updateData(particles)
 
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
         this.gl.useProgram(this._stateConfig.render.program);
         this.gl.bindVertexArray(this._stateConfig.render.vertexArrays["particle"]);
-        this.gl.drawArrays(this.gl.POINTS, 0, this.settings.physics.particleCount);
+        this.gl.drawArrays(this.gl.POINTS, 0, count);
 
         this.stats.renderTime = performance.now() - t;
     }
 
     _updateData(particles) {
+        const isBuffer = isParticleBuffer(particles);
+        const count = getParticleCount(particles);
+        const canUploadDirectly = isBuffer && !this.coordinateTransformer;
+        const uploadData = canUploadDirectly ? particles : this._particleBufferData;
         const pos = {x: 0, y: 0};
-        for (let i = 0; i < particles.length; i++) {
-            const particle = particles[i];
-            pos.x = particle.x;
-            pos.y = particle.y;
 
-            if (this.coordinateTransformer) {
-                this.coordinateTransformer(i, particle, pos);
+        for (let i = 0; i < count; i++) {
+            const offset = i * ITEM_SIZE;
+            let velX, velY;
+
+            if (isBuffer) {
+                velX = particles[offset + 2];
+                velY = particles[offset + 3];
+
+                if (!canUploadDirectly) {
+                    pos.x = particles[offset];
+                    pos.y = particles[offset + 1];
+                    if (this.coordinateTransformer) {
+                        this.coordinateTransformer(i, null, pos);
+                    }
+
+                    uploadData[offset] = pos.x;
+                    uploadData[offset + 1] = pos.y;
+                    uploadData[offset + 2] = velX;
+                    uploadData[offset + 3] = velY;
+                    uploadData[offset + 4] = particles[offset + 4];
+                }
+            } else {
+                const particle = particles[i];
+                velX = particle.velX;
+                velY = particle.velY;
+
+                pos.x = particle.x;
+                pos.y = particle.y;
+                if (this.coordinateTransformer) {
+                    this.coordinateTransformer(i, particle, pos);
+                }
+
+                uploadData[offset] = pos.x;
+                uploadData[offset + 1] = pos.y;
+                uploadData[offset + 2] = velX;
+                uploadData[offset + 3] = velY;
+                uploadData[offset + 4] = particle.mass;
             }
 
-            this._positionBufferData[i * 2] = pos.x;
-            this._positionBufferData[i * 2 + 1] = pos.y;
-
-            this._velocityBufferData[i * 2] = particle.velX;
-            this._velocityBufferData[i * 2 + 1] = particle.velY;
-            this._massBufferData[i] = particle.mass;
-
-            const speed = Math.max(Math.abs(particle.velX), Math.abs(particle.velY));
+            const speed = Math.max(Math.abs(velX), Math.abs(velY));
             if (Number.isFinite(speed) && this._maxSpeed < speed) {
                 this._maxSpeed = speed;
             }
@@ -195,12 +220,12 @@ export class Webgl2Renderer extends RendererBase {
                     {name: "offset", values: [this.xOffset, this.yOffset]},
                     {name: "particle_scale", values: [particleScale]}
                 ], buffers: [
-                    {name: "position", data: this._positionBufferData},
-                    {name: "velocity", data: this._velocityBufferData},
-                    {name: "mass", data: this._massBufferData},
+                    {name: "particles", data: uploadData},
                 ]
             }
         ])
+
+        return count;
     }
 
     getDebugDrawingContext() {
@@ -231,9 +256,7 @@ export class Webgl2Renderer extends RendererBase {
 
     dispose() {
         this._stateConfig = null;
-        this._positionBufferData = null;
-        this._velocityBufferData = null;
-        this._massBufferData = null;
+        this._particleBufferData = null;
 
         if (this.debugCanvas) {
             this.debugCtx = null;

@@ -31,6 +31,7 @@ export class Application {
         this.playerCtrl.subscribe(this, PlayerController.PARTICLE_SCALE_EVENT, (_, value) => this.settings.render.config.particleSizeScale = value);
         this.playerCtrl.setState(PlayerStateEnum.waiting);
         this.playerCtrl.configure(this.settings);
+        this._renderFrame = this.render.bind(this);
     }
 
     async loadDataFromUrl(url) {
@@ -125,7 +126,7 @@ export class Application {
                 this.nextFrame();
             }
 
-            requestAnimationFrame(this.render.bind(this));
+            requestAnimationFrame(this._renderFrame);
         });
     }
 

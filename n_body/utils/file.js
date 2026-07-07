@@ -43,9 +43,13 @@ export function saveFile(content, fileName, contentType) {
 export function saveFileParts(parts, fileName, contentType) {
     const a = document.createElement("a");
     const file = new Blob(parts, {type: contentType});
-    a.href = URL.createObjectURL(file);
+    const url = URL.createObjectURL(file);
+    a.href = url;
     a.download = fileName;
     a.click();
 
-    setTimeout(() => a.remove(), 0);
+    setTimeout(() => {
+        URL.revokeObjectURL(url);
+        a.remove();
+    }, 0);
 }

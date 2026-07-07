@@ -8,12 +8,13 @@ import {StateControllerBase} from "./base.js";
 import {SimulationStateEnum} from "./enums.js";
 import {Label} from "../ui/controls/label.js";
 import {SimulationSequence} from "../simulation/sequence.js";
-import {ITEM_SIZE} from "../backend/base.js";
+import {ITEM_SIZE} from "../utils/particles.js";
 import {RecordPanelController} from "./record_panel.js";
 import {RecordSettingsController} from "./record_settings.js";
 import {Dialog, DialogPositionEnum, DialogTypeEnum} from "../ui/controls/dialog.js";
 import {SettingsController} from "./settings.js";
 import {Frame} from "../ui/controls/frame.js";
+import {exportParticleState} from "../utils/particles.js";
 
 /**
  * @extends StateControllerBase<SimulationStateEnum>
@@ -151,7 +152,7 @@ export class SimulationController extends StateControllerBase {
     exportState() {
         const data = {
             settings: this.app.settings.export(),
-            particles: this.app.particles.map(p => [p.x, p.y, p.velX, p.velY, p.mass]),
+            particles: exportParticleState(this.app.particles),
             renderer: {
                 scale: this.app.renderer.scale / this.app.renderer.dpr,
                 relativeOffset: this.app.renderer.centeredRelativeOffset()

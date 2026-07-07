@@ -1,4 +1,5 @@
 import {RendererBase} from "./base.js";
+import {ITEM_SIZE, getParticleCount, isParticleBuffer} from "../utils/particles.js";
 
 export class CanvasRenderer extends RendererBase {
     _renderImageData = null;
@@ -36,21 +37,39 @@ export class CanvasRenderer extends RendererBase {
         const t = performance.now();
         super.render(particles);
 
-        for (let i = 0; i < this._pixels.length; i++) {
-            this._pixels[i] = 0;
-        }
+        this._pixels.fill(0);
 
         const canvasWidth = Math.ceil(this.canvasWidth);
         const canvasHeight = Math.ceil(this.canvasHeight);
 
+        const isBuffer = isParticleBuffer(particles);
+        const count = getParticleCount(particles);
         const pos = {x: 0, y: 0};
-        for (let i = 0; i < particles.length; i++) {
-            const particle = particles[i];
+        for (let i = 0; i < count; i++) {
+            let velX, velY, mass;
 
-            pos.x = particle.x;
-            pos.y = particle.y;
-            if (this.coordinateTransformer) {
-                this.coordinateTransformer(i, particle, pos);
+            if (isBuffer) {
+                const offset = i * ITEM_SIZE;
+                pos.x = particles[offset];
+                pos.y = particles[offset + 1];
+                velX = particles[offset + 2];
+                velY = particles[offset + 3];
+                mass = particles[offset + 4];
+
+                if (this.coordinateTransformer) {
+                    this.coordinateTransformer(i, null, pos);
+                }
+            } else {
+                const particle = particles[i];
+                pos.x = particle.x;
+                pos.y = particle.y;
+                velX = particle.velX;
+                velY = particle.velY;
+                mass = particle.mass;
+
+                if (this.coordinateTransformer) {
+                    this.coordinateTransformer(i, particle, pos);
+                }
             }
 
             const x = this.xOffset + pos.x * this.scale;
@@ -60,11 +79,11 @@ export class CanvasRenderer extends RendererBase {
                 continue;
             }
 
-            this._maxSpeed = Math.max(this._maxSpeed, Math.abs(particle.velX), Math.abs(particle.velY));
-            const mass = Math.floor(255 * (0.25 + particle.mass / (this.settings.physics.particleMass + 1) * 0.25));
-            const xVelToColor = Math.floor(255 * (0.5 + particle.velX / this._maxSpeed * 0.5));
-            const yVelToColor = Math.floor(255 * (0.5 + particle.velY / this._maxSpeed * 0.5));
-            const color = 0xff000000 | xVelToColor << 16 | mass << 8 | yVelToColor;
+            this._maxSpeed = Math.max(this._maxSpeed, Math.abs(velX), Math.abs(velY));
+            const massColor = Math.floor(255 * (0.25 + mass / (this.settings.physics.particleMass + 1) * 0.25));
+            const xVelToColor = Math.floor(255 * (0.5 + velX / this._maxSpeed * 0.5));
+            const yVelToColor = Math.floor(255 * (0.5 + velY / this._maxSpeed * 0.5));
+            const color = 0xff000000 | xVelToColor << 16 | massColor << 8 | yVelToColor;
 
             const index = (Math.floor(x) + Math.floor(y) * canvasWidth);
             if (this.settings.render.enableBlending) {

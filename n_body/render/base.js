@@ -184,9 +184,9 @@ export class RendererBase {
         this._updateCanvasSize();
 
         let resizeScale;
-        if (this.canvasWidth !== oldWidth && this.canvasHeight === this.canvasHeight) {
+        if (this.canvasWidth !== oldWidth && this.canvasHeight === oldHeight) {
             resizeScale = this.canvasWidth / oldWidth;
-        } else if (this.canvasWidth === oldWidth && this.canvasHeight !== this.canvasHeight) {
+        } else if (this.canvasWidth === oldWidth && this.canvasHeight !== oldHeight) {
             resizeScale = this.canvasHeight / oldHeight;
         } else {
             const xDiff = this.canvasWidth / oldWidth;
