@@ -84,59 +84,60 @@ export class FlatPhysicsEngine {
     }
 
     _calculateTree(tree) {
-        this._calculateLeaf(tree, tree.root, 0, 0);
+        this._calculateNode(tree, tree.root, 0, 0);
     }
 
-    _calculateLeaf(tree, leaf, pForceX, pForceY) {
-        const blocks = leaf.children;
-        if (blocks.length > 0) {
-            this._calculateLeafBlock(tree, leaf, pForceX, pForceY);
+    _calculateNode(tree, nodeId, pForceX, pForceY) {
+        if (tree.nodeChildCount[nodeId] > 0) {
+            this._calculateNodeBlock(tree, nodeId, pForceX, pForceY);
         } else {
-            this._calculateLeafData(tree, leaf, pForceX, pForceY);
+            this._calculateLeafData(tree, nodeId, pForceX, pForceY);
             if (this.settings.physics.enableCollision) {
-                this._processCollisions(tree, leaf);
+                this._processCollisions(tree, nodeId);
             }
         }
     }
 
-    _calculateLeafBlock(tree, leaf, pForceX, pForceY) {
-        // Parent force is copied as scalars for each child. Each sibling block
-        // contributes one aggregate force based on its mass and rect center,
-        // matching the old object-based engine.
-        const blocks = leaf.children;
+    _calculateNodeBlock(tree, nodeId, pForceX, pForceY) {
+        // Parent force is copied as scalars for each child. Children are stored
+        // contiguously in the tree node-pool, so traversal uses numeric node ids
+        // instead of child object arrays.
         const particleGravity = this.settings.physics.particleGravity;
         const minInteractionDistanceSq = this.settings.physics.minInteractionDistanceSq;
+        const firstChild = tree.nodeFirstChild[nodeId];
+        const childCount = tree.nodeChildCount[nodeId];
 
-        for (let i = 0; i < blocks.length; i++) {
-            const block = blocks[i];
-            const blockRect = block.boundaryRect;
+        for (let i = 0; i < childCount; i++) {
+            const childId = firstChild + i;
             let forceX = pForceX;
             let forceY = pForceY;
+            const childCenterX = tree.nodeCenterX[childId];
+            const childCenterY = tree.nodeCenterY[childId];
 
-            for (let j = 0; j < blocks.length; j++) {
+            for (let j = 0; j < childCount; j++) {
                 if (i === j) continue;
-                const otherRect = blocks[j].boundaryRect;
-                const dx = blockRect.centerX - otherRect.centerX;
-                const dy = blockRect.centerY - otherRect.centerY;
+                const otherId = firstChild + j;
+                const dx = childCenterX - tree.nodeCenterX[otherId];
+                const dy = childCenterY - tree.nodeCenterY[otherId];
                 const distSquare = dx * dx + dy * dy;
                 if (distSquare >= minInteractionDistanceSq) {
-                    const force = -(particleGravity * blocks[j].mass) / distSquare;
+                    const force = -(particleGravity * tree.nodeMass[otherId]) / distSquare;
                     forceX += dx * force;
                     forceY += dy * force;
                 }
             }
 
-            this._calculateLeaf(tree, block, forceX, forceY);
+            this._calculateNode(tree, childId, forceX, forceY);
         }
     }
 
-    _calculateLeafData(tree, leaf, pForceX, pForceY) {
+    _calculateLeafData(tree, nodeId, pForceX, pForceY) {
         // Final leaves use exact particle-to-particle interactions. Indices map
         // the compact tree range back to offsets in the shared particle buffer.
         const particles = tree.particles;
-        const indices = leaf.indices;
-        const start = leaf.start;
-        const end = start + leaf.count;
+        const indices = tree.indexBuffers[tree.nodeIndexBuffer[nodeId]];
+        const start = tree.nodeStart[nodeId];
+        const end = start + tree.nodeParticleCount[nodeId];
         const particleGravity = this.settings.physics.particleGravity;
         const minInteractionDistanceSq = this.settings.physics.minInteractionDistanceSq;
         const accumulateForce = this.settings.common.debugForce;
@@ -177,15 +178,16 @@ export class FlatPhysicsEngine {
         }
     }
 
-    _processCollisions(tree, leaf) {
+    _processCollisions(tree, nodeId) {
         // Collision response must be staged: all next velocities are calculated
         // first, then written back, so earlier particles do not affect later
         // particles within the same collision pass.
-        this._ensureCollisionBuffer(leaf.count);
+        const leafCount = tree.nodeParticleCount[nodeId];
+        this._ensureCollisionBuffer(leafCount);
         const particles = tree.particles;
-        const indices = leaf.indices;
-        const start = leaf.start;
-        const end = start + leaf.count;
+        const indices = tree.indexBuffers[tree.nodeIndexBuffer[nodeId]];
+        const start = tree.nodeStart[nodeId];
+        const end = start + leafCount;
         const nextVelXBuffer = this._collisionVelX;
         const nextVelYBuffer = this._collisionVelY;
         const collisionSizeSq = this.settings.physics.collisionSizeSq;
@@ -272,17 +274,16 @@ export class FlatPhysicsEngine {
     _calcTreeStats(tree) {
         const flopsPerOp = 14;
         let flops = 0;
-        function _processLeaf(parent) {
-            if (parent.children.length === 0) {
-                flops += Math.pow(parent.count, 2) * flopsPerOp;
-                return;
+
+        for (let nodeId = 0; nodeId < tree.nodeCount; nodeId++) {
+            const childCount = tree.nodeChildCount[nodeId];
+            if (childCount === 0) {
+                flops += Math.pow(tree.nodeParticleCount[nodeId], 2) * flopsPerOp;
+            } else {
+                flops += Math.pow(childCount, 2) * flopsPerOp;
             }
-            for (let i = 0; i < parent.children.length; i++) {
-                _processLeaf(parent.children[i]);
-            }
-            flops += Math.pow(parent.children.length, 2) * flopsPerOp;
         }
-        _processLeaf(tree.root);
+
         this.stats.tree.flops = flops;
         this.stats.tree.depth = tree.maxDepth;
         this.stats.tree.segmentCount = tree.nodeCount;

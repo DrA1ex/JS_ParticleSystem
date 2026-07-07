@@ -1,61 +1,33 @@
 import {ITEM_SIZE} from "../utils/particles.js";
 
 const EPSILON = 0.1e-6;
+const BUFFER_A = 0;
+const BUFFER_B = 1;
 
-class FlatBoundaryRect {
-    constructor(left, top, right, bottom) {
-        this.left = left;
-        this.top = top;
-        this.right = right;
-        this.bottom = bottom;
-        this.width = right - left;
-        this.height = bottom - top;
-        this.centerX = left + this.width / 2;
-        this.centerY = top + this.height / 2;
+function nextCapacity(required, current = 0) {
+    let capacity = Math.max(16, current || 16);
+    while (capacity < required) {
+        capacity *= 2;
     }
-
-    static fromRange(particles, indices, start, count) {
-        const firstOffset = indices[start] * ITEM_SIZE;
-        let minX = particles[firstOffset], maxX = particles[firstOffset],
-            minY = particles[firstOffset + 1], maxY = particles[firstOffset + 1];
-
-        const end = start + count;
-        for (let i = start + 1; i < end; i++) {
-            const offset = indices[i] * ITEM_SIZE;
-            const x = particles[offset];
-            if (minX > x) minX = x;
-            if (maxX < x) maxX = x;
-
-            const y = particles[offset + 1];
-            if (minY > y) minY = y;
-            if (maxY < y) maxY = y;
-        }
-
-        return new FlatBoundaryRect(minX, minY, maxX, maxY);
-    }
+    return capacity;
 }
 
-class FlatLeaf {
-    constructor(tree, start, count, indices, depth = 1, rect = null) {
-        this.tree = tree;
-        this.start = start;
-        this.count = count;
-        this.length = count;
-        this.indices = indices;
-        this.depth = depth;
-        this.children = [];
-        this.boundaryRect = rect || FlatBoundaryRect.fromRange(tree.particles, indices, start, count);
-        this.mass = tree.sumMass(start, count, indices);
-        this.tree._registerNode();
+function growArray(ArrayType, current, capacity) {
+    if (current && current.length >= capacity) {
+        return current;
     }
 
-    appendChild(start, count, indices, rect = null) {
-        const leaf = new FlatLeaf(this.tree, start, count, indices, this.depth + 1, rect);
-        this.children.push(leaf);
-        return leaf;
+    const next = new ArrayType(capacity);
+    if (current) {
+        next.set(current.subarray(0, Math.min(current.length, capacity)));
     }
+    return next;
 }
 
+// Flat spatial tree used by the optimized CPU backend. Nodes are stored in
+// typed-array pools and addressed by node id instead of small JS objects. This
+// keeps the tree rebuild allocation-free in the common case and lets physics
+// traversal read compact arrays directly.
 export class FlatSpatialTree {
     constructor(particles, maxCount, divideFactor = 2, randomness = 0.25, workspace = null) {
         this.particles = particles;
@@ -65,10 +37,14 @@ export class FlatSpatialTree {
         this.randomness = randomness;
         this.nodeCount = 0;
         this.maxDepth = 0;
+        this.root = 0;
 
         workspace = this._prepareWorkspace(workspace);
+        this._workspace = workspace;
+
         this.indices = workspace.indices;
         this._scratchIndices = workspace.scratchIndices;
+        this.indexBuffers = workspace.indexBuffers;
         this._identityIndices = workspace.identityIndices;
         this.indices.set(this._identityIndices.subarray(0, this.count), 0);
 
@@ -81,8 +57,31 @@ export class FlatSpatialTree {
         this._yEdges = workspace.yEdges;
         this._weights = workspace.weights;
 
-        this.root = new FlatLeaf(this, 0, this.count, this.indices);
-        this._populate(this.root, this._scratchIndices);
+        this.nodeStart = workspace.nodeStart;
+        this.nodeParticleCount = workspace.nodeParticleCount;
+        this.nodeDepth = workspace.nodeDepth;
+        this.nodeIndexBuffer = workspace.nodeIndexBuffer;
+        this.nodeFirstChild = workspace.nodeFirstChild;
+        this.nodeChildCount = workspace.nodeChildCount;
+        this.nodeLeft = workspace.nodeLeft;
+        this.nodeTop = workspace.nodeTop;
+        this.nodeRight = workspace.nodeRight;
+        this.nodeBottom = workspace.nodeBottom;
+        this.nodeCenterX = workspace.nodeCenterX;
+        this.nodeCenterY = workspace.nodeCenterY;
+        this.nodeMass = workspace.nodeMass;
+
+        if (this.count === 0) {
+            this.root = this._createNode(0, 0, BUFFER_A, 1, 0, 0, 0, 0);
+            this._markLeaf(this.root);
+            return;
+        }
+
+        const rootBounds = this._calculateRangeBounds(this.indices, 0, this.count);
+        this.root = this._createNode(0, this.count, BUFFER_A, 1,
+            rootBounds.left, rootBounds.top, rootBounds.right, rootBounds.bottom);
+        this._populate(this.root, BUFFER_B);
+        this._aggregateMassBottomUp();
     }
 
     _prepareWorkspace(workspace) {
@@ -95,7 +94,6 @@ export class FlatSpatialTree {
             workspace.indices = new Int32Array(this.count);
             workspace.scratchIndices = new Int32Array(this.count);
             workspace.identityIndices = new Int32Array(this.count);
-            workspace.bucketIds = new Int16Array(this.count);
             for (let i = 0; i < this.count; i++) {
                 workspace.identityIndices[i] = i;
             }
@@ -117,30 +115,117 @@ export class FlatSpatialTree {
             workspace.weights = new Float64Array(this.divideFactor);
         }
 
+        workspace.indexBuffers = [workspace.indices, workspace.scratchIndices];
+
+        const estimatedLeafCount = Math.ceil(this.count / Math.max(1, this.maxCount));
+        const initialNodeCapacity = nextCapacity(Math.max(16, estimatedLeafCount * 4), workspace.nodeCapacity || 0);
+        this._ensureNodeCapacity(workspace, initialNodeCapacity, 0);
+
         return workspace;
     }
 
-    sumMass(start, count, indices) {
-        let mass = 0;
-        const end = start + count;
-        for (let i = start; i < end; i++) {
-            mass += this.particles[indices[i] * ITEM_SIZE + 4];
-        }
-        return mass;
-    }
-
-    _populate(current, targetIndices) {
-        if (current.count <= this.maxCount || this._isTooSmallToSplit(current.boundaryRect)) {
-            this._markLeaf(current);
+    _ensureNodeCapacity(workspace, required, usedCount = this.nodeCount) {
+        if (workspace.nodeCapacity >= required) {
             return;
         }
 
-        const sourceIndices = current.indices;
-        const boundary = current.boundaryRect;
+        const capacity = nextCapacity(required, workspace.nodeCapacity || 16);
+        workspace.nodeStart = growArray(Int32Array, workspace.nodeStart, capacity);
+        workspace.nodeParticleCount = growArray(Int32Array, workspace.nodeParticleCount, capacity);
+        workspace.nodeDepth = growArray(Int16Array, workspace.nodeDepth, capacity);
+        workspace.nodeIndexBuffer = growArray(Int8Array, workspace.nodeIndexBuffer, capacity);
+        workspace.nodeFirstChild = growArray(Int32Array, workspace.nodeFirstChild, capacity);
+        workspace.nodeChildCount = growArray(Int16Array, workspace.nodeChildCount, capacity);
+        workspace.nodeLeft = growArray(Float64Array, workspace.nodeLeft, capacity);
+        workspace.nodeTop = growArray(Float64Array, workspace.nodeTop, capacity);
+        workspace.nodeRight = growArray(Float64Array, workspace.nodeRight, capacity);
+        workspace.nodeBottom = growArray(Float64Array, workspace.nodeBottom, capacity);
+        workspace.nodeCenterX = growArray(Float64Array, workspace.nodeCenterX, capacity);
+        workspace.nodeCenterY = growArray(Float64Array, workspace.nodeCenterY, capacity);
+        workspace.nodeMass = growArray(Float64Array, workspace.nodeMass, capacity);
+        workspace.nodeCapacity = capacity;
+
+        // If arrays are grown after the tree object has already cached them,
+        // refresh local references so the rest of the build writes to the new
+        // buffers. This path is rare because capacity is estimated up-front.
+        if (usedCount > 0) {
+            this.nodeStart = workspace.nodeStart;
+            this.nodeParticleCount = workspace.nodeParticleCount;
+            this.nodeDepth = workspace.nodeDepth;
+            this.nodeIndexBuffer = workspace.nodeIndexBuffer;
+            this.nodeFirstChild = workspace.nodeFirstChild;
+            this.nodeChildCount = workspace.nodeChildCount;
+            this.nodeLeft = workspace.nodeLeft;
+            this.nodeTop = workspace.nodeTop;
+            this.nodeRight = workspace.nodeRight;
+            this.nodeBottom = workspace.nodeBottom;
+            this.nodeCenterX = workspace.nodeCenterX;
+            this.nodeCenterY = workspace.nodeCenterY;
+            this.nodeMass = workspace.nodeMass;
+        }
+    }
+
+    _createNode(start, count, indexBufferId, depth, left, top, right, bottom) {
+        this._ensureNodeCapacity(this._workspace, this.nodeCount + 1);
+        const nodeId = this.nodeCount++;
+
+        this.nodeStart[nodeId] = start;
+        this.nodeParticleCount[nodeId] = count;
+        this.nodeDepth[nodeId] = depth;
+        this.nodeIndexBuffer[nodeId] = indexBufferId;
+        this.nodeFirstChild[nodeId] = -1;
+        this.nodeChildCount[nodeId] = 0;
+        this.nodeLeft[nodeId] = left;
+        this.nodeTop[nodeId] = top;
+        this.nodeRight[nodeId] = right;
+        this.nodeBottom[nodeId] = bottom;
+        this.nodeCenterX[nodeId] = left + (right - left) / 2;
+        this.nodeCenterY[nodeId] = top + (bottom - top) / 2;
+        this.nodeMass[nodeId] = 0;
+
+        return nodeId;
+    }
+
+    _calculateRangeBounds(indices, start, count) {
+        const firstOffset = indices[start] * ITEM_SIZE;
+        let minX = this.particles[firstOffset];
+        let maxX = minX;
+        let minY = this.particles[firstOffset + 1];
+        let maxY = minY;
+        const end = start + count;
+
+        for (let i = start + 1; i < end; i++) {
+            const offset = indices[i] * ITEM_SIZE;
+            const x = this.particles[offset];
+            if (minX > x) minX = x;
+            if (maxX < x) maxX = x;
+
+            const y = this.particles[offset + 1];
+            if (minY > y) minY = y;
+            if (maxY < y) maxY = y;
+        }
+
+        return {left: minX, top: minY, right: maxX, bottom: maxY};
+    }
+
+    _populate(nodeId, targetBufferId) {
+        const count = this.nodeParticleCount[nodeId];
+        if (count <= this.maxCount || this._isTooSmallToSplit(nodeId)) {
+            this._markLeaf(nodeId);
+            return;
+        }
+
+        const sourceBufferId = this.nodeIndexBuffer[nodeId];
+        const sourceIndices = this.indexBuffers[sourceBufferId];
+        const targetIndices = this.indexBuffers[targetBufferId];
         const xEdges = this._xEdges;
         const yEdges = this._yEdges;
-        this._buildEdges(xEdges, boundary.left, boundary.width);
-        this._buildEdges(yEdges, boundary.top, boundary.height);
+        const left = this.nodeLeft[nodeId];
+        const top = this.nodeTop[nodeId];
+        const width = this.nodeRight[nodeId] - left;
+        const height = this.nodeBottom[nodeId] - top;
+        this._buildEdges(xEdges, left, width);
+        this._buildEdges(yEdges, top, height);
 
         const bucketCounts = this._bucketCounts;
         const bucketStarts = this._bucketStarts;
@@ -149,14 +234,14 @@ export class FlatSpatialTree {
         const bucketsCount = this._bucketsCount;
         const particles = this.particles;
         const divideFactor = this.divideFactor;
-        const start = current.start;
-        const end = start + current.count;
+        const start = this.nodeStart[nodeId];
+        const end = start + count;
 
         bucketCounts.fill(0);
 
-        // Count first, then scatter into the alternate index buffer. Every child
-        // receives a contiguous range, but we avoid the previous scratch ->
-        // source copy by letting leaves remember which index buffer owns them.
+        // Counting pass: compute the child bucket once and remember it. The
+        // scatter pass can then move only integer particle ids without reading
+        // x/y again or repeating edge lookup.
         let usedBuckets = 0;
         for (let i = start; i < end; i++) {
             const offset = sourceIndices[i] * ITEM_SIZE;
@@ -171,8 +256,8 @@ export class FlatSpatialTree {
             bucketCounts[bucketIndex] += 1;
         }
 
-        if (usedBuckets === 0 || (usedBuckets === 1 && this._hasSinglePoint(current))) {
-            this._markLeaf(current);
+        if (usedBuckets === 0 || (usedBuckets === 1 && this._hasSinglePoint(nodeId))) {
+            this._markLeaf(nodeId);
             return;
         }
 
@@ -184,41 +269,78 @@ export class FlatSpatialTree {
         }
 
         for (let i = start; i < end; i++) {
-            const particleIndex = sourceIndices[i];
             const bucketIndex = bucketIds[i];
-            targetIndices[bucketWrites[bucketIndex]++] = particleIndex;
+            targetIndices[bucketWrites[bucketIndex]++] = sourceIndices[i];
         }
 
-        const children = [];
+        // Children are allocated back-to-back before recursion, so each parent
+        // can store a compact firstChild/childCount pair instead of a JS array.
+        const firstChild = this.nodeCount;
+        let childCount = 0;
+        const childDepth = this.nodeDepth[nodeId] + 1;
+
         for (let x = 0; x < divideFactor; x++) {
             for (let y = 0; y < divideFactor; y++) {
                 const bucketIndex = x * divideFactor + y;
-                const count = bucketCounts[bucketIndex];
-                if (count === 0) {
+                const bucketCount = bucketCounts[bucketIndex];
+                if (bucketCount === 0) {
                     continue;
                 }
 
-                const rect = new FlatBoundaryRect(xEdges[x], yEdges[y], xEdges[x + 1], yEdges[y + 1]);
-                children.push(current.appendChild(bucketStarts[bucketIndex], count, targetIndices, rect));
+                this._createNode(bucketStarts[bucketIndex], bucketCount, targetBufferId, childDepth,
+                    xEdges[x], yEdges[y], xEdges[x + 1], yEdges[y + 1]);
+                childCount += 1;
             }
         }
 
-        // Child ranges are now in targetIndices. During child population the
-        // buffers are swapped, so deeper levels continue partitioning without
-        // copying ranges back after every split.
-        for (let i = 0; i < children.length; i++) {
-            this._populate(children[i], sourceIndices);
+        this.nodeFirstChild[nodeId] = firstChild;
+        this.nodeChildCount[nodeId] = childCount;
+
+        const nextTargetBufferId = sourceBufferId;
+        for (let i = 0; i < childCount; i++) {
+            this._populate(firstChild + i, nextTargetBufferId);
         }
     }
 
-    _markLeaf(current) {
-        if (current.depth > this.maxDepth) {
-            this.maxDepth = current.depth;
+    _aggregateMassBottomUp() {
+        const particles = this.particles;
+        const nodeMass = this.nodeMass;
+
+        // Leaves aggregate particle masses directly. Internal node mass is then
+        // calculated bottom-up from child nodes, avoiding one full particle-range
+        // mass scan for every internal node during tree construction.
+        for (let nodeId = this.nodeCount - 1; nodeId >= 0; nodeId--) {
+            const childCount = this.nodeChildCount[nodeId];
+            let mass = 0;
+
+            if (childCount === 0) {
+                const indices = this.indexBuffers[this.nodeIndexBuffer[nodeId]];
+                const start = this.nodeStart[nodeId];
+                const end = start + this.nodeParticleCount[nodeId];
+                for (let i = start; i < end; i++) {
+                    mass += particles[indices[i] * ITEM_SIZE + 4];
+                }
+            } else {
+                const firstChild = this.nodeFirstChild[nodeId];
+                for (let i = 0; i < childCount; i++) {
+                    mass += nodeMass[firstChild + i];
+                }
+            }
+
+            nodeMass[nodeId] = mass;
         }
     }
 
-    _isTooSmallToSplit(boundary) {
-        return boundary.width <= EPSILON && boundary.height <= EPSILON;
+    _markLeaf(nodeId) {
+        const depth = this.nodeDepth[nodeId];
+        if (depth > this.maxDepth) {
+            this.maxDepth = depth;
+        }
+    }
+
+    _isTooSmallToSplit(nodeId) {
+        return this.nodeRight[nodeId] - this.nodeLeft[nodeId] <= EPSILON &&
+            this.nodeBottom[nodeId] - this.nodeTop[nodeId] <= EPSILON;
     }
 
     _buildEdges(edges, start, size) {
@@ -253,17 +375,18 @@ export class FlatSpatialTree {
         return edges.length - 2;
     }
 
-    _hasSinglePoint(current) {
-        if (current.count < 2) {
+    _hasSinglePoint(nodeId) {
+        const count = this.nodeParticleCount[nodeId];
+        if (count < 2) {
             return true;
         }
 
-        const indices = current.indices;
-        const start = current.start;
+        const indices = this.indexBuffers[this.nodeIndexBuffer[nodeId]];
+        const start = this.nodeStart[nodeId];
         const firstOffset = indices[start] * ITEM_SIZE;
         const x = this.particles[firstOffset];
         const y = this.particles[firstOffset + 1];
-        const end = start + current.count;
+        const end = start + count;
 
         for (let i = start + 1; i < end; i++) {
             const offset = indices[i] * ITEM_SIZE;
@@ -274,26 +397,18 @@ export class FlatSpatialTree {
         return true;
     }
 
-    _registerNode() {
-        this.nodeCount += 1;
-    }
-
     getDebugData() {
         const result = [];
-        this._collectLeafDebugData(this.root, result);
-        return result;
-    }
-
-    _collectLeafDebugData(leaf, out) {
-        const rect = leaf.boundaryRect;
-        out.push({
-            x: rect.left, y: rect.top,
-            width: rect.width, height: rect.height,
-            count: leaf.count, depth: leaf.depth
-        });
-
-        for (let i = 0; i < leaf.children.length; i++) {
-            this._collectLeafDebugData(leaf.children[i], out);
+        for (let nodeId = 0; nodeId < this.nodeCount; nodeId++) {
+            result.push({
+                x: this.nodeLeft[nodeId],
+                y: this.nodeTop[nodeId],
+                width: this.nodeRight[nodeId] - this.nodeLeft[nodeId],
+                height: this.nodeBottom[nodeId] - this.nodeTop[nodeId],
+                count: this.nodeParticleCount[nodeId],
+                depth: this.nodeDepth[nodeId]
+            });
         }
+        return result;
     }
 }
