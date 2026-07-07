@@ -90,6 +90,9 @@ export class Debug {
             profile ? `  - export buffer: ${profile.exportTime.toFixed(1)} ms` : "",
             profile ? `  - stats: ${profile.statsTime.toFixed(1)} ms` : "",
             `- render: ${this.renderTime.toFixed(1)} ms`,
+            this.renderer.stats ? `  - prepare data: ${this.renderer.stats.prepareDataTime.toFixed(1)} ms` : "",
+            this.renderer.stats ? `  - upload: ${this.renderer.stats.uploadTime.toFixed(1)} ms` : "",
+            this.renderer.stats ? `  - draw call: ${this.renderer.stats.drawTime.toFixed(1)} ms` : "",
             `renderer: ${this.renderer.constructor.name} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
             `backend: ${this.backend.constructor.name}, block size: ${this.settings.simulation.segmentMaxCount}`,
         ].filter(v => v).join("\n");

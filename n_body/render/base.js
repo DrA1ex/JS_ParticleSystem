@@ -17,7 +17,7 @@ export class RendererBase {
      */
     constructor(canvas, settings) {
         this.coordinateTransformer = null;
-        this.stats = {renderTime: 0};
+        this.stats = {renderTime: 0, prepareDataTime: 0, uploadTime: 0, drawTime: 0};
 
         this.settings = settings;
         this.canvas = canvas;
@@ -87,6 +87,21 @@ export class RendererBase {
     setCoordinateTransformer(fn) {
         this.coordinateTransformer = fn;
     }
+
+    /**
+     * WebGL renderers can interpolate between current and next flat particle
+     * buffers directly in the vertex shader. Canvas and legacy renderers fall
+     * back to the CPU coordinate transformer.
+     */
+    supportsGpuInterpolation() {
+        return false;
+    }
+
+    setInterpolationFrame(_particles) {}
+
+    setInterpolationFactor(_factor) {}
+
+    markParticlesDirty() {}
 
     /**
      * @abstract

@@ -250,6 +250,8 @@ export class Application {
             }
         }
 
+        this.renderer.markParticlesDirty?.();
+
         if (this.settings.common.debugTree) this.debug.importTreeDebugData(bufferEntry.treeDebug);
         if (this.settings.common.debugForce) this.debug.importForceDebugData(bufferEntry.forceDebug);
 

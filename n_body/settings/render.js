@@ -1,5 +1,5 @@
 import {ComponentType, Property, SettingsBase} from "./base.js";
-import {RenderType} from "./enum.js";
+import {MaxSpeedUpdateMode, RenderType} from "./enum.js";
 
 
 export class RenderSettings extends SettingsBase {
@@ -29,6 +29,9 @@ export class RenderSettings extends SettingsBase {
             .setExportable(true)
             .setName("Enable blending").setDescription("Enable color blending for particles")
             .setAffects(ComponentType.renderer),
+        maxSpeedUpdateMode: Property.enum("max_speed_mode", MaxSpeedUpdateMode, MaxSpeedUpdateMode.current)
+            .setName("Max speed update").setDescription("How often WebGL scans particle velocities to normalize colors")
+            .setAffects(ComponentType.renderer),
         enableDFRI: Property.bool("dfri", true)
             .setName("Enable DFRI").setDescription("Enable frame rate interpolation for smoother render")
             .setBreaks(ComponentType.dfri)
@@ -54,6 +57,7 @@ export class RenderSettings extends SettingsBase {
     get fixedParticleSize() {return this.config.fixedParticleSize}
     get enableFilter() {return this.config.enableFilter}
     get enableBlending() {return this.config.enableBlending}
+    get maxSpeedUpdateMode() {return this.config.maxSpeedUpdateMode}
     get enableDFRI() {return this.config.enableDFRI}
     get DFRIMaxFrames() {return this.config.DFRIMaxFrames}
     get dprRate() {return this.config.dprRate}

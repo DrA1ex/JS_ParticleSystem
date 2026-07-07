@@ -1,5 +1,6 @@
 import {RendererBase} from "../base.js";
 import * as WebglUtils from "../../utils/webgl.js";
+import {MaxSpeedUpdateMode} from "../../settings/enum.js";
 import {ITEM_SIZE, getParticleCount, isParticleBuffer} from "../../utils/particles.js";
 
 const RenderVertexShaderSource = await fetch(new URL("./shaders/render_vs.glsl", import.meta.url))
@@ -8,6 +9,8 @@ const RenderFragmentShaderSource = await fetch(new URL("./shaders/render_fs.glsl
     .then(r => r.text());
 
 const GL = WebGL2RenderingContext;
+const PARTICLE_STRIDE = ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT;
+const MAX_SPEED_THROTTLE_INTERVAL_MS = 250;
 const CONFIGURATION = [
     {
         program: "render",
@@ -15,11 +18,13 @@ const CONFIGURATION = [
         fs: RenderFragmentShaderSource,
         attributes: [
             {name: "position"},
+            {name: "next_position"},
             {name: "velocity"},
             {name: "mass"}
         ],
         buffers: [
-            {name: "particles", usageHint: GL.STREAM_DRAW}
+            {name: "particles", usageHint: GL.STREAM_DRAW},
+            {name: "nextParticles", usageHint: GL.STREAM_DRAW}
         ],
         uniforms: [
             {type: "uniform2f", name: "resolution"},
@@ -29,12 +34,14 @@ const CONFIGURATION = [
             {type: "uniform1f", name: "max_mass"},
             {type: "uniform1f", name: "max_speed"},
             {type: "uniform1f", name: "particle_scale"},
+            {type: "uniform1f", name: "interpolation_factor"},
         ],
         vertexArrays: [{
             name: "particle", entries: [
-                {name: "position", buffer: "particles", type: GL.FLOAT, size: 2, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 0},
-                {name: "velocity", buffer: "particles", type: GL.FLOAT, size: 2, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 2 * Float32Array.BYTES_PER_ELEMENT},
-                {name: "mass", buffer: "particles", type: GL.FLOAT, size: 1, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 4 * Float32Array.BYTES_PER_ELEMENT},
+                {name: "position", buffer: "particles", type: GL.FLOAT, size: 2, stride: PARTICLE_STRIDE, offset: 0},
+                {name: "next_position", buffer: "nextParticles", type: GL.FLOAT, size: 2, stride: PARTICLE_STRIDE, offset: 0},
+                {name: "velocity", buffer: "particles", type: GL.FLOAT, size: 2, stride: PARTICLE_STRIDE, offset: 2 * Float32Array.BYTES_PER_ELEMENT},
+                {name: "mass", buffer: "particles", type: GL.FLOAT, size: 1, stride: PARTICLE_STRIDE, offset: 4 * Float32Array.BYTES_PER_ELEMENT},
             ]
         }],
     }
@@ -53,6 +60,18 @@ export class Webgl2Renderer extends RendererBase {
 
         this._particleBufferData = new Float32Array(this.settings.physics.particleCount * ITEM_SIZE);
         this._maxSpeed = this.settings.physics.gravity / 100;
+        this._lastMaxSpeedScanTime = 0;
+
+        this._particleDataDirty = true;
+        this._uploadedParticleSource = null;
+        this._uploadedParticleCount = 0;
+
+        this._nextParticles = null;
+        this._nextParticlesDirty = true;
+        this._uploadedNextParticleSource = null;
+        this._uploadedNextParticleCount = 0;
+        this._nextBufferInitialized = false;
+        this._interpolationFactor = 0;
 
         this.initWebgl();
         if (this.settings.common.debug) {
@@ -72,7 +91,8 @@ export class Webgl2Renderer extends RendererBase {
                 {name: "scale", values: [this.scale]},
                 {name: "offset", values: [this.xOffset, this.yOffset]},
                 {name: "resolution", values: [this.canvasWidth, this.canvasHeight]},
-                {name: "particle_scale", values: [this.settings.render.particleSizeScale]}],
+                {name: "particle_scale", values: [this.settings.render.particleSizeScale]},
+                {name: "interpolation_factor", values: [0]}],
             buffers: []
         }]);
 
@@ -133,6 +153,10 @@ export class Webgl2Renderer extends RendererBase {
     reset() {
         super.reset();
         this._maxSpeed = this.settings.physics.gravity / 100;
+        this._lastMaxSpeedScanTime = 0;
+        this.markParticlesDirty();
+        this.setInterpolationFrame(null);
+        this.setInterpolationFactor(0);
     }
 
     clear() {
@@ -142,90 +166,235 @@ export class Webgl2Renderer extends RendererBase {
         this.debugCtx?.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
     }
 
+    supportsGpuInterpolation() {
+        return true;
+    }
+
+    /**
+     * DFRI supplies the next worker frame here. The renderer uploads it only
+     * when the buffer reference changes; intermediate render frames only update
+     * interpolation_factor, so DFRI no longer requires a CPU pass over particles.
+     */
+    setInterpolationFrame(particles) {
+        if (particles && isParticleBuffer(particles)) {
+            this._nextParticles = particles;
+        } else {
+            this._nextParticles = null;
+        }
+        this._nextParticlesDirty = true;
+    }
+
+    setInterpolationFactor(factor) {
+        const value = Number.isFinite(factor) ? Math.max(0, Math.min(1, factor)) : 0;
+        this._interpolationFactor = this._nextParticles ? value : 0;
+    }
+
+    markParticlesDirty() {
+        this._particleDataDirty = true;
+    }
+
     render(particles) {
-        const t = performance.now();
+        const renderStart = performance.now();
         super.render(particles);
 
         this.debugCtx?.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-        const count = this._updateData(particles)
+        const {count, prepareDataTime, uploadTime} = this._updateData(particles)
 
+        const drawStart = performance.now();
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
         this.gl.useProgram(this._stateConfig.render.program);
         this.gl.bindVertexArray(this._stateConfig.render.vertexArrays["particle"]);
         this.gl.drawArrays(this.gl.POINTS, 0, count);
+        const drawTime = performance.now() - drawStart;
 
-        this.stats.renderTime = performance.now() - t;
+        this.stats.prepareDataTime = prepareDataTime;
+        this.stats.uploadTime = uploadTime;
+        this.stats.drawTime = drawTime;
+        this.stats.renderTime = performance.now() - renderStart;
     }
 
     _updateData(particles) {
+        const prepareStart = performance.now();
         const isBuffer = isParticleBuffer(particles);
         const count = getParticleCount(particles);
+        const scanMaxSpeed = this._shouldScanMaxSpeed(prepareStart);
         const canUploadDirectly = isBuffer && !this.coordinateTransformer;
-        const uploadData = canUploadDirectly ? particles : this._particleBufferData;
-        const pos = {x: 0, y: 0};
+        const uploadData = canUploadDirectly ? particles : this._ensureParticleBufferCapacity(count);
+        let maxSpeed = this._maxSpeed;
 
-        for (let i = 0; i < count; i++) {
-            const offset = i * ITEM_SIZE;
-            let velX, velY;
+        // Fast path for the common WebGL case: the renderer receives the flat
+        // worker buffer directly, DFRI is handled in the shader, and color
+        // normalization is not scanned every frame. No per-particle CPU loop is
+        // needed before the upload/draw.
+        if (canUploadDirectly && scanMaxSpeed) {
+            maxSpeed = this._scanMaxSpeedFromBuffer(particles, count, maxSpeed);
+        } else if (!canUploadDirectly) {
+            maxSpeed = this._fillUploadBuffer(particles, count, isBuffer, scanMaxSpeed, maxSpeed);
+        }
 
-            if (isBuffer) {
-                velX = particles[offset + 2];
-                velY = particles[offset + 3];
-
-                if (!canUploadDirectly) {
-                    pos.x = particles[offset];
-                    pos.y = particles[offset + 1];
-                    if (this.coordinateTransformer) {
-                        this.coordinateTransformer(i, null, pos);
-                    }
-
-                    uploadData[offset] = pos.x;
-                    uploadData[offset + 1] = pos.y;
-                    uploadData[offset + 2] = velX;
-                    uploadData[offset + 3] = velY;
-                    uploadData[offset + 4] = particles[offset + 4];
-                }
-            } else {
-                const particle = particles[i];
-                velX = particle.velX;
-                velY = particle.velY;
-
-                pos.x = particle.x;
-                pos.y = particle.y;
-                if (this.coordinateTransformer) {
-                    this.coordinateTransformer(i, particle, pos);
-                }
-
-                uploadData[offset] = pos.x;
-                uploadData[offset + 1] = pos.y;
-                uploadData[offset + 2] = velX;
-                uploadData[offset + 3] = velY;
-                uploadData[offset + 4] = particle.mass;
-            }
-
-            const speed = Math.max(Math.abs(velX), Math.abs(velY));
-            if (Number.isFinite(speed) && this._maxSpeed < speed) {
-                this._maxSpeed = speed;
-            }
+        if (scanMaxSpeed) {
+            this._maxSpeed = maxSpeed;
+            this._lastMaxSpeedScanTime = prepareStart;
         }
 
         const particleScale = this.settings.render.fixedParticleSize ?
             this.settings.render.particleSizeScale :
             this.settings.render.particleSizeScale * this.scale;
+
         WebglUtils.loadDataFromConfig(this.gl, this._stateConfig, [
             {
                 program: "render", uniforms: [
                     {name: "scale", values: [this.scale]},
                     {name: "max_speed", values: [this._maxSpeed]},
                     {name: "offset", values: [this.xOffset, this.yOffset]},
-                    {name: "particle_scale", values: [particleScale]}
-                ], buffers: [
-                    {name: "particles", data: uploadData},
-                ]
+                    {name: "particle_scale", values: [particleScale]},
+                    {name: "interpolation_factor", values: [this._interpolationFactor]}
+                ], buffers: []
             }
         ])
 
-        return count;
+        const prepareDataTime = performance.now() - prepareStart;
+        const uploadStart = performance.now();
+        this._uploadCurrentParticles(uploadData, count, !canUploadDirectly);
+        this._uploadNextParticlesIfNeeded(uploadData, count);
+        const uploadTime = performance.now() - uploadStart;
+
+        return {count, prepareDataTime, uploadTime};
+    }
+
+    _ensureParticleBufferCapacity(count) {
+        const minLength = count * ITEM_SIZE;
+        if (!this._particleBufferData || this._particleBufferData.length < minLength) {
+            this._particleBufferData = new Float32Array(minLength);
+        }
+        return this._particleBufferData;
+    }
+
+    _shouldScanMaxSpeed(now) {
+        switch (this.settings.render.maxSpeedUpdateMode) {
+            case MaxSpeedUpdateMode.off:
+                return false;
+            case MaxSpeedUpdateMode.throttle:
+                return now - this._lastMaxSpeedScanTime >= MAX_SPEED_THROTTLE_INTERVAL_MS;
+            case MaxSpeedUpdateMode.current:
+            default:
+                return true;
+        }
+    }
+
+    _scanMaxSpeedFromBuffer(particles, count, currentMaxSpeed) {
+        let maxSpeed = currentMaxSpeed;
+        for (let i = 0; i < count; i++) {
+            const offset = i * ITEM_SIZE;
+            const speed = Math.max(Math.abs(particles[offset + 2]), Math.abs(particles[offset + 3]));
+            if (Number.isFinite(speed) && maxSpeed < speed) {
+                maxSpeed = speed;
+            }
+        }
+        return maxSpeed;
+    }
+
+    _fillUploadBuffer(particles, count, isBuffer, scanMaxSpeed, currentMaxSpeed) {
+        const uploadData = this._ensureParticleBufferCapacity(count);
+        const pos = {x: 0, y: 0};
+        let maxSpeed = currentMaxSpeed;
+
+        for (let i = 0; i < count; i++) {
+            const offset = i * ITEM_SIZE;
+            let velX, velY, mass;
+
+            if (isBuffer) {
+                pos.x = particles[offset];
+                pos.y = particles[offset + 1];
+                velX = particles[offset + 2];
+                velY = particles[offset + 3];
+                mass = particles[offset + 4];
+
+                if (this.coordinateTransformer) {
+                    this.coordinateTransformer(i, null, pos);
+                }
+            } else {
+                const particle = particles[i];
+                pos.x = particle.x;
+                pos.y = particle.y;
+                velX = particle.velX;
+                velY = particle.velY;
+                mass = particle.mass;
+
+                if (this.coordinateTransformer) {
+                    this.coordinateTransformer(i, particle, pos);
+                }
+            }
+
+            uploadData[offset] = pos.x;
+            uploadData[offset + 1] = pos.y;
+            uploadData[offset + 2] = velX;
+            uploadData[offset + 3] = velY;
+            uploadData[offset + 4] = mass;
+
+            if (scanMaxSpeed) {
+                const speed = Math.max(Math.abs(velX), Math.abs(velY));
+                if (Number.isFinite(speed) && maxSpeed < speed) {
+                    maxSpeed = speed;
+                }
+            }
+        }
+
+        return maxSpeed;
+    }
+
+    _uploadCurrentParticles(data, count, forceUpload = false) {
+        const needsUpload = forceUpload || this._particleDataDirty ||
+            this._uploadedParticleSource !== data || this._uploadedParticleCount !== count;
+        if (!needsUpload) {
+            return;
+        }
+
+        this._uploadParticleBuffer("particles", data, count);
+        this._uploadedParticleSource = data;
+        this._uploadedParticleCount = count;
+        this._particleDataDirty = false;
+    }
+
+    _uploadNextParticlesIfNeeded(currentData, count) {
+        let data = this._nextParticles;
+        let forceUpload = this._nextParticlesDirty;
+
+        if (!data) {
+            // The next_position attribute must always have a valid buffer for
+            // the draw range. When DFRI has no ahead frame, mirror the current
+            // buffer once and keep interpolation_factor at zero.
+            data = currentData;
+            forceUpload = forceUpload || !this._nextBufferInitialized;
+        }
+
+        const nextCount = getParticleCount(data);
+        if (nextCount < count) {
+            data = currentData;
+            forceUpload = true;
+        }
+        const drawCount = count;
+        const needsUpload = forceUpload || this._uploadedNextParticleSource !== data ||
+            this._uploadedNextParticleCount !== drawCount;
+
+        if (!needsUpload) {
+            return;
+        }
+
+        this._uploadParticleBuffer("nextParticles", data, drawCount);
+        this._uploadedNextParticleSource = data;
+        this._uploadedNextParticleCount = drawCount;
+        this._nextParticlesDirty = false;
+        this._nextBufferInitialized = true;
+    }
+
+    _uploadParticleBuffer(name, data, count) {
+        const buffer = this._stateConfig.render.buffers[name];
+        const length = Math.min(data.length, count * ITEM_SIZE);
+        const view = length === data.length ? data : data.subarray(0, length);
+
+        this.gl.bindBuffer(GL.ARRAY_BUFFER, buffer);
+        this.gl.bufferData(GL.ARRAY_BUFFER, view, GL.STREAM_DRAW);
     }
 
     getDebugDrawingContext() {
@@ -257,6 +426,9 @@ export class Webgl2Renderer extends RendererBase {
     dispose() {
         this._stateConfig = null;
         this._particleBufferData = null;
+        this._nextParticles = null;
+        this._uploadedParticleSource = null;
+        this._uploadedNextParticleSource = null;
 
         if (this.debugCanvas) {
             this.debugCtx = null;

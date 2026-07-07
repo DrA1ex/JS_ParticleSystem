@@ -7,15 +7,18 @@ uniform float point_size;
 uniform float max_mass;
 uniform float max_speed;
 uniform float particle_scale;
+uniform float interpolation_factor;
 
 in vec2 position;
+in vec2 next_position;
 in vec2 velocity;
 in float mass;
 
 out vec3 color;
 
 void main() {
-    vec2 translated_pos = ((position * scale + offset) / resolution * 2.0 - 1.0);
+    vec2 render_position = mix(position, next_position, interpolation_factor);
+    vec2 translated_pos = ((render_position * scale + offset) / resolution * 2.0 - 1.0);
     gl_Position = vec4(translated_pos * vec2(1, -1.0), 0, 1);
 
     gl_PointSize = point_size;

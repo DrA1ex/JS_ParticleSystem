@@ -11,10 +11,8 @@ export class DFRIHelperBase {
         this.interpolateFrames = 0;
 
         this._initialized = false;
-        this._deltas = new Array(this.particleCount);
-        for (let i = 0; i < this.particleCount; i++) {
-            this._deltas[i] = {x: 0, y: 0};
-        }
+        this._gpuInterpolation = false;
+        this._deltas = null;
     }
 
     /**
@@ -37,10 +35,21 @@ export class DFRIHelperBase {
         return Number.MAX_SAFE_INTEGER;
     }
 
+    get preferGpuInterpolation() {
+        return false;
+    }
+
     reconfigure() {}
 
     enable() {
-        this.renderer.setCoordinateTransformer(this._transformParticlePosition.bind(this));
+        this._gpuInterpolation = this.preferGpuInterpolation && !!this.renderer.supportsGpuInterpolation?.();
+        if (this._gpuInterpolation) {
+            this.renderer.setCoordinateTransformer(null);
+            this.renderer.setInterpolationFactor(0);
+        } else {
+            this._ensureDeltas();
+            this.renderer.setCoordinateTransformer(this._transformParticlePosition.bind(this));
+        }
     }
 
     init() {
@@ -54,6 +63,9 @@ export class DFRIHelperBase {
         }
 
         this._currentFactor = this.getFactor();
+        if (this._gpuInterpolation) {
+            this.renderer.setInterpolationFactor(this._currentFactor);
+        }
         this.renderer.render(particles);
 
         if (!pause) {
@@ -82,11 +94,25 @@ export class DFRIHelperBase {
     }
 
     setNextFrame(dataFn) {
+        this._ensureDeltas();
         for (let i = 0; i < this.particleCount; i++) {
             dataFn(i, this._deltas[i]);
         }
 
         this.reset();
+    }
+
+    _ensureDeltas() {
+        if (this._deltas && this._deltas.length === this.particleCount) {
+            return;
+        }
+
+        // CPU DFRI needs one mutable delta object per particle. WebGL DFRI does
+        // interpolation in the vertex shader and never allocates this array.
+        this._deltas = new Array(this.particleCount);
+        for (let i = 0; i < this.particleCount; i++) {
+            this._deltas[i] = {x: 0, y: 0};
+        }
     }
 
     _getInterpolateFramesCount() {
@@ -142,6 +168,10 @@ export class DFRIHelper extends DFRIHelperBase {
         this.interpolateFramesSmoother = new DataSmoother(this.settings.world.fps);
     }
 
+    get preferGpuInterpolation() {
+        return true;
+    }
+
     get actualTime() {
         return this.stepTimeSmoother.smoothedValue;
     }
@@ -158,6 +188,12 @@ export class DFRIHelper extends DFRIHelperBase {
         const buffer = aheadBufferEntry?.buffer;
         if (!buffer) {
             console.warn(`${performance.now().toFixed(0)} No available ahead buffer, interpolation may be inconsistent`);
+        }
+
+        if (this._gpuInterpolation) {
+            this.renderer.setInterpolationFrame(buffer || null);
+            this.reset();
+            return;
         }
 
         this.setNextFrame((i, out) => {
@@ -187,6 +223,8 @@ export class DFRIHelper extends DFRIHelperBase {
 
     dispose() {
         this.renderer.setCoordinateTransformer(null);
+        this.renderer.setInterpolationFrame?.(null);
+        this.renderer.setInterpolationFactor?.(0);
         this.renderer = null;
         this._deltas = null;
     }

@@ -26,3 +26,11 @@ export const BackendType = {
     worker: "worker",
     gpgpu: "gpgpu"
 }
+/**
+ * @enum(string)
+ */
+export const MaxSpeedUpdateMode = {
+    current: "current",
+    throttle: "throttle",
+    off: "off"
+}
