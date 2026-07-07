@@ -3,7 +3,7 @@ import {AppSimulationSettings} from "../settings/app.js";
 import {ITEM_SIZE} from "../utils/particles.js";
 
 /**
- * @typedef {{physicsTime:number, treeTime: number, tree: {flops: number, depth: number, segmentCount: number}, profile?: Object}} StepStatistics
+ * @typedef {{physicsTime:number, treeTime: number, tree: {flops: number, depth: number, segmentCount: number}, profile?: Object, actualSegmentSize?: number, segmentAutoTune?: Object}} StepStatistics
  * @typedef {{timestamp: number, buffer: Float32Array, treeDebug: Array, forceDebug: Array, stats: StepStatistics}} StepResult
  */
 

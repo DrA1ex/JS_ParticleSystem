@@ -14,6 +14,8 @@ export class Debug {
     treeDebugData = [];
     forceDebugData = [];
     profile = null;
+    actualSegmentSize = null;
+    segmentAutoTune = null;
 
     get elapsed() {
         return this.frameRateSmoother.smoothedValue;
@@ -74,28 +76,51 @@ export class Debug {
         this._lastStatsDrawTime = now;
 
         const flops = CommonUtils.formatUnit(this.flops, "FLOPS");
+        const profile = this.profile || {};
+        const rendererStats = this.renderer.stats || {};
+        const actualSegmentSize = this.actualSegmentSize ?? this.settings.simulation.segmentMaxCount;
 
-        const profile = this.profile;
+        // Keep the stats layout stable: fields that may be temporarily unknown
+        // are rendered as n/a instead of being added/removed between frames.
         this.infoElem.innerText = [
             `max depth: ${this.depth}`,
             `segments: ${this.segmentCount}`,
             `complexity: ${flops}`,
             `ahead buffers: ${this.bufferCount}`,
-            this.settings.render.enableDFRI ? `interpolated: ${this.interpolateFrames} frames` : "",
+            `interpolated: ${this.settings.render.enableDFRI ? `${this.interpolateFrames} frames` : "off"}`,
             `fps: ${(1000 / this.elapsed || 0).toFixed(1)}`,
-            `- tree building: ${this.treeTime.toFixed(1)} ms`,
-            `- physics calc: ${this.physicsTime.toFixed(1)} ms`,
-            profile ? `  - force solve: ${profile.forceTime.toFixed(1)} ms` : "",
-            profile ? `  - integrate: ${profile.integrateTime.toFixed(1)} ms` : "",
-            profile ? `  - export buffer: ${profile.exportTime.toFixed(1)} ms` : "",
-            profile ? `  - stats: ${profile.statsTime.toFixed(1)} ms` : "",
-            `- render: ${this.renderTime.toFixed(1)} ms`,
-            this.renderer.stats ? `  - prepare data: ${this.renderer.stats.prepareDataTime.toFixed(1)} ms` : "",
-            this.renderer.stats ? `  - upload: ${this.renderer.stats.uploadTime.toFixed(1)} ms` : "",
-            this.renderer.stats ? `  - draw call: ${this.renderer.stats.drawTime.toFixed(1)} ms` : "",
+            `- tree building: ${this._formatMs(this.treeTime)}`,
+            `- physics calc: ${this._formatMs(this.physicsTime)}`,
+            `  - force solve: ${this._formatMs(profile.forceTime)}`,
+            `  - integrate: ${this._formatMs(profile.integrateTime)}`,
+            `  - export buffer: ${this._formatMs(profile.exportTime)}`,
+            `  - stats: ${this._formatMs(profile.statsTime)}`,
+            `- render: ${this._formatMs(this.renderTime)}`,
+            `  - prepare data: ${this._formatMs(rendererStats.prepareDataTime)}`,
+            `  - upload: ${this._formatMs(rendererStats.uploadTime)}`,
+            `  - draw call: ${this._formatMs(rendererStats.drawTime)}`,
+            `  - gpu draw: ${this._formatMs(rendererStats.gpuDrawTime)} (${rendererStats.gpuTimerStatus || "n/a"})`,
             `renderer: ${this.renderer.constructor.name} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
-            `backend: ${this.backend.constructor.name}, block size: ${this.settings.simulation.segmentMaxCount}`,
-        ].filter(v => v).join("\n");
+            `backend: ${this.backend.constructor.name}, block size: ${actualSegmentSize}`,
+            `auto tune: ${this._formatAutoTune(this.segmentAutoTune)}`,
+        ].join("\n");
+    }
+
+    _formatMs(value) {
+        return Number.isFinite(value) ? `${value.toFixed(1)} ms` : "n/a";
+    }
+
+    _formatAutoTune(state) {
+        if (!state || !state.enabled) {
+            return "off";
+        }
+
+        if (state.status === "done") {
+            const avg = Number.isFinite(state.lastAverageTime) ? `, avg ${state.lastAverageTime.toFixed(1)} ms` : "";
+            return `done, selected ${state.selectedSize}${avg}`;
+        }
+
+        return `tuning ${state.candidateSize}, sample ${state.sample}/${state.samplesPerCandidate}`;
     }
 
     postFrameTime(elapsed) {
@@ -152,6 +177,8 @@ export class Debug {
         this.depth = physics.stats.tree.depth;
         this.segmentCount = physics.stats.tree.segmentCount;
         this.profile = physics.stats.profile || null;
+        this.actualSegmentSize = physics.stats.actualSegmentSize ?? null;
+        this.segmentAutoTune = physics.stats.segmentAutoTune ?? null;
 
         this.postFlops(physics.stats.tree.flops);
     }

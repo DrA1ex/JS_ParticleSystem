@@ -4,6 +4,115 @@ import {ITEM_SIZE} from "../utils/particles.js";
 import {Particle_initializer} from "../simulation/particle_initializer.js";
 import {AppSimulationSettings} from "../settings/app.js";
 
+
+const SEGMENT_TUNE_CANDIDATES = [8, 16, 24, 32, 40, 48, 64, 96];
+const SEGMENT_TUNE_SAMPLES_PER_CANDIDATE = 2;
+
+class SegmentSizeAutoTuner {
+    constructor(settings) {
+        this.enabled = !!settings.simulation.autoTuneSegmentSize;
+        this.baseSize = settings.simulation.segmentMaxCount;
+        this.particleCount = settings.physics.particleCount;
+        this.candidates = this._buildCandidates(this.baseSize, this.particleCount);
+        this.samplesPerCandidate = SEGMENT_TUNE_SAMPLES_PER_CANDIDATE;
+        this.candidateIndex = 0;
+        this.sampleIndex = 0;
+        this.results = [];
+        this.finished = !this.enabled || this.candidates.length <= 1;
+        this.selectedSize = this.finished ? this.baseSize : this.candidates[0];
+        this.lastStepTime = null;
+        this.lastAverageTime = null;
+    }
+
+    get currentSize() {
+        return this.finished ? this.selectedSize : this.candidates[this.candidateIndex];
+    }
+
+    record(stepTime) {
+        if (!this.enabled || this.finished) {
+            this.lastStepTime = stepTime;
+            return;
+        }
+
+        const candidate = this.candidates[this.candidateIndex];
+        let result = this.results[this.candidateIndex];
+        if (!result) {
+            result = {size: candidate, totalTime: 0, samples: 0, averageTime: null};
+            this.results[this.candidateIndex] = result;
+        }
+
+        result.totalTime += stepTime;
+        result.samples += 1;
+        result.averageTime = result.totalTime / result.samples;
+        this.lastStepTime = stepTime;
+        this.lastAverageTime = result.averageTime;
+        this.sampleIndex += 1;
+
+        if (this.sampleIndex < this.samplesPerCandidate) {
+            return;
+        }
+
+        this.sampleIndex = 0;
+        this.candidateIndex += 1;
+
+        if (this.candidateIndex >= this.candidates.length) {
+            this._selectBest();
+        }
+    }
+
+    _selectBest() {
+        let best = this.results[0];
+        for (let i = 1; i < this.results.length; i++) {
+            const result = this.results[i];
+            if (result && result.averageTime < best.averageTime) {
+                best = result;
+            }
+        }
+
+        this.selectedSize = best?.size ?? this.baseSize;
+        this.lastAverageTime = best?.averageTime ?? null;
+        this.finished = true;
+    }
+
+    _buildCandidates(baseSize, particleCount) {
+        const maxCandidate = Math.max(1, Math.min(128, particleCount));
+        const values = [...SEGMENT_TUNE_CANDIDATES, baseSize]
+            .filter(v => Number.isFinite(v) && v >= 1 && v <= maxCandidate);
+        return [...new Set(values)].sort((a, b) => a - b);
+    }
+
+    getStats(actualSize) {
+        if (!this.enabled) {
+            return {
+                enabled: false,
+                status: "off",
+                actualSize,
+                selectedSize: actualSize,
+                candidateSize: actualSize,
+                candidates: [],
+                sample: 0,
+                samplesPerCandidate: this.samplesPerCandidate,
+                lastStepTime: this.lastStepTime,
+                lastAverageTime: null,
+            };
+        }
+
+        return {
+            enabled: true,
+            status: this.finished ? "done" : "tuning",
+            actualSize,
+            selectedSize: this.selectedSize,
+            candidateSize: this.currentSize,
+            candidates: this.candidates,
+            sample: this.finished ? this.samplesPerCandidate : this.sampleIndex + 1,
+            samplesPerCandidate: this.samplesPerCandidate,
+            lastStepTime: this.lastStepTime,
+            lastAverageTime: this.lastAverageTime,
+        };
+    }
+}
+
+
 export class WorkerBackend extends BackendBase {
     constructor() {
         super("./backend/worker.js");
@@ -17,10 +126,13 @@ class WorkerBackendImpl {
         this.particles = null;
         this.buffers = [];
         this._particleForces = [];
+        this._segmentTuner = null;
+        this._actualSegmentSize = null;
     }
 
     async init(settings, state) {
         this.settings = AppSimulationSettings.deserialize(settings);
+        this._initSegmentTuner();
         this.physicalEngine = new FlatPhysicsEngine(this.settings);
         this.particles = this._initializeParticleBuffer();
         this._applyParticlesState(state);
@@ -42,7 +154,12 @@ class WorkerBackendImpl {
             return null;
         }
 
+        this._applyTunedSegmentSize();
+        const tuneStart = performance.now();
         const tree = this.physicalEngine.step(this.particles);
+        const stepCalcTime = performance.now() - tuneStart;
+        this._recordTuningSample(stepCalcTime);
+
         const buffer = this.buffers.shift();
         const profile = this.physicalEngine.stats.profile;
 
@@ -67,7 +184,9 @@ class WorkerBackendImpl {
                     depth: this.physicalEngine.stats.tree.depth,
                     segmentCount: this.physicalEngine.stats.tree.segmentCount
                 },
-                profile: this.physicalEngine.stats.profile
+                profile: this.physicalEngine.stats.profile,
+                actualSegmentSize: this._actualSegmentSize,
+                segmentAutoTune: this._segmentTuner?.getStats(this._actualSegmentSize) ?? null
             }
         };
     }
@@ -78,6 +197,7 @@ class WorkerBackendImpl {
             this.settings.physics.particleCount !== newSettings.physics.particleCount;
 
         this.settings = newSettings;
+        this._initSegmentTuner();
 
         if (particleCountChanged || !this.particles) {
             this.particles = this._initializeParticleBuffer();
@@ -89,10 +209,47 @@ class WorkerBackendImpl {
         this._initDebugForceView();
     }
 
+    _initSegmentTuner() {
+        this._segmentTuner = new SegmentSizeAutoTuner(this.settings);
+        this._actualSegmentSize = this._segmentTuner.currentSize;
+        this._setSegmentMaxCount(this._actualSegmentSize);
+    }
+
+    _applyTunedSegmentSize() {
+        if (!this._segmentTuner) {
+            this._actualSegmentSize = this.settings.simulation.segmentMaxCount;
+            return;
+        }
+
+        const nextSize = this._segmentTuner.currentSize;
+        if (nextSize !== this._actualSegmentSize) {
+            this._actualSegmentSize = nextSize;
+            this._setSegmentMaxCount(nextSize);
+        }
+    }
+
+    _recordTuningSample(stepTime) {
+        if (!this._segmentTuner) {
+            return;
+        }
+
+        this._segmentTuner.record(stepTime);
+        const selectedSize = this._segmentTuner.currentSize;
+        if (this._segmentTuner.finished && selectedSize !== this._actualSegmentSize) {
+            this._actualSegmentSize = selectedSize;
+            this._setSegmentMaxCount(selectedSize);
+        }
+    }
+
+    _setSegmentMaxCount(size) {
+        this.settings.simulation.config.segmentMaxCount = size;
+    }
+
     dispose() {
         this.buffers = null;
         this.particles = null;
         this._particleForces = null;
+        this._segmentTuner = null;
         this.physicalEngine.dispose();
         this.physicalEngine = null;
         this.settings = null;

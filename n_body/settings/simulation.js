@@ -15,6 +15,9 @@ export class SimulationSettings extends SettingsBase {
             .setBreaks(ComponentType.backend, ComponentType.dfri)
             .setAffects(ComponentType.debug)
             .setConstraints(1, 1e6),
+        autoTuneSegmentSize: Property.bool("segment_auto", true)
+            .setName("Auto tune segment size").setDescription("Try several segment sizes in the CPU worker and keep the fastest one")
+            .setBreaks(ComponentType.backend, ComponentType.debug),
         segmentRandomness: Property.float("segment_random", 0.25)
             .setName("Segmentation randomness").setDescription("Spatial subdivision randomness factor")
             .setAffects(ComponentType.backend)
@@ -38,6 +41,7 @@ export class SimulationSettings extends SettingsBase {
     get segmentDivider() {return this.config.segmentDivider;}
     get segmentRandomness() {return this.config.segmentRandomness;}
     get segmentSize() {return this.config.segmentSize;}
+    get autoTuneSegmentSize() {return this.config.autoTuneSegmentSize;}
     get segmentMaxCount() {return this.config.segmentMaxCount;}
     get bufferCount() {return this.config.bufferCount;}
 

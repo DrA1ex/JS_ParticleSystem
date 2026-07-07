@@ -58,6 +58,10 @@ export class Webgl2Renderer extends RendererBase {
         this.gl = canvas.getContext("webgl2");
         this._stateConfig = {};
 
+        this._gpuTimerExt = this.gl.getExtension("EXT_disjoint_timer_query_webgl2");
+        this._gpuTimerQuery = null;
+        this.stats.gpuTimerStatus = this._gpuTimerExt ? "waiting" : "unsupported";
+
         this._particleBufferData = new Float32Array(this.settings.physics.particleCount * ITEM_SIZE);
         this._maxSpeed = this.settings.physics.gravity / 100;
         this._lastMaxSpeedScanTime = 0;
@@ -201,10 +205,15 @@ export class Webgl2Renderer extends RendererBase {
         const {count, prepareDataTime, uploadTime} = this._updateData(particles)
 
         const drawStart = performance.now();
+        this._pollGpuTimer();
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
         this.gl.useProgram(this._stateConfig.render.program);
         this.gl.bindVertexArray(this._stateConfig.render.vertexArrays["particle"]);
+
+        const gpuQuery = this._beginGpuTimer();
         this.gl.drawArrays(this.gl.POINTS, 0, count);
+        this._endGpuTimer(gpuQuery);
+
         const drawTime = performance.now() - drawStart;
 
         this.stats.prepareDataTime = prepareDataTime;
@@ -397,6 +406,61 @@ export class Webgl2Renderer extends RendererBase {
         this.gl.bufferData(GL.ARRAY_BUFFER, view, GL.STREAM_DRAW);
     }
 
+    _beginGpuTimer() {
+        if (!this._gpuTimerExt || this._gpuTimerQuery) {
+            return null;
+        }
+
+        const query = this.gl.createQuery();
+        this.gl.beginQuery(this._gpuTimerExt.TIME_ELAPSED_EXT, query);
+        this._gpuTimerQuery = query;
+        this.stats.gpuTimerStatus = "pending";
+        return query;
+    }
+
+    _endGpuTimer(query) {
+        if (query && this._gpuTimerExt) {
+            this.gl.endQuery(this._gpuTimerExt.TIME_ELAPSED_EXT);
+        }
+    }
+
+    _pollGpuTimer() {
+        const ext = this._gpuTimerExt;
+        if (!ext) {
+            this.stats.gpuTimerStatus = "unsupported";
+            this.stats.gpuDrawTime = null;
+            return;
+        }
+
+        const query = this._gpuTimerQuery;
+        if (!query) {
+            if (this.stats.gpuDrawTime === null) {
+                this.stats.gpuTimerStatus = "waiting";
+            }
+            return;
+        }
+
+        const available = this.gl.getQueryParameter(query, GL.QUERY_RESULT_AVAILABLE);
+        const disjoint = this.gl.getParameter(ext.GPU_DISJOINT_EXT);
+
+        if (!available) {
+            this.stats.gpuTimerStatus = "pending";
+            return;
+        }
+
+        if (disjoint) {
+            this.stats.gpuDrawTime = null;
+            this.stats.gpuTimerStatus = "disjoint";
+        } else {
+            const elapsedNs = this.gl.getQueryParameter(query, GL.QUERY_RESULT);
+            this.stats.gpuDrawTime = elapsedNs / 1_000_000;
+            this.stats.gpuTimerStatus = "ok";
+        }
+
+        this.gl.deleteQuery(query);
+        this._gpuTimerQuery = null;
+    }
+
     getDebugDrawingContext() {
         return this.debugCtx;
     }
@@ -429,6 +493,11 @@ export class Webgl2Renderer extends RendererBase {
         this._nextParticles = null;
         this._uploadedParticleSource = null;
         this._uploadedNextParticleSource = null;
+        if (this._gpuTimerQuery) {
+            this.gl.deleteQuery(this._gpuTimerQuery);
+            this._gpuTimerQuery = null;
+        }
+        this._gpuTimerExt = null;
 
         if (this.debugCanvas) {
             this.debugCtx = null;

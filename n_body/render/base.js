@@ -17,7 +17,14 @@ export class RendererBase {
      */
     constructor(canvas, settings) {
         this.coordinateTransformer = null;
-        this.stats = {renderTime: 0, prepareDataTime: 0, uploadTime: 0, drawTime: 0};
+        this.stats = {
+            renderTime: 0,
+            prepareDataTime: 0,
+            uploadTime: 0,
+            drawTime: 0,
+            gpuDrawTime: null,
+            gpuTimerStatus: "unsupported",
+        };
 
         this.settings = settings;
         this.canvas = canvas;
