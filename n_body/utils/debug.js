@@ -13,6 +13,7 @@ export class Debug {
     renderTime = 0;
     treeDebugData = [];
     forceDebugData = [];
+    profile = null;
 
     get elapsed() {
         return this.frameRateSmoother.smoothedValue;
@@ -74,6 +75,7 @@ export class Debug {
 
         const flops = CommonUtils.formatUnit(this.flops, "FLOPS");
 
+        const profile = this.profile;
         this.infoElem.innerText = [
             `max depth: ${this.depth}`,
             `segments: ${this.segmentCount}`,
@@ -83,6 +85,10 @@ export class Debug {
             `fps: ${(1000 / this.elapsed || 0).toFixed(1)}`,
             `- tree building: ${this.treeTime.toFixed(1)} ms`,
             `- physics calc: ${this.physicsTime.toFixed(1)} ms`,
+            profile ? `  - force solve: ${profile.forceTime.toFixed(1)} ms` : "",
+            profile ? `  - integrate: ${profile.integrateTime.toFixed(1)} ms` : "",
+            profile ? `  - export buffer: ${profile.exportTime.toFixed(1)} ms` : "",
+            profile ? `  - stats: ${profile.statsTime.toFixed(1)} ms` : "",
             `- render: ${this.renderTime.toFixed(1)} ms`,
             `renderer: ${this.renderer.constructor.name} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
             `backend: ${this.backend.constructor.name}, block size: ${this.settings.simulation.segmentMaxCount}`,
@@ -142,6 +148,7 @@ export class Debug {
         this.treeTime = physics.stats.treeTime;
         this.depth = physics.stats.tree.depth;
         this.segmentCount = physics.stats.tree.segmentCount;
+        this.profile = physics.stats.profile || null;
 
         this.postFlops(physics.stats.tree.flops);
     }

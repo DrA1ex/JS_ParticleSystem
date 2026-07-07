@@ -3,7 +3,7 @@ import {AppSimulationSettings} from "../settings/app.js";
 import {ITEM_SIZE} from "../utils/particles.js";
 
 /**
- * @typedef {{physicsTime:number, treeTime: number, tree: {flops: number, depth: number, segmentCount: number}}} StepStatistics
+ * @typedef {{physicsTime:number, treeTime: number, tree: {flops: number, depth: number, segmentCount: number}, profile?: Object}} StepStatistics
  * @typedef {{timestamp: number, buffer: Float32Array, treeDebug: Array, forceDebug: Array, stats: StepStatistics}} StepResult
  */
 
@@ -132,7 +132,8 @@ export class BackendImpl {
                     flops: this.physicalEngine.stats.tree.flops,
                     depth: this.physicalEngine.stats.tree.depth,
                     segmentCount: this.physicalEngine.stats.tree.segmentCount
-                }
+                },
+                profile: this.physicalEngine.stats.profile || null
             }
         }
     }

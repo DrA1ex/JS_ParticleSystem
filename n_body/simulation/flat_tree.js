@@ -36,20 +36,21 @@ class FlatBoundaryRect {
 }
 
 class FlatLeaf {
-    constructor(tree, start, count, depth = 1, rect = null) {
+    constructor(tree, start, count, indices, depth = 1, rect = null) {
         this.tree = tree;
         this.start = start;
         this.count = count;
         this.length = count;
+        this.indices = indices;
         this.depth = depth;
         this.children = [];
-        this.boundaryRect = rect || FlatBoundaryRect.fromRange(tree.particles, tree.indices, start, count);
-        this.mass = tree.sumMass(start, count);
+        this.boundaryRect = rect || FlatBoundaryRect.fromRange(tree.particles, indices, start, count);
+        this.mass = tree.sumMass(start, count, indices);
         this.tree._registerNode();
     }
 
-    appendChild(start, count, rect = null) {
-        const leaf = new FlatLeaf(this.tree, start, count, this.depth + 1, rect);
+    appendChild(start, count, indices, rect = null) {
+        const leaf = new FlatLeaf(this.tree, start, count, indices, this.depth + 1, rect);
         this.children.push(leaf);
         return leaf;
     }
@@ -75,9 +76,13 @@ export class FlatSpatialTree {
         this._bucketCounts = workspace.bucketCounts;
         this._bucketStarts = workspace.bucketStarts;
         this._bucketWrites = workspace.bucketWrites;
+        this._bucketIds = workspace.bucketIds;
+        this._xEdges = workspace.xEdges;
+        this._yEdges = workspace.yEdges;
+        this._weights = workspace.weights;
 
-        this.root = new FlatLeaf(this, 0, this.count);
-        this._populate(this.root);
+        this.root = new FlatLeaf(this, 0, this.count, this.indices);
+        this._populate(this.root, this._scratchIndices);
     }
 
     _prepareWorkspace(workspace) {
@@ -90,9 +95,14 @@ export class FlatSpatialTree {
             workspace.indices = new Int32Array(this.count);
             workspace.scratchIndices = new Int32Array(this.count);
             workspace.identityIndices = new Int32Array(this.count);
+            workspace.bucketIds = new Int16Array(this.count);
             for (let i = 0; i < this.count; i++) {
                 workspace.identityIndices[i] = i;
             }
+        }
+
+        if (!workspace.bucketIds || workspace.bucketIds.length < this.count) {
+            workspace.bucketIds = new Int16Array(this.count);
         }
 
         if (!workspace.bucketCounts || workspace.bucketCounts.length < bucketsCount) {
@@ -101,33 +111,42 @@ export class FlatSpatialTree {
             workspace.bucketWrites = new Int32Array(bucketsCount);
         }
 
+        if (!workspace.xEdges || workspace.xEdges.length < this.divideFactor + 1) {
+            workspace.xEdges = new Float64Array(this.divideFactor + 1);
+            workspace.yEdges = new Float64Array(this.divideFactor + 1);
+            workspace.weights = new Float64Array(this.divideFactor);
+        }
+
         return workspace;
     }
 
-    sumMass(start, count) {
+    sumMass(start, count, indices) {
         let mass = 0;
         const end = start + count;
         for (let i = start; i < end; i++) {
-            mass += this.particles[this.indices[i] * ITEM_SIZE + 4];
+            mass += this.particles[indices[i] * ITEM_SIZE + 4];
         }
         return mass;
     }
 
-    _populate(current) {
+    _populate(current, targetIndices) {
         if (current.count <= this.maxCount || this._isTooSmallToSplit(current.boundaryRect)) {
             this._markLeaf(current);
             return;
         }
 
+        const sourceIndices = current.indices;
         const boundary = current.boundaryRect;
-        const xEdges = this._buildEdges(boundary.left, boundary.width);
-        const yEdges = this._buildEdges(boundary.top, boundary.height);
+        const xEdges = this._xEdges;
+        const yEdges = this._yEdges;
+        this._buildEdges(xEdges, boundary.left, boundary.width);
+        this._buildEdges(yEdges, boundary.top, boundary.height);
+
         const bucketCounts = this._bucketCounts;
         const bucketStarts = this._bucketStarts;
         const bucketWrites = this._bucketWrites;
+        const bucketIds = this._bucketIds;
         const bucketsCount = this._bucketsCount;
-        const indices = this.indices;
-        const scratch = this._scratchIndices;
         const particles = this.particles;
         const divideFactor = this.divideFactor;
         const start = current.start;
@@ -135,23 +154,24 @@ export class FlatSpatialTree {
 
         bucketCounts.fill(0);
 
-        // Partition the current index range in two passes. This keeps the tree
-        // build O(n) per node without allocating arrays of particles for every
-        // child bucket.
+        // Count first, then scatter into the alternate index buffer. Every child
+        // receives a contiguous range, but we avoid the previous scratch ->
+        // source copy by letting leaves remember which index buffer owns them.
         let usedBuckets = 0;
         for (let i = start; i < end; i++) {
-            const offset = indices[i] * ITEM_SIZE;
+            const offset = sourceIndices[i] * ITEM_SIZE;
             const x = this._findEdgeIndex(particles[offset], xEdges);
             const y = this._findEdgeIndex(particles[offset + 1], yEdges);
             const bucketIndex = x * divideFactor + y;
 
+            bucketIds[i] = bucketIndex;
             if (bucketCounts[bucketIndex] === 0) {
                 usedBuckets += 1;
             }
             bucketCounts[bucketIndex] += 1;
         }
 
-        if (usedBuckets === 0 || (usedBuckets === 1 && this._hasSinglePoint(start, current.count))) {
+        if (usedBuckets === 0 || (usedBuckets === 1 && this._hasSinglePoint(current))) {
             this._markLeaf(current);
             return;
         }
@@ -164,15 +184,10 @@ export class FlatSpatialTree {
         }
 
         for (let i = start; i < end; i++) {
-            const particleIndex = indices[i];
-            const offset = particleIndex * ITEM_SIZE;
-            const x = this._findEdgeIndex(particles[offset], xEdges);
-            const y = this._findEdgeIndex(particles[offset + 1], yEdges);
-            const bucketIndex = x * divideFactor + y;
-            scratch[bucketWrites[bucketIndex]++] = particleIndex;
+            const particleIndex = sourceIndices[i];
+            const bucketIndex = bucketIds[i];
+            targetIndices[bucketWrites[bucketIndex]++] = particleIndex;
         }
-
-        indices.set(scratch.subarray(start, end), start);
 
         const children = [];
         for (let x = 0; x < divideFactor; x++) {
@@ -184,12 +199,15 @@ export class FlatSpatialTree {
                 }
 
                 const rect = new FlatBoundaryRect(xEdges[x], yEdges[y], xEdges[x + 1], yEdges[y + 1]);
-                children.push(current.appendChild(bucketStarts[bucketIndex], count, rect));
+                children.push(current.appendChild(bucketStarts[bucketIndex], count, targetIndices, rect));
             }
         }
 
+        // Child ranges are now in targetIndices. During child population the
+        // buffers are swapped, so deeper levels continue partitioning without
+        // copying ranges back after every split.
         for (let i = 0; i < children.length; i++) {
-            this._populate(children[i]);
+            this._populate(children[i], sourceIndices);
         }
     }
 
@@ -203,9 +221,8 @@ export class FlatSpatialTree {
         return boundary.width <= EPSILON && boundary.height <= EPSILON;
     }
 
-    _buildEdges(start, size) {
-        const edges = new Array(this.divideFactor + 1);
-        const weights = new Array(this.divideFactor);
+    _buildEdges(edges, start, size) {
+        const weights = this._weights;
         let totalWeight = 0;
 
         // Preserve the original randomized grid split. The last edge is widened
@@ -225,7 +242,6 @@ export class FlatSpatialTree {
         }
 
         edges[this.divideFactor] = start + size + EPSILON;
-        return edges;
     }
 
     _findEdgeIndex(value, edges) {
@@ -237,18 +253,20 @@ export class FlatSpatialTree {
         return edges.length - 2;
     }
 
-    _hasSinglePoint(start, count) {
-        if (count < 2) {
+    _hasSinglePoint(current) {
+        if (current.count < 2) {
             return true;
         }
 
-        const firstOffset = this.indices[start] * ITEM_SIZE;
+        const indices = current.indices;
+        const start = current.start;
+        const firstOffset = indices[start] * ITEM_SIZE;
         const x = this.particles[firstOffset];
         const y = this.particles[firstOffset + 1];
-        const end = start + count;
+        const end = start + current.count;
 
         for (let i = start + 1; i < end; i++) {
-            const offset = this.indices[i] * ITEM_SIZE;
+            const offset = indices[i] * ITEM_SIZE;
             if (Math.abs(this.particles[offset] - x) > EPSILON || Math.abs(this.particles[offset + 1] - y) > EPSILON) {
                 return false;
             }

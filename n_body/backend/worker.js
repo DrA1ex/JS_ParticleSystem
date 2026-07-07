@@ -44,7 +44,15 @@ class WorkerBackendImpl {
 
         const tree = this.physicalEngine.step(this.particles);
         const buffer = this.buffers.shift();
-        buffer.set(this.particles);
+        const profile = this.physicalEngine.stats.profile;
+
+        if (this.settings.common.stats && profile) {
+            const t = performance.now();
+            buffer.set(this.particles);
+            profile.exportTime = performance.now() - t;
+        } else {
+            buffer.set(this.particles);
+        }
 
         return {
             timestamp: timestamp,
@@ -58,7 +66,8 @@ class WorkerBackendImpl {
                     flops: this.physicalEngine.stats.tree.flops,
                     depth: this.physicalEngine.stats.tree.depth,
                     segmentCount: this.physicalEngine.stats.tree.segmentCount
-                }
+                },
+                profile: this.physicalEngine.stats.profile
             }
         };
     }

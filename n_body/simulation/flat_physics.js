@@ -15,6 +15,12 @@ export class FlatPhysicsEngine {
                 flops: 0,
                 depth: 0,
                 segmentCount: 0
+            },
+            profile: {
+                forceTime: 0,
+                integrateTime: 0,
+                statsTime: 0,
+                exportTime: 0
             }
         };
         this._collisionVelX = new Float32Array(0);
@@ -38,24 +44,41 @@ export class FlatPhysicsEngine {
             this._forceY.fill(0);
         }
 
+        if (!this.settings.common.stats) {
+            const tree = new FlatSpatialTree(particles,
+                this.settings.simulation.segmentMaxCount,
+                this.settings.simulation.segmentDivider,
+                this.settings.simulation.segmentRandomness,
+                this._treeWorkspace);
+            this._calculateTree(tree);
+            this._physicsStep(particles);
+            return tree;
+        }
+
+        const profile = this.stats.profile;
+        profile.exportTime = 0;
+
         let t = performance.now();
         const tree = new FlatSpatialTree(particles,
             this.settings.simulation.segmentMaxCount,
             this.settings.simulation.segmentDivider,
             this.settings.simulation.segmentRandomness,
             this._treeWorkspace);
-        if (this.settings.common.stats) {
-            this.stats.treeTime = performance.now() - t;
-        }
+        this.stats.treeTime = performance.now() - t;
 
         t = performance.now();
         this._calculateTree(tree);
-        this._physicsStep(particles);
+        profile.forceTime = performance.now() - t;
 
-        if (this.settings.common.stats) {
-            this.stats.physicsTime = performance.now() - t;
-            this._calcTreeStats(tree);
-        }
+        t = performance.now();
+        this._physicsStep(particles);
+        profile.integrateTime = performance.now() - t;
+
+        this.stats.physicsTime = profile.forceTime + profile.integrateTime;
+
+        t = performance.now();
+        this._calcTreeStats(tree);
+        profile.statsTime = performance.now() - t;
 
         return tree;
     }
@@ -111,7 +134,7 @@ export class FlatPhysicsEngine {
         // Final leaves use exact particle-to-particle interactions. Indices map
         // the compact tree range back to offsets in the shared particle buffer.
         const particles = tree.particles;
-        const indices = tree.indices;
+        const indices = leaf.indices;
         const start = leaf.start;
         const end = start + leaf.count;
         const particleGravity = this.settings.physics.particleGravity;
@@ -160,7 +183,7 @@ export class FlatPhysicsEngine {
         // particles within the same collision pass.
         this._ensureCollisionBuffer(leaf.count);
         const particles = tree.particles;
-        const indices = tree.indices;
+        const indices = leaf.indices;
         const start = leaf.start;
         const end = start + leaf.count;
         const nextVelXBuffer = this._collisionVelX;
