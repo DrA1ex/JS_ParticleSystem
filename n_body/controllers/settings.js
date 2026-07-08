@@ -325,11 +325,19 @@ export class SettingsController extends ControllerBase {
 
     _createSelect(type, value) {
         const select = new Select(document.createElement("select"));
-        select.setOptions(Object.keys(type));
+        const options = Object.entries(type).map(([key, enumValue]) => {
+            if (typeof enumValue === "string") {
+                return {key: enumValue, strKey: enumValue, label: enumValue};
+            }
 
-        const entry = value && Object.entries(type).find(([k, v]) => v === value);
+            return {key, strKey: key, label: key};
+        });
+
+        select.setOptions(options);
+
+        const entry = Object.entries(type).find(([k, v]) => v === value || k === value);
         if (entry) {
-            select.select(entry[0]);
+            select.select(typeof entry[1] === "string" ? entry[1] : entry[0]);
         }
 
         return select;

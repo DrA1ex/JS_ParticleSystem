@@ -15,7 +15,7 @@ export default function () {
 
             let defaultValue = property.defaultValue;
             if (defaultValue !== null && property.type === PropertyType.enum) {
-                defaultValue = EnumUtils.findKey(property.enumType, defaultValue);
+                defaultValue = typeof defaultValue === "string" ? defaultValue : EnumUtils.findKey(property.enumType, defaultValue);
             }
 
             const description = [
@@ -23,7 +23,7 @@ export default function () {
                 defaultValue !== null && `> - default: **${defaultValue}**`,
                 property.type && `> - type: **${property.type}**`,
                 (property.min !== null || property.max !== null) && `> - constraints: **${property.min ?? '-∞'}-${property.max ?? "∞"}**`,
-                property.type === PropertyType.enum && `> - values: ${Object.keys(property.enumType).map(v => `**${v}**`).join(", ")}`
+                property.type === PropertyType.enum && `> - values: ${Object.entries(property.enumType).map(([k, v]) => `**${typeof v === "string" ? v : k}**`).join(", ")}`
             ];
 
             result.push(...description.filter(v => v));

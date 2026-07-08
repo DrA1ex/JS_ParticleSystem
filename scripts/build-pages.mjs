@@ -164,6 +164,8 @@ async function buildNBody() {
 
   await bundleJs(path.join(sourceDir, "index.js"), path.join(targetDir, "assets", "index.js"));
   await bundleJs(path.join(sourceDir, "backend", "worker.js"), path.join(targetDir, "backend", "worker.js"));
+  await bundleJs(path.join(sourceDir, "backend", "worker_mt.js"), path.join(targetDir, "backend", "worker_mt.js"));
+  await bundleJs(path.join(sourceDir, "backend", "worker_mt_task.js"), path.join(targetDir, "backend", "worker_mt_task.js"));
   await bundleJs(path.join(sourceDir, "backend", "gpgpu.js"), path.join(targetDir, "backend", "gpgpu.js"));
   await bundleJs(path.join(sourceDir, "player", "index.js"), path.join(targetDir, "player", "assets", "index.js"));
 

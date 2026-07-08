@@ -94,8 +94,17 @@ export class PropertyParser {
                 return prop.defaultValue
             }
 
-            const value = param instanceof String ? param.trim() : param;
-            const entry = Object.entries(prop.enumType).find(([k, v]) => k === value || v === value);
+            const value = typeof param === "string" || param instanceof String ? param.trim() : param;
+            const normalize = (v) => typeof v === "string"
+                ? v.trim().toLowerCase().replace(/[-_]/g, "")
+                : v;
+            const normalizedValue = normalize(value);
+            const entry = Object.entries(prop.enumType).find(([k, v]) =>
+                k === value ||
+                v === value ||
+                normalize(k) === normalizedValue ||
+                normalize(v) === normalizedValue
+            );
 
             return entry?.at(1) ?? prop.defaultValue;
         }
@@ -113,7 +122,7 @@ export class Property {
      * @param {*} [defaultValue=null]
      */
     constructor(key, type = PropertyType.string, enumType = null, defaultValue = null) {
-        this.name = name;
+        this.name = key ?? "";
         this.key = key;
         this.type = type;
         this.enumType = enumType;
@@ -391,7 +400,10 @@ export class SettingsBase {
         for (const [prop, value] of params.entries()) {
             if (value !== prop.defaultValue) {
                 if (prop.type === PropertyType.enum) {
-                    result.push({key: prop.key, value: EnumUtils.findKey(prop.enumType, value)});
+                    result.push({
+                        key: prop.key,
+                        value: typeof value === "string" ? value : EnumUtils.findKey(prop.enumType, value)
+                    });
                 } else {
                     result.push({key: prop.key, value});
                 }

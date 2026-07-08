@@ -8,7 +8,7 @@ export class SettingsGroup {
     constructor(type) {
         this.type = type;
 
-        this.name = name;
+        this.name = "";
     }
 
     setName(name) {
