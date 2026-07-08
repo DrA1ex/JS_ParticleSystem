@@ -21,12 +21,12 @@ const WORKER_TREE_STRATEGY_STATIC = "static";
 const WORKER_TREE_STRATEGY_DYNAMIC = "dynamic";
 const WORKER_TREE_STRATEGY_RECURSIVE = "recursive";
 const WORKER_TREE_STRATEGY_HYBRID = "hybrid";
-const HYBRID_TREE_SEED_SPLIT_LEVELS = 2;
-const HYBRID_TREE_SEED_JOBS_PER_THREAD = 2;
-const HYBRID_TREE_SEED_JOBS_MIN = 4;
-const HYBRID_TREE_SEED_JOBS_MAX = 16;
-const HYBRID_TREE_SPLIT_BUDGET = 5;
-const HYBRID_TREE_MIN_JOB_PARTICLES = 32768;
+const HYBRID_TREE_SEED_SPLIT_LEVELS = PARALLEL_TREE_MAX_SPLIT_LEVELS;
+const HYBRID_TREE_SEED_JOBS_PER_THREAD = AUTO_TREE_JOBS_PER_THREAD;
+const HYBRID_TREE_SEED_JOBS_MIN = AUTO_TREE_JOBS_MIN;
+const HYBRID_TREE_SEED_JOBS_MAX = AUTO_TREE_JOBS_MAX;
+const HYBRID_TREE_SPLIT_BUDGET = 3;
+const HYBRID_TREE_MIN_JOB_PARTICLES = 16384;
 const TREE_FLOPS_PER_OP = 14;
 const EPSILON = 0.1e-6;
 
@@ -565,9 +565,7 @@ class WorkerMTBackendImpl {
         let t = performance.now();
         const treeJobs = strategy === WORKER_TREE_STRATEGY_RECURSIVE
             ? this._buildRecursiveTreeSeedJobs()
-            : strategy === WORKER_TREE_STRATEGY_HYBRID
-                ? this._buildHybridTreeSeedJobs()
-                : this._buildParallelTreeJobs();
+            : this._buildParallelTreeJobs();
         const topTreeTime = performance.now() - t;
 
         t = performance.now();

@@ -145,7 +145,7 @@ The number of subworkers can be selected with the `worker_threads` parameter. Su
 
 The parallel tree scheduler can be tuned with `worker_mt_tree_jobs`. Supported values are `auto`, `16`, `32`, `64`, and `128`. The default `auto` mode is intentionally conservative: it targets roughly 4 subtree jobs per worker so the coordinator does not spend too much time preparing work before subworkers can start.
 
-The tree split strategy can be selected with `worker_mt_tree_strategy`. Supported values are `static`, `dynamic`, `recursive`, and `hybrid`. `dynamic` is the default conservative queue-based scheduler. `static` is useful as a baseline. `recursive` is experimental: it starts from coarse regions and lets subworkers split heavy jobs further, returning spawned jobs back to the coordinator queue. `hybrid` starts from an even cheaper coarse seed split, then lets subworkers recursively split only heavy jobs. It is intended to reduce coordinator preparation while avoiding the high downstream idle ratio seen in pure recursive mode.
+The tree split strategy can be selected with `worker_mt_tree_strategy`. Supported values are `static`, `dynamic`, `recursive`, and `hybrid`. `dynamic` is the default conservative queue-based scheduler. `static` is useful as a baseline. `recursive` is experimental: it starts from coarse regions and lets subworkers split heavy jobs further, returning spawned jobs back to the coordinator queue. `hybrid` starts from the conservative dynamic split, then lets subworkers recursively split only heavy jobs. This is intentionally closer to the stable dynamic mode because the more aggressive coarse-seed experiment reduced top-tree time but made downstream calc/force balancing worse.
 
 This backend is the default for `n_body`. It requires `SharedArrayBuffer` and cross-origin isolation for real multithreading. On static hosting, the app can install a local COOP/COEP service worker and automatically reload once so the page becomes cross-origin isolated. If isolation cannot be enabled, the backend falls back to the single-worker path and shows the fallback reason in stats.
 
@@ -205,7 +205,7 @@ Application originally developed and optimized for Chrome browser. In other brow
 /n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid
 ```
 
-Hybrid mode now starts from a cheap coarse seed split instead of the normal dynamic split. It then allows subworkers to recursively split only heavy jobs and return spawned jobs to the coordinator queue. It is intended to reduce serial coordinator preparation while avoiding the high downstream idle ratio seen in pure recursive mode.
+Hybrid mode currently starts from the same conservative shallow dynamic split as `dynamic`, then allows subworkers to recursively split only heavy jobs and return spawned jobs to the coordinator queue. This intentionally rolls back the more aggressive coarse-seed tuning: that version reduced `topTreeTime`, but made the downstream `calc` / `force` pipeline less balanced.
 
 Recommended comparison links:
 
