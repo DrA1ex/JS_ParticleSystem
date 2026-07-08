@@ -45,7 +45,7 @@ export class RenderSettings extends SettingsBase {
                 "This affects CPU/GPU upload cost, not the physics calculation itself."
             ].join("\n"))
             .setAffects(ComponentType.renderer),
-        maxSpeedUpdateMode: Property.enum("max_speed_mode", MaxSpeedUpdateMode, MaxSpeedUpdateMode.current)
+        maxSpeedUpdateMode: Property.enum("max_speed_mode", MaxSpeedUpdateMode, MaxSpeedUpdateMode.throttle)
             .setName("Max speed update").setDescription([
                 "Controls how often the renderer scans all velocities to update the color normalization value.",
                 "current: scan every render frame; most reactive, but adds a CPU pass over all particles.",

@@ -35,7 +35,13 @@ export class Application {
         statsDomTime: null,
         onDataTime: null,
         bufferSwitchTime: null,
+        maxRafInterval: null,
+        droppedRafFrames: 0,
+        noAheadBufferCount: 0,
+        missedAheadFrames: 0,
+        dfriTargetFrameTime: null,
     };
+    _lastNoAheadWarningTime = 0;
 
     /**
      * @param {AppSimulationSettings} settings
@@ -247,7 +253,9 @@ export class Application {
 
         if (this.aheadBuffers.length === 0) {
             if (this.settings.render.enableDFRI) {
-                console.warn(`${performance.now().toFixed(0)} Next buffer not ready. Frames may be dropped`);
+                this.mainStats.noAheadBufferCount += 1;
+                this.mainStats.missedAheadFrames += 1;
+                this._warnNoAheadBufferIfNeeded();
             }
             return;
         }
@@ -299,6 +307,34 @@ export class Application {
         this.backend.requestNextStep();
     }
 
+    _warnNoAheadBufferIfNeeded() {
+        if (!this.settings.common.verboseStats) {
+            return;
+        }
+
+        const now = performance.now();
+        if (now - this._lastNoAheadWarningTime < 1000) {
+            return;
+        }
+
+        this._lastNoAheadWarningTime = now;
+        console.warn(`${now.toFixed(0)} Next buffer not ready. Frames may be dropped`);
+    }
+
+    _recordRafInterval(elapsed) {
+        if (!Number.isFinite(elapsed) || elapsed <= 0) {
+            return;
+        }
+
+        this.mainStats.maxRafInterval = Math.max(this.mainStats.maxRafInterval || 0, elapsed);
+        const targetFrameTime = this.dfriHelper?.targetRenderTime || this.refreshTime;
+        this.mainStats.dfriTargetFrameTime = targetFrameTime;
+
+        if (Number.isFinite(targetFrameTime) && targetFrameTime > 0 && elapsed > targetFrameTime * 1.5) {
+            this.mainStats.droppedRafFrames += Math.max(1, Math.round(elapsed / targetFrameTime) - 1);
+        }
+    }
+
     requestNextStepIfNeeded() {
         // A retained render buffer is not available to the worker, so the fill
         // target is reduced by one until that buffer is acknowledged.
@@ -318,6 +354,7 @@ export class Application {
         const callbackStart = performance.now();
         const elapsed = timestamp - this.lastRenderTime;
         this.mainStats.rafInterval = elapsed;
+        this._recordRafInterval(elapsed);
 
         if (this.simulationCtrl.currentState === SimulationStateEnum.loading) {
             this.lastRenderTime = timestamp;

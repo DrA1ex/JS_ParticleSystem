@@ -24,9 +24,15 @@ export class Debug {
         statsDomTime: null,
         onDataTime: null,
         bufferSwitchTime: null,
+        maxRafInterval: null,
+        droppedRafFrames: 0,
+        noAheadBufferCount: 0,
+        missedAheadFrames: 0,
+        dfriTargetFrameTime: null,
     };
     longTaskCount = 0;
     longTaskTime = 0;
+    lastLongTaskTime = null;
 
     get elapsed() {
         return this.frameRateSmoother.smoothedValue;
@@ -65,6 +71,7 @@ export class Debug {
                     for (const entry of list.getEntries()) {
                         this.longTaskCount += 1;
                         this.longTaskTime += entry.duration || 0;
+                        this.lastLongTaskTime = entry.duration || 0;
                     }
                 });
                 this._longTaskObserver.observe({entryTypes: ["longtask"]});
@@ -162,7 +169,14 @@ export class Debug {
             `  - on data: ${this._formatMs(main.onDataTime)}`,
             `  - debug overlay: ${this._formatMs(main.debugOverlayTime)}`,
             `  - stats dom: ${this._formatMs(main.statsDomTime)}`,
+            `  - max raf: ${this._formatMs(main.maxRafInterval)}`,
+            `  - dropped raf frames: ${main.droppedRafFrames ?? 0}`,
             `  - long tasks: ${this.longTaskCount} / ${this._formatMs(this.longTaskTime)}`,
+            `  - last long task: ${this._formatMs(this.lastLongTaskTime)}`,
+            `- DFRI pacing`,
+            `  - target frame: ${this._formatMs(main.dfriTargetFrameTime)}`,
+            `  - no ahead buffer: ${main.noAheadBufferCount ?? 0}`,
+            `  - missed ahead frames: ${main.missedAheadFrames ?? 0}`,
             `- tree building: ${this._formatMs(this.treeTime)}`,
             `- physics calc: ${this._formatMs(this.physicsTime)}`,
             `  - force solve: ${this._formatMs(profile.forceTime)}`,

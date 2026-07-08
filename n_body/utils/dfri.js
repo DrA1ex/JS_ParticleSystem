@@ -13,6 +13,10 @@ export class DFRIHelperBase {
         this._initialized = false;
         this._gpuInterpolation = false;
         this._deltas = null;
+        this._recentRenderTimes = [];
+        this._recentRenderTimeIndex = 0;
+        this._recentRenderTimeCount = 0;
+        this._recentBestRenderTime = 0;
     }
 
     /**
@@ -73,6 +77,16 @@ export class DFRIHelperBase {
             this.init();
         }
 
+        // Recalculate interpolation length while waiting for the next physics
+        // frame. When the browser temporarily drops RAF callbacks, using only
+        // the delayed average render interval creates a feedback loop: DFRI
+        // asks for the next physics frame too early, misses it, and may drop
+        // more visual frames. The recent-best refresh interval keeps pacing
+        // aligned with the display's real capability when it is observed.
+        if (!pause && !this.needNextFrame()) {
+            this.interpolateFrames = this._getInterpolateFramesCount();
+        }
+
         this._currentFactor = this.getFactor();
         if (this._gpuInterpolation) {
             this.renderer.setInterpolationFactor(this._currentFactor);
@@ -102,6 +116,10 @@ export class DFRIHelperBase {
     reset() {
         this.frame = 0;
         this.interpolateFrames = this._getInterpolateFramesCount();
+    }
+
+    get targetRenderTime() {
+        return this.desiredTime;
     }
 
     setNextFrame(dataFn) {
@@ -188,7 +206,9 @@ export class DFRIHelper extends DFRIHelperBase {
     }
 
     get desiredTime() {
-        return this.renderTimeSmoother.smoothedValue;
+        const smoothed = this.renderTimeSmoother.smoothedValue || 1000 / this.settings.world.fps;
+        const recentBest = this._recentBestRenderTime || smoothed;
+        return Math.max(1, Math.min(smoothed, recentBest));
     }
 
     get maxCount() {
@@ -197,9 +217,6 @@ export class DFRIHelper extends DFRIHelperBase {
 
     bufferSwitched(particles, aheadBufferEntry) {
         const buffer = aheadBufferEntry?.buffer;
-        if (!buffer) {
-            console.warn(`${performance.now().toFixed(0)} No available ahead buffer, interpolation may be inconsistent`);
-        }
 
         if (this._gpuInterpolation) {
             // GPU DFRI cannot synthesize a velocity-based fallback in the shader.
@@ -237,11 +254,45 @@ export class DFRIHelper extends DFRIHelperBase {
     }
 
     postRenderTime(time) {
+        if (!Number.isFinite(time) || time <= 0 || time > 1000) {
+            return;
+        }
+
         this.renderTimeSmoother.postValue(time);
+        this._postRecentRenderTime(time);
+    }
+
+    _postRecentRenderTime(time) {
+        const maxSamples = Math.max(10, Math.min(240, this.settings.world.fps * 2));
+        if (this._recentRenderTimes.length !== maxSamples) {
+            this._recentRenderTimes = new Array(maxSamples);
+            this._recentRenderTimeIndex = 0;
+            this._recentRenderTimeCount = 0;
+        }
+
+        this._recentRenderTimes[this._recentRenderTimeIndex] = time;
+        this._recentRenderTimeIndex = (this._recentRenderTimeIndex + 1) % maxSamples;
+        this._recentRenderTimeCount = Math.min(maxSamples, this._recentRenderTimeCount + 1);
+
+        let best = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < this._recentRenderTimeCount; i++) {
+            const value = this._recentRenderTimes[i];
+            if (Number.isFinite(value) && value > 1 && value < best) {
+                best = value;
+            }
+        }
+
+        if (Number.isFinite(best)) {
+            this._recentBestRenderTime = best;
+        }
     }
 
     reconfigure(settings) {
         this.settings = settings;
+        this._recentRenderTimes = [];
+        this._recentRenderTimeIndex = 0;
+        this._recentRenderTimeCount = 0;
+        this._recentBestRenderTime = 0;
     }
 
     _getInterpolateFramesCount() {
