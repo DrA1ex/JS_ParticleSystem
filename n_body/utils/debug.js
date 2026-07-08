@@ -189,6 +189,9 @@ export class Debug {
             `  - populate: ${this._formatMs(this.treeProfile?.populateTime)}`,
             `  - aggregate: ${this._formatMs(this.treeProfile?.aggregateTime)}`,
             `  - fast buckets: ${this.treeProfile?.fastBucketPath ? "on" : "off"}`,
+            `  - parallel: ${this.treeProfile?.parallel ? "on" : "off"}`,
+            `  - top populate: ${this._formatMs(this.treeProfile?.topPopulateTime)}`,
+            `  - parallel wait: ${this._formatMs(this.treeProfile?.parallelTreeWaitTime)}`,
             `- physics calc: ${this._formatMs(this.physicsTime)}`,
             `  - force solve: ${this._formatMs(profile.forceTime)}`,
             `  - integrate: ${this._formatMs(profile.integrateTime)}`,
@@ -291,7 +294,10 @@ export class Debug {
         const tasks = Number.isFinite(state.taskCount) ? state.taskCount : "n/a";
         const active = Number.isFinite(state.activeWorkers) ? state.activeWorkers : "n/a";
         const sharedIndices = state.sharedIndexBuffers ? "shared indices" : "copied indices";
-        return `${state.actualThreads} threads, ${active} active, tasks ${tasks}, wait ${wait}, ` +
+        const tree = state.treeParallel
+            ? `tree on, top ${this._formatMs(state.topTreeTime)}, tree max ${this._formatMs(state.treeTimeMax)}, jobs ${state.treeJobCount ?? "n/a"}, `
+            : "tree off, ";
+        return `${state.actualThreads} threads, ${active} active, ${tree}tasks ${tasks}, wait ${wait}, ` +
             `build ${taskBuild}, partition ${partition}, descriptors ${descriptorBytes}, ` +
             `index copy ${indexCopyBytes}, ${sharedIndices}`;
     }

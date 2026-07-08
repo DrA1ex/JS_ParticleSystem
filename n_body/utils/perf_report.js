@@ -120,8 +120,11 @@ function cloneWorkerMTState(state) {
     const integrateTimeTotal = finite(state.integrateTimeTotal);
     const coordinationTime = sumFinite(taskBuildTime, partitionTime);
     const wallTime = sumFinite(coordinationTime, parallelWaitTime);
-    const workerCpuTime = sumFinite(forceTimeTotal, integrateTimeTotal);
-    const workerMaxTime = sumFinite(forceTimeMax, integrateTimeMax);
+    const treeTimeMax = finite(state.treeTimeMax);
+    const treeTimeTotal = finite(state.treeTimeTotal);
+    const topTreeTime = finite(state.topTreeTime);
+    const workerCpuTime = sumFinite(treeTimeTotal, forceTimeTotal, integrateTimeTotal);
+    const workerMaxTime = sumFinite(treeTimeMax, forceTimeMax, integrateTimeMax);
     const activeWorkerTime = Number.isFinite(parallelWaitTime) && Number.isFinite(activeWorkers)
         ? parallelWaitTime * activeWorkers
         : null;
@@ -135,6 +138,14 @@ function cloneWorkerMTState(state) {
         activeWorkers,
         fallbackReason: state.fallbackReason || null,
         taskCount,
+        treeParallel: !!state.treeParallel,
+        treeJobCount: finite(state.treeJobCount),
+        topTreeTime,
+        topTreeSplitTime: finite(state.topTreeSplitTime),
+        treeRootBoundsTime: finite(state.treeRootBoundsTime),
+        treeResetTime: finite(state.treeResetTime),
+        treeTimeMax,
+        treeTimeTotal,
         taskBuildTime,
         partitionTime,
         coordinationTime,
@@ -200,6 +211,10 @@ const BLOCK_METRICS = {
     "physics.mt.coordination": "physics.workerMT.coordinationTime",
     "physics.mt.parallelWait": "physics.workerMT.parallelWaitTime",
     "physics.mt.wall": "physics.workerMT.wallTime",
+    "physics.mt.topTree": "physics.workerMT.topTreeTime",
+    "physics.mt.treeMax": "physics.workerMT.treeTimeMax",
+    "physics.mt.treeTotal": "physics.workerMT.treeTimeTotal",
+    "physics.mt.treeJobs": "physics.workerMT.treeJobCount",
     "physics.mt.forceMax": "physics.workerMT.forceTimeMax",
     "physics.mt.integrateMax": "physics.workerMT.integrateTimeMax",
     "physics.mt.forceTotal": "physics.workerMT.forceTimeTotal",
@@ -543,6 +558,11 @@ function summarizeWorkerMTBlocks(blocks) {
         taskBuildTime: summarizeAcrossBlocks(blocks, "physics.mt.taskBuild"),
         partitionTime: summarizeAcrossBlocks(blocks, "physics.mt.partition"),
         parallelWaitTime: summarizeAcrossBlocks(blocks, "physics.mt.parallelWait"),
+        topTreeTime: summarizeAcrossBlocks(blocks, "physics.mt.topTree"),
+        treeMax: summarizeAcrossBlocks(blocks, "physics.mt.treeMax"),
+        treeTotal: summarizeAcrossBlocks(blocks, "physics.mt.treeTotal"),
+        treeJobs: summarizeAcrossBlocks(blocks, "physics.mt.treeJobs"),
+        treeParallel: states.some(state => state.treeParallel),
         forceMax: summarizeAcrossBlocks(blocks, "physics.mt.forceMax"),
         integrateMax: summarizeAcrossBlocks(blocks, "physics.mt.integrateMax"),
         forceTotal: summarizeAcrossBlocks(blocks, "physics.mt.forceTotal"),
@@ -662,6 +682,8 @@ function buildCompactSummaryRows(reports) {
         force: fixed(metricAvg(report, "summary.physics.force"), 1),
         integrate: fixed(metricAvg(report, "summary.physics.integrate"), 1),
         mtWall: fixed(metricAvg(report, "summary.workerMT.wallTime"), 1),
+        mtTree: fixed(metricAvg(report, "summary.workerMT.treeMax"), 1),
+        mtTopTree: fixed(metricAvg(report, "summary.workerMT.topTreeTime"), 1),
         mtWait: fixed(metricAvg(report, "summary.workerMT.parallelWaitTime"), 1),
         mtCoord: fixed(metricAvg(report, "summary.workerMT.coordinationTime"), 1),
         mtEff: fixed(metricAvg(report, "summary.workerMT.parallelEfficiency"), 2),

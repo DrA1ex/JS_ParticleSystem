@@ -1,4 +1,5 @@
 import {AppSimulationSettings} from "../settings/app.js";
+import {FlatSpatialTree} from "../simulation/flat_tree.js";
 import {ITEM_SIZE} from "../utils/particles.js";
 
 let settings = null;
@@ -8,6 +9,7 @@ let forceY = null;
 let collisionVelX = new Float32Array(0);
 let collisionVelY = new Float32Array(0);
 let indexBuffers = null;
+let treeWorkspace = null;
 
 function init(data) {
     settings = AppSimulationSettings.deserialize(data.settings);
@@ -135,6 +137,186 @@ function integrateLeaf(indices, start, count) {
     }
 }
 
+
+function buildTreeStats(tree) {
+    const flopsPerOp = 14;
+    let flops = 0;
+    for (let nodeId = 0; nodeId < tree.nodeCount; nodeId++) {
+        const childCount = tree.nodeChildCount[nodeId];
+        if (childCount === 0) {
+            flops += Math.pow(tree.nodeParticleCount[nodeId], 2) * flopsPerOp;
+        } else {
+            flops += Math.pow(childCount, 2) * flopsPerOp;
+        }
+    }
+
+    return {
+        flops,
+        depth: tree.maxDepth,
+        segmentCount: tree.nodeCount,
+    };
+}
+
+function addTreeProfile(total, profile) {
+    if (!profile) {
+        return;
+    }
+    total.resetTime += profile.resetTime || 0;
+    total.rootBoundsTime += profile.rootBoundsTime || 0;
+    total.populateTime += profile.populateTime || 0;
+    total.aggregateTime += profile.aggregateTime || 0;
+    total.fastBucketPath = total.fastBucketPath && profile.fastBucketPath !== false;
+}
+
+function collectLeafTasks(tree, nodeId, pForceX, pForceY, tasks) {
+    if (tree.nodeChildCount[nodeId] === 0) {
+        tasks.push({
+            start: tree.nodeStart[nodeId],
+            count: tree.nodeParticleCount[nodeId],
+            indexBuffer: tree.nodeIndexBuffer[nodeId],
+            forceX: pForceX,
+            forceY: pForceY,
+        });
+        return;
+    }
+
+    const particleGravity = settings.physics.particleGravity;
+    const minInteractionDistanceSq = settings.physics.minInteractionDistanceSq;
+    const firstChild = tree.nodeFirstChild[nodeId];
+    const childCount = tree.nodeChildCount[nodeId];
+
+    for (let i = 0; i < childCount; i++) {
+        const childId = firstChild + i;
+        let forceX = pForceX;
+        let forceY = pForceY;
+        const childCenterX = tree.nodeCenterX[childId];
+        const childCenterY = tree.nodeCenterY[childId];
+
+        for (let j = 0; j < childCount; j++) {
+            if (i === j) continue;
+            const otherId = firstChild + j;
+            const dx = childCenterX - tree.nodeCenterX[otherId];
+            const dy = childCenterY - tree.nodeCenterY[otherId];
+            const distSquare = dx * dx + dy * dy;
+            if (distSquare >= minInteractionDistanceSq) {
+                const force = -(particleGravity * tree.nodeMass[otherId]) / distSquare;
+                forceX += dx * force;
+                forceY += dy * force;
+            }
+        }
+
+        collectLeafTasks(tree, childId, forceX, forceY, tasks);
+    }
+}
+
+function processLeafTasks(tasks) {
+    let particleCount = 0;
+    let t = performance.now();
+    for (let i = 0; i < tasks.length; i++) {
+        const task = tasks[i];
+        const indices = indexBuffers[task.indexBuffer];
+        calculateLeaf(indices, task.start, task.count, task.forceX, task.forceY);
+        if (settings.physics.enableCollision) {
+            processCollisions(indices, task.start, task.count);
+        }
+        particleCount += task.count;
+    }
+    const forceTime = performance.now() - t;
+
+    t = performance.now();
+    for (let i = 0; i < tasks.length; i++) {
+        const task = tasks[i];
+        integrateLeaf(indexBuffers[task.indexBuffer], task.start, task.count);
+    }
+    const integrateTime = performance.now() - t;
+
+    return {forceTime, integrateTime, particleCount};
+}
+
+function processTreeJobs(data) {
+    const jobStarts = new Uint32Array(data.jobStartsBuffer);
+    const jobCounts = new Uint32Array(data.jobCountsBuffer);
+    const jobIndexBuffers = new Uint8Array(data.jobIndexBuffersBuffer);
+    const jobDepths = new Uint16Array(data.jobDepthsBuffer);
+    const jobLeft = new Float64Array(data.jobLeftBuffer);
+    const jobTop = new Float64Array(data.jobTopBuffer);
+    const jobRight = new Float64Array(data.jobRightBuffer);
+    const jobBottom = new Float64Array(data.jobBottomBuffer);
+    const jobParentForceX = new Float32Array(data.jobParentForceXBuffer);
+    const jobParentForceY = new Float32Array(data.jobParentForceYBuffer);
+
+    const tasks = [];
+    const treeProfile = {
+        resetTime: 0,
+        rootBoundsTime: 0,
+        populateTime: 0,
+        aggregateTime: 0,
+        fastBucketPath: true,
+    };
+    const treeStats = {flops: 0, depth: 0, segmentCount: 0};
+
+    if (!treeWorkspace) {
+        treeWorkspace = {
+            indices: indexBuffers[0],
+            scratchIndices: indexBuffers[1],
+        };
+    }
+
+    const treeStart = performance.now();
+    for (let i = 0; i < jobStarts.length; i++) {
+        const count = jobCounts[i];
+        if (count === 0) {
+            continue;
+        }
+
+        const tree = new FlatSpatialTree(
+            particles,
+            settings.simulation.segmentMaxCount,
+            settings.simulation.segmentDivider,
+            settings.simulation.segmentRandomness,
+            treeWorkspace,
+            {
+                count,
+                indexCapacity: Math.floor(particles.length / ITEM_SIZE),
+                skipIndexReset: true,
+                root: {
+                    start: jobStarts[i],
+                    count,
+                    indexBuffer: jobIndexBuffers[i],
+                    depth: jobDepths[i],
+                    left: jobLeft[i],
+                    top: jobTop[i],
+                    right: jobRight[i],
+                    bottom: jobBottom[i],
+                }
+            }
+        );
+
+        addTreeProfile(treeProfile, tree.profile);
+        const stats = buildTreeStats(tree);
+        treeStats.flops += stats.flops;
+        treeStats.depth = Math.max(treeStats.depth, stats.depth);
+        treeStats.segmentCount += stats.segmentCount;
+        collectLeafTasks(tree, tree.root, jobParentForceX[i], jobParentForceY[i], tasks);
+    }
+    const treeTime = performance.now() - treeStart;
+
+    const processed = processLeafTasks(tasks);
+
+    postMessage({
+        type: "done",
+        requestId: data.requestId,
+        treeTime,
+        treeProfile,
+        treeStats,
+        forceTime: processed.forceTime,
+        integrateTime: processed.integrateTime,
+        leafCount: tasks.length,
+        particleCount: processed.particleCount,
+        jobCount: jobStarts.length,
+    });
+}
+
 function processTasks(data) {
     const leafStarts = new Uint32Array(data.leafStartsBuffer);
     const leafCounts = new Uint32Array(data.leafCountsBuffer);
@@ -182,6 +364,9 @@ onmessage = (event) => {
             break;
         case "process":
             processTasks(data);
+            break;
+        case "process-tree":
+            processTreeJobs(data);
             break;
         case "dispose":
             close();

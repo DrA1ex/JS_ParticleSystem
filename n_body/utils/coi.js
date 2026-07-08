@@ -38,7 +38,7 @@ export function clearCrossOriginIsolationReloadAttempt() {
 }
 
 export async function ensureCrossOriginIsolationForWorkerMT(settings, options = {}) {
-    const {interactive = true} = options;
+    const {interactive = false} = options;
     if (!isWorkerMTBackend(settings)) {
         clearCrossOriginIsolationReloadAttempt();
         return {required: false, ready: isSharedMemoryReady(), reloading: false, status: getCrossOriginIsolationStatus()};
@@ -78,11 +78,13 @@ export async function ensureCrossOriginIsolationForWorkerMT(settings, options = 
         return {required: true, ready: false, reloading: false, reason: "cross-origin isolation unavailable after reload", status};
     }
 
-    const shouldReload = !interactive || window.confirm([
-        "worker-mt needs SharedArrayBuffer and cross-origin isolation.",
-        "A local COOP/COEP service worker has been installed for n_body.",
-        "Reload the page now to enable real multithreaded worker mode?"
-    ].join("\n"));
+    const shouldReload = interactive
+        ? window.confirm([
+            "worker-mt needs SharedArrayBuffer and cross-origin isolation.",
+            "A local COOP/COEP service worker has been installed for n_body.",
+            "Reload the page now to enable real multithreaded worker mode?"
+        ].join("\n"))
+        : true;
 
     if (!shouldReload) {
         return {required: true, ready: false, reloading: false, reason: "reload declined", status};

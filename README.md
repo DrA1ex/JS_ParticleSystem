@@ -143,7 +143,7 @@ _Simulation demo links with maximum accuracy_:
 
 The number of subworkers can be selected with the `worker_threads` parameter. Supported values are `auto`, `2`, `4`, `6`, and `8`. The `auto` mode uses browser hardware concurrency information when available and otherwise falls back to a safe default. In practice, `4` threads is usually a good starting point; higher values can help on some desktops, but may also add scheduling overhead.
 
-This backend requires `SharedArrayBuffer` and cross-origin isolation for real multithreading. On static hosting, the app can install a local COOP/COEP service worker and then ask to reload the page. If isolation cannot be enabled, the backend falls back to the single-worker path.
+This backend is the default for `n_body`. It requires `SharedArrayBuffer` and cross-origin isolation for real multithreading. On static hosting, the app can install a local COOP/COEP service worker and automatically reload once so the page becomes cross-origin isolated. If isolation cannot be enabled, the backend falls back to the single-worker path and shows the fallback reason in stats.
 
 _Demos with different worker thread counts_:
 - Auto threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=auto&particle_count=200000&segment_auto=1)

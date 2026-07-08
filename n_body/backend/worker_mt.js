@@ -8,6 +8,11 @@ import {AppSimulationSettings} from "../settings/app.js";
 const SEGMENT_TUNE_CANDIDATES = [8, 16, 24, 32, 40, 48, 64, 96];
 const SEGMENT_TUNE_SAMPLES_PER_CANDIDATE = 2;
 const THREAD_CHOICES = [2, 4, 6, 8];
+const BUFFER_A = 0;
+const BUFFER_B = 1;
+const PARALLEL_TREE_SPLIT_LEVELS = 2;
+const TREE_FLOPS_PER_OP = 14;
+const EPSILON = 0.1e-6;
 
 class SegmentSizeAutoTuner {
     constructor(settings) {
@@ -162,6 +167,18 @@ class SubworkerPool {
         return Promise.all(promises);
     }
 
+    processTreePartitions(partitions) {
+        const promises = [];
+        for (let i = 0; i < this.workers.length; i++) {
+            const partition = partitions[i];
+            if (!partition || partition.jobCount === 0) {
+                continue;
+            }
+            promises.push(this._processTreePartition(this.workers[i], partition));
+        }
+        return Promise.all(promises);
+    }
+
     _sendInit(worker, type, settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB) {
         return new Promise((resolve) => {
             const previous = worker.onmessage;
@@ -203,6 +220,38 @@ class SubworkerPool {
                 partition.leafIndexBuffers.buffer,
                 partition.parentForceX.buffer,
                 partition.parentForceY.buffer,
+            ]);
+        });
+    }
+
+    _processTreePartition(worker, partition) {
+        const requestId = ++this._requestId;
+        return new Promise((resolve, reject) => {
+            this._pending.set(requestId, {resolve, reject});
+            worker.postMessage({
+                type: "process-tree",
+                requestId,
+                jobStartsBuffer: partition.jobStarts.buffer,
+                jobCountsBuffer: partition.jobCounts.buffer,
+                jobIndexBuffersBuffer: partition.jobIndexBuffers.buffer,
+                jobDepthsBuffer: partition.jobDepths.buffer,
+                jobLeftBuffer: partition.jobLeft.buffer,
+                jobTopBuffer: partition.jobTop.buffer,
+                jobRightBuffer: partition.jobRight.buffer,
+                jobBottomBuffer: partition.jobBottom.buffer,
+                jobParentForceXBuffer: partition.jobParentForceX.buffer,
+                jobParentForceYBuffer: partition.jobParentForceY.buffer,
+            }, [
+                partition.jobStarts.buffer,
+                partition.jobCounts.buffer,
+                partition.jobIndexBuffers.buffer,
+                partition.jobDepths.buffer,
+                partition.jobLeft.buffer,
+                partition.jobTop.buffer,
+                partition.jobRight.buffer,
+                partition.jobBottom.buffer,
+                partition.jobParentForceX.buffer,
+                partition.jobParentForceY.buffer,
             ]);
         });
     }
@@ -294,6 +343,10 @@ class WorkerMTBackendImpl {
             return this._singleThreadStep(timestamp);
         }
 
+        if (this.settings.simulation.segmentDivider === 2) {
+            return this._parallelTreeStep(timestamp);
+        }
+
         this._applyTunedSegmentSize();
         const stepStart = performance.now();
         const profile = {
@@ -370,6 +423,418 @@ class WorkerMTBackendImpl {
         }
 
         return this._buildResult(timestamp, buffer, tree, treeTime, taskBuildTime + partitionTime + parallelTime, this._calcTreeStats(tree), profile);
+    }
+
+
+    async _parallelTreeStep(timestamp) {
+        this._applyTunedSegmentSize();
+        const stepStart = performance.now();
+        const profile = {
+            forceTime: 0,
+            integrateTime: 0,
+            statsTime: 0,
+            exportTime: 0,
+            mt: null,
+        };
+
+        if (this.settings.common.debugForce && this.forceX && this.forceY) {
+            this.forceX.fill(0);
+            this.forceY.fill(0);
+        }
+
+        let t = performance.now();
+        const treeJobs = this._buildParallelTreeJobs();
+        const topTreeTime = performance.now() - t;
+
+        t = performance.now();
+        const partitions = this._buildTreeJobPartitions(treeJobs.jobs);
+        const partitionTime = performance.now() - t;
+
+        t = performance.now();
+        const workerResults = await this._pool.processTreePartitions(partitions);
+        const parallelWaitTime = performance.now() - t;
+
+        const maxWorkerTreeTime = workerResults.reduce((max, item) => Math.max(max, item.treeTime || 0), 0);
+        const treeTime = topTreeTime + maxWorkerTreeTime;
+        const forceTime = workerResults.reduce((max, item) => Math.max(max, item.forceTime || 0), 0);
+        const integrateTime = workerResults.reduce((max, item) => Math.max(max, item.integrateTime || 0), 0);
+        const workerCpuTime = workerResults.reduce((sum, item) => sum + (item.treeTime || 0) + (item.forceTime || 0) + (item.integrateTime || 0), 0);
+        const workerMaxTime = workerResults.reduce((max, item) => Math.max(max, (item.treeTime || 0) + (item.forceTime || 0) + (item.integrateTime || 0)), 0);
+
+        profile.forceTime = forceTime;
+        profile.integrateTime = integrateTime;
+        profile.mt = {
+            enabled: true,
+            sharedMemory: true,
+            crossOriginIsolated: this._crossOriginIsolated,
+            requestedThreads: this.settings.simulation.workerThreads,
+            actualThreads: this._threadCount,
+            taskCount: workerResults.reduce((sum, item) => sum + (item.leafCount || 0), 0),
+            activeWorkers: workerResults.length,
+            treeParallel: true,
+            treeJobCount: treeJobs.jobs.length,
+            topTreeTime,
+            topTreeSplitTime: treeJobs.profile.populateTime,
+            treeRootBoundsTime: treeJobs.profile.rootBoundsTime,
+            treeResetTime: treeJobs.profile.resetTime,
+            treeTimeMax: maxWorkerTreeTime,
+            treeTimeTotal: workerResults.reduce((sum, item) => sum + (item.treeTime || 0), 0),
+            taskBuildTime: 0,
+            partitionTime,
+            partitionDescriptorBytes: partitions.reduce((sum, item) => sum + (item.descriptorBytes || 0), 0),
+            indexCopyBytes: partitions.reduce((sum, item) => sum + (item.indexCopyBytes || 0), 0),
+            sharedIndexBuffers: true,
+            parallelWaitTime,
+            forceTimeMax: forceTime,
+            integrateTimeMax: integrateTime,
+            forceTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceTime || 0), 0),
+            integrateTimeTotal: workerResults.reduce((sum, item) => sum + (item.integrateTime || 0), 0),
+            workerCpuTime,
+            workerMaxTime,
+        };
+
+        const stepCalcTime = performance.now() - stepStart;
+        this._recordTuningSample(stepCalcTime);
+
+        const buffer = this.buffers.shift();
+        t = performance.now();
+        buffer.set(this.particles);
+        profile.exportTime = performance.now() - t;
+
+        const treeStats = this._mergeParallelTreeStats(treeJobs.stats, workerResults);
+        const treeProfile = this._mergeParallelTreeProfile(treeJobs.profile, workerResults, maxWorkerTreeTime);
+        return this._buildParallelResult(timestamp, buffer, treeTime, forceTime + integrateTime + partitionTime, treeStats, treeProfile, profile);
+    }
+
+    _buildParallelResult(timestamp, buffer, treeTime, physicsTime, treeStats, treeProfile, profile) {
+        return {
+            timestamp,
+            buffer,
+            treeDebug: [],
+            forceDebug: this._getCalculatedForces(),
+            stats: {
+                physicsTime,
+                treeTime,
+                tree: treeStats,
+                treeProfile,
+                profile,
+                actualSegmentSize: this._actualSegmentSize,
+                segmentAutoTune: this._segmentTuner?.getStats(this._actualSegmentSize) ?? null
+            }
+        };
+    }
+
+    _mergeParallelTreeStats(topStats, workerResults) {
+        return {
+            flops: topStats.flops + workerResults.reduce((sum, item) => sum + (item.treeStats?.flops || 0), 0),
+            depth: Math.max(topStats.depth, ...workerResults.map(item => item.treeStats?.depth || 0)),
+            segmentCount: topStats.segmentCount + workerResults.reduce((sum, item) => sum + (item.treeStats?.segmentCount || 0), 0),
+        };
+    }
+
+    _mergeParallelTreeProfile(topProfile, workerResults, maxWorkerTreeTime) {
+        return {
+            resetTime: topProfile.resetTime,
+            rootBoundsTime: topProfile.rootBoundsTime,
+            populateTime: topProfile.populateTime + maxWorkerTreeTime,
+            aggregateTime: Math.max(0, ...workerResults.map(item => item.treeProfile?.aggregateTime || 0)),
+            fastBucketPath: true,
+            parallel: true,
+            topPopulateTime: topProfile.populateTime,
+            parallelPopulateTime: Math.max(0, ...workerResults.map(item => item.treeProfile?.populateTime || 0)),
+            parallelAggregateTime: Math.max(0, ...workerResults.map(item => item.treeProfile?.aggregateTime || 0)),
+            parallelTreeWaitTime: maxWorkerTreeTime,
+            parallelTreeWorkerTotal: workerResults.reduce((sum, item) => sum + (item.treeTime || 0), 0),
+            parallelTreeJobs: workerResults.reduce((sum, item) => sum + (item.jobCount || 0), 0),
+        };
+    }
+
+    _buildParallelTreeJobs() {
+        const count = this.settings.physics.particleCount;
+        const source = this._treeWorkspace.indices;
+        const identity = this._treeWorkspace.identityIndices;
+        const profile = {
+            resetTime: 0,
+            rootBoundsTime: 0,
+            populateTime: 0,
+            aggregateTime: 0,
+            fastBucketPath: true,
+        };
+        const stats = {flops: 0, depth: 1, segmentCount: 1};
+
+        let t = performance.now();
+        source.set(identity.subarray(0, count), 0);
+        profile.resetTime = performance.now() - t;
+
+        t = performance.now();
+        const rootBounds = this._calculateBounds(source, 0, count);
+        profile.rootBoundsTime = performance.now() - t;
+
+        let nodes = [{
+            start: 0,
+            count,
+            indexBuffer: BUFFER_A,
+            depth: 1,
+            left: rootBounds.left,
+            top: rootBounds.top,
+            right: rootBounds.right,
+            bottom: rootBounds.bottom,
+            parentForceX: 0,
+            parentForceY: 0,
+        }];
+
+        t = performance.now();
+        for (let level = 0; level < PARALLEL_TREE_SPLIT_LEVELS; level++) {
+            const next = [];
+            for (const node of nodes) {
+                if (node.count <= this.settings.simulation.segmentMaxCount || this._isParallelNodeTooSmall(node)) {
+                    next.push(node);
+                    continue;
+                }
+                const children = this._splitParallelNode(node, 1 - node.indexBuffer);
+                if (children.length <= 1) {
+                    next.push(node);
+                    continue;
+                }
+
+                stats.flops += Math.pow(children.length, 2) * TREE_FLOPS_PER_OP;
+                stats.segmentCount += children.length;
+                stats.depth = Math.max(stats.depth, ...children.map(item => item.depth));
+                next.push(...children);
+            }
+            nodes = next;
+            if (nodes.length >= this._threadCount * 2) {
+                break;
+            }
+        }
+        profile.populateTime = performance.now() - t;
+        // The final job roots are built and counted inside subworkers. Keep the
+        // coordinator segment count limited to the shallow internal nodes that
+        // it actually materialized while partitioning the tree.
+        stats.segmentCount = Math.max(0, stats.segmentCount - nodes.length);
+
+        return {jobs: nodes, profile, stats};
+    }
+
+    _splitParallelNode(node, targetBufferId) {
+        const sourceIndices = this._treeWorkspace.indexBuffers[node.indexBuffer];
+        const targetIndices = this._treeWorkspace.indexBuffers[targetBufferId];
+        const particles = this.particles;
+        const left = node.left;
+        const top = node.top;
+        const right = node.right;
+        const bottom = node.bottom;
+        const width = right - left;
+        const height = bottom - top;
+        const xMid = this._buildParallelMid(left, width);
+        const yMid = this._buildParallelMid(top, height);
+        const start = node.start;
+        const end = start + node.count;
+        const bucketCounts = new Int32Array(4);
+        const bucketMass = new Float64Array(4);
+        const bucketIds = this._treeWorkspace.bucketIds;
+        let usedBuckets = 0;
+
+        for (let i = start; i < end; i++) {
+            const particleIndex = sourceIndices[i];
+            const offset = particleIndex * ITEM_SIZE;
+            const bucketIndex = (particles[offset] < xMid ? 0 : 2) + (particles[offset + 1] < yMid ? 0 : 1);
+            bucketIds[i - start] = bucketIndex;
+            if (bucketCounts[bucketIndex] === 0) {
+                usedBuckets += 1;
+            }
+            bucketCounts[bucketIndex] += 1;
+            bucketMass[bucketIndex] += particles[offset + 4];
+        }
+
+        if (usedBuckets <= 1 && this._parallelNodeHasSinglePoint(node, sourceIndices)) {
+            return [node];
+        }
+
+        const bucketStarts = new Int32Array(4);
+        const bucketWrites = new Int32Array(4);
+        let writeStart = start;
+        for (let i = 0; i < 4; i++) {
+            bucketStarts[i] = writeStart;
+            bucketWrites[i] = writeStart;
+            writeStart += bucketCounts[i];
+        }
+
+        for (let i = start; i < end; i++) {
+            const bucketIndex = bucketIds[i - start];
+            targetIndices[bucketWrites[bucketIndex]++] = sourceIndices[i];
+        }
+
+        const children = [];
+        for (let bucketIndex = 0; bucketIndex < 4; bucketIndex++) {
+            const bucketCount = bucketCounts[bucketIndex];
+            if (bucketCount === 0) {
+                continue;
+            }
+            const x = bucketIndex >> 1;
+            const y = bucketIndex & 1;
+            const childLeft = x === 0 ? left : xMid;
+            const childRight = x === 0 ? xMid : right + EPSILON;
+            const childTop = y === 0 ? top : yMid;
+            const childBottom = y === 0 ? yMid : bottom + EPSILON;
+            children.push({
+                start: bucketStarts[bucketIndex],
+                count: bucketCount,
+                indexBuffer: targetBufferId,
+                depth: node.depth + 1,
+                left: childLeft,
+                top: childTop,
+                right: childRight,
+                bottom: childBottom,
+                centerX: childLeft + (childRight - childLeft) / 2,
+                centerY: childTop + (childBottom - childTop) / 2,
+                mass: bucketMass[bucketIndex],
+                parentForceX: node.parentForceX,
+                parentForceY: node.parentForceY,
+            });
+        }
+
+        const particleGravity = this.settings.physics.particleGravity;
+        const minInteractionDistanceSq = this.settings.physics.minInteractionDistanceSq;
+        for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+            let forceX = child.parentForceX;
+            let forceY = child.parentForceY;
+            for (let j = 0; j < children.length; j++) {
+                if (i === j) continue;
+                const other = children[j];
+                const dx = child.centerX - other.centerX;
+                const dy = child.centerY - other.centerY;
+                const distSquare = dx * dx + dy * dy;
+                if (distSquare >= minInteractionDistanceSq) {
+                    const force = -(particleGravity * other.mass) / distSquare;
+                    forceX += dx * force;
+                    forceY += dy * force;
+                }
+            }
+            child.parentForceX = forceX;
+            child.parentForceY = forceY;
+        }
+
+        return children;
+    }
+
+
+    _buildParallelMid(start, size) {
+        const randomness = this.settings.simulation.segmentRandomness;
+        const firstWeight = 1 + randomness * (Math.random() - 0.5);
+        const secondWeight = 1 + randomness * (Math.random() - 0.5);
+        return start + size * firstWeight / (firstWeight + secondWeight);
+    }
+
+    _buildTreeJobPartitions(jobs) {
+        const partitions = new Array(this._threadCount).fill(null).map(() => ({jobs: [], work: 0, particleCount: 0}));
+        for (const job of jobs) {
+            let bestIndex = 0;
+            let bestWork = partitions[0].work;
+            for (let i = 1; i < partitions.length; i++) {
+                if (partitions[i].work < bestWork) {
+                    bestIndex = i;
+                    bestWork = partitions[i].work;
+                }
+            }
+            const work = job.count * Math.max(1, Math.log2(job.count));
+            partitions[bestIndex].jobs.push(job);
+            partitions[bestIndex].work += work;
+            partitions[bestIndex].particleCount += job.count;
+        }
+        return partitions.map(partition => this._materializeTreeJobPartition(partition));
+    }
+
+    _materializeTreeJobPartition(partition) {
+        const jobCount = partition.jobs.length;
+        const jobStarts = new Uint32Array(jobCount);
+        const jobCounts = new Uint32Array(jobCount);
+        const jobIndexBuffers = new Uint8Array(jobCount);
+        const jobDepths = new Uint16Array(jobCount);
+        const jobLeft = new Float64Array(jobCount);
+        const jobTop = new Float64Array(jobCount);
+        const jobRight = new Float64Array(jobCount);
+        const jobBottom = new Float64Array(jobCount);
+        const jobParentForceX = new Float32Array(jobCount);
+        const jobParentForceY = new Float32Array(jobCount);
+
+        for (let i = 0; i < jobCount; i++) {
+            const job = partition.jobs[i];
+            jobStarts[i] = job.start;
+            jobCounts[i] = job.count;
+            jobIndexBuffers[i] = job.indexBuffer;
+            jobDepths[i] = job.depth;
+            jobLeft[i] = job.left;
+            jobTop[i] = job.top;
+            jobRight[i] = job.right;
+            jobBottom[i] = job.bottom;
+            jobParentForceX[i] = job.parentForceX;
+            jobParentForceY[i] = job.parentForceY;
+        }
+
+        const descriptorBytes = jobStarts.byteLength + jobCounts.byteLength + jobIndexBuffers.byteLength +
+            jobDepths.byteLength + jobLeft.byteLength + jobTop.byteLength + jobRight.byteLength +
+            jobBottom.byteLength + jobParentForceX.byteLength + jobParentForceY.byteLength;
+
+        return {
+            jobStarts,
+            jobCounts,
+            jobIndexBuffers,
+            jobDepths,
+            jobLeft,
+            jobTop,
+            jobRight,
+            jobBottom,
+            jobParentForceX,
+            jobParentForceY,
+            jobCount,
+            descriptorBytes,
+            indexCopyBytes: 0,
+        };
+    }
+
+    _calculateBounds(indices, start, count) {
+        if (count <= 0) {
+            return {left: 0, top: 0, right: 0, bottom: 0};
+        }
+        const firstOffset = indices[start] * ITEM_SIZE;
+        let minX = this.particles[firstOffset];
+        let maxX = minX;
+        let minY = this.particles[firstOffset + 1];
+        let maxY = minY;
+        const end = start + count;
+        for (let i = start + 1; i < end; i++) {
+            const offset = indices[i] * ITEM_SIZE;
+            const x = this.particles[offset];
+            if (minX > x) minX = x;
+            if (maxX < x) maxX = x;
+            const y = this.particles[offset + 1];
+            if (minY > y) minY = y;
+            if (maxY < y) maxY = y;
+        }
+        return {left: minX, top: minY, right: maxX, bottom: maxY};
+    }
+
+    _isParallelNodeTooSmall(node) {
+        return node.right - node.left <= EPSILON && node.bottom - node.top <= EPSILON;
+    }
+
+    _parallelNodeHasSinglePoint(node, indices) {
+        if (node.count < 2) {
+            return true;
+        }
+        const firstOffset = indices[node.start] * ITEM_SIZE;
+        const x = this.particles[firstOffset];
+        const y = this.particles[firstOffset + 1];
+        const end = node.start + node.count;
+        for (let i = node.start + 1; i < end; i++) {
+            const offset = indices[i] * ITEM_SIZE;
+            if (Math.abs(this.particles[offset] - x) > EPSILON || Math.abs(this.particles[offset + 1] - y) > EPSILON) {
+                return false;
+            }
+        }
+        return true;
     }
 
     _buildResult(timestamp, buffer, tree, treeTime, physicsTime, treeStats, profile) {
@@ -498,6 +963,11 @@ class WorkerMTBackendImpl {
                 this._treeWorkspace.identityIndices[i] = i;
             }
         }
+
+        if (!this._treeWorkspace.bucketIds || this._treeWorkspace.bucketIds.length < count) {
+            this._treeWorkspace.bucketIds = new Int16Array(count);
+        }
+        this._treeWorkspace.indexBuffers = [this._treeWorkspace.indices, this._treeWorkspace.scratchIndices];
     }
 
 

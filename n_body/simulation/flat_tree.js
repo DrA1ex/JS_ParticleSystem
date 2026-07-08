@@ -29,9 +29,13 @@ function growArray(ArrayType, current, capacity) {
 // keeps the tree rebuild allocation-free in the common case and lets physics
 // traversal read compact arrays directly.
 export class FlatSpatialTree {
-    constructor(particles, maxCount, divideFactor = 2, randomness = 0.25, workspace = null) {
+    constructor(particles, maxCount, divideFactor = 2, randomness = 0.25, workspace = null, options = {}) {
         this.particles = particles;
-        this.count = Math.floor(particles.length / ITEM_SIZE);
+        this.particleCount = Math.floor(particles.length / ITEM_SIZE);
+        this.count = options.count ?? this.particleCount;
+        this._indexCapacity = options.indexCapacity ?? this.particleCount;
+        this._rootOptions = options.root ?? null;
+        this._skipIndexReset = !!options.skipIndexReset;
         this.maxCount = maxCount;
         this.divideFactor = divideFactor;
         this.randomness = randomness;
@@ -54,7 +58,9 @@ export class FlatSpatialTree {
         this.indexBuffers = workspace.indexBuffers;
         this._identityIndices = workspace.identityIndices;
         let profileStart = performance.now();
-        this.indices.set(this._identityIndices.subarray(0, this.count), 0);
+        if (!this._skipIndexReset) {
+            this.indices.set(this._identityIndices.subarray(0, this.count), 0);
+        }
         this.profile.resetTime = performance.now() - profileStart;
 
         this._bucketsCount = this.divideFactor * this.divideFactor;
@@ -86,15 +92,22 @@ export class FlatSpatialTree {
             return;
         }
 
-        profileStart = performance.now();
-        const rootBounds = this._calculateRangeBounds(this.indices, 0, this.count);
-        this.profile.rootBoundsTime = performance.now() - profileStart;
+        if (this._rootOptions) {
+            const root = this._rootOptions;
+            this.root = this._createNode(root.start, root.count, root.indexBuffer, root.depth ?? 1,
+                root.left, root.top, root.right, root.bottom);
+        } else {
+            profileStart = performance.now();
+            const rootBounds = this._calculateRangeBounds(this.indices, 0, this.count);
+            this.profile.rootBoundsTime = performance.now() - profileStart;
 
-        this.root = this._createNode(0, this.count, BUFFER_A, 1,
-            rootBounds.left, rootBounds.top, rootBounds.right, rootBounds.bottom);
+            this.root = this._createNode(0, this.count, BUFFER_A, 1,
+                rootBounds.left, rootBounds.top, rootBounds.right, rootBounds.bottom);
+        }
 
         profileStart = performance.now();
-        this._populate(this.root, BUFFER_B);
+        const initialTargetBuffer = this._rootOptions ? 1 - this.nodeIndexBuffer[this.root] : BUFFER_B;
+        this._populate(this.root, initialTargetBuffer);
         this.profile.populateTime = performance.now() - profileStart;
 
         profileStart = performance.now();
@@ -109,11 +122,11 @@ export class FlatSpatialTree {
             workspace = {};
         }
 
-        if (!workspace.indices || workspace.indices.length < this.count) {
-            workspace.indices = new Int32Array(this.count);
-            workspace.scratchIndices = new Int32Array(this.count);
-            workspace.identityIndices = new Int32Array(this.count);
-            for (let i = 0; i < this.count; i++) {
+        if (!workspace.indices || workspace.indices.length < this._indexCapacity) {
+            workspace.indices = new Int32Array(this._indexCapacity);
+            workspace.scratchIndices = new Int32Array(this._indexCapacity);
+            workspace.identityIndices = new Int32Array(this._indexCapacity);
+            for (let i = 0; i < this._indexCapacity; i++) {
                 workspace.identityIndices[i] = i;
             }
         }
@@ -273,7 +286,7 @@ export class FlatSpatialTree {
                 const offset = particleIndex * ITEM_SIZE;
                 const bucketIndex = (particles[offset] < xMid ? 0 : 2) + (particles[offset + 1] < yMid ? 0 : 1);
 
-                bucketIds[i] = bucketIndex;
+                bucketIds[i - start] = bucketIndex;
                 if (bucketCounts[bucketIndex] === 0) {
                     usedBuckets += 1;
                 }
@@ -286,7 +299,7 @@ export class FlatSpatialTree {
                 const y = this._findEdgeIndex(particles[offset + 1], yEdges);
                 const bucketIndex = x * divideFactor + y;
 
-                bucketIds[i] = bucketIndex;
+                bucketIds[i - start] = bucketIndex;
                 if (bucketCounts[bucketIndex] === 0) {
                     usedBuckets += 1;
                 }
@@ -307,7 +320,7 @@ export class FlatSpatialTree {
         }
 
         for (let i = start; i < end; i++) {
-            const bucketIndex = bucketIds[i];
+            const bucketIndex = bucketIds[i - start];
             targetIndices[bucketWrites[bucketIndex]++] = sourceIndices[i];
         }
 

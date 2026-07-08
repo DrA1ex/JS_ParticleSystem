@@ -3,7 +3,7 @@ import {BackendType, WorkerThreadCount} from "./enum.js";
 
 export class SimulationSettings extends SettingsBase {
     static Properties = {
-        backend: Property.enum("backend", BackendType, BackendType.worker)
+        backend: Property.enum("backend", BackendType, BackendType.workerMt)
             .setName("Backend").setDescription("Choice backend to calculate particle interactions")
             .setBreaks(ComponentType.backend, ComponentType.dfri, ComponentType.debug),
         segmentDivider: Property.int("segment_divider", 2)
@@ -33,7 +33,7 @@ export class SimulationSettings extends SettingsBase {
                 "Worker MT backend only. Number of physics subworkers used for leaf force solving and integration.",
                 "auto uses navigator.hardwareConcurrency when available and otherwise falls back to 4.",
                 "This mode requires SharedArrayBuffer/cross-origin isolation for real multithreading; otherwise it falls back to the single worker path.",
-                "On static hosting such as GitHub Pages, n_body can install a local COOP/COEP service worker and then ask for a page reload to enable SharedArrayBuffer."
+                "On static hosting such as GitHub Pages, n_body can install a local COOP/COEP service worker and reload once to enable SharedArrayBuffer."
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug),
         segmentRandomness: Property.float("segment_random", 0.25)
