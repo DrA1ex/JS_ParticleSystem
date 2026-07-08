@@ -1,5 +1,5 @@
 import {ComponentType, Property, ReadOnlyProperty, SettingsBase} from "./base.js";
-import {BackendType, WorkerThreadCount, WorkerTreeJobCount} from "./enum.js";
+import {BackendType, WorkerThreadCount, WorkerTreeJobCount, WorkerTreeStrategy} from "./enum.js";
 
 export class SimulationSettings extends SettingsBase {
     static Properties = {
@@ -40,7 +40,15 @@ export class SimulationSettings extends SettingsBase {
             .setName("Worker MT tree jobs").setDescription([
                 "Worker MT backend only. Target number of subtree jobs used by the dynamic tree scheduler.",
                 "More jobs can improve load balancing between workers, but too many jobs add coordinator/message overhead.",
-                "auto uses a thread-count based target, currently about 12 jobs per worker and capped to a practical range."
+                "auto now uses a conservative shallow target so coordinator preparation does not dominate the step."
+            ].join("\n"))
+            .setBreaks(ComponentType.backend, ComponentType.debug),
+        workerMtTreeStrategy: Property.enum("worker_mt_tree_strategy", WorkerTreeStrategy, WorkerTreeStrategy.dynamic)
+            .setName("Worker MT tree strategy").setDescription([
+                "Worker MT backend only. Strategy used to split parallel tree work between subworkers.",
+                "static uses the shallow coordinator split and assigns jobs once.",
+                "dynamic uses the current coordinator queue, but with a conservative shallow split to avoid expensive single-thread preparation.",
+                "recursive starts from coarse jobs and lets subworkers split heavy jobs further, returning spawned jobs to the coordinator queue."
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug),
         segmentRandomness: Property.float("segment_random", 0.25)
@@ -73,6 +81,7 @@ export class SimulationSettings extends SettingsBase {
     get autoTuneSegmentSize() {return this.config.autoTuneSegmentSize;}
     get workerThreads() {return this.config.workerThreads;}
     get workerMtTreeJobs() {return this.config.workerMtTreeJobs;}
+    get workerMtTreeStrategy() {return this.config.workerMtTreeStrategy;}
     get segmentMaxCount() {return this.config.segmentMaxCount;}
     get bufferCount() {return this.config.bufferCount;}
 

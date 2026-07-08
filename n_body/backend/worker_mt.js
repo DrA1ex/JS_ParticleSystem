@@ -10,10 +10,16 @@ const SEGMENT_TUNE_SAMPLES_PER_CANDIDATE = 2;
 const THREAD_CHOICES = [2, 4, 6, 8];
 const BUFFER_A = 0;
 const BUFFER_B = 1;
-const PARALLEL_TREE_MAX_SPLIT_LEVELS = 5;
-const AUTO_TREE_JOBS_PER_THREAD = 12;
-const AUTO_TREE_JOBS_MIN = 16;
-const AUTO_TREE_JOBS_MAX = 64;
+const PARALLEL_TREE_MAX_SPLIT_LEVELS = 3;
+const AUTO_TREE_JOBS_PER_THREAD = 4;
+const AUTO_TREE_JOBS_MIN = 8;
+const AUTO_TREE_JOBS_MAX = 32;
+const RECURSIVE_TREE_SEED_SPLIT_LEVELS = 1;
+const RECURSIVE_TREE_SPLIT_BUDGET = 8;
+const RECURSIVE_TREE_MIN_JOB_PARTICLES = 8192;
+const WORKER_TREE_STRATEGY_STATIC = "static";
+const WORKER_TREE_STRATEGY_DYNAMIC = "dynamic";
+const WORKER_TREE_STRATEGY_RECURSIVE = "recursive";
 const TREE_FLOPS_PER_OP = 14;
 const EPSILON = 0.1e-6;
 
@@ -190,7 +196,7 @@ class SubworkerPool {
 
     async processTreeJobsDynamic(jobs, materializePartition) {
         if (this.workers.length === 0 || jobs.length === 0) {
-            return {results: [], dispatchTime: 0};
+            return {results: [], dispatchTime: 0, spawnedJobCount: 0};
         }
 
         const queue = jobs.slice().sort((a, b) => estimateTreeJobWork(b) - estimateTreeJobWork(a));
@@ -208,7 +214,7 @@ class SubworkerPool {
                     continue;
                 }
 
-                const result = await this._processTreePartition(worker, partition);
+                const result = await this._processTreePartition(worker, partition, "process-tree");
                 result.descriptorBytes = partition.descriptorBytes || 0;
                 result.indexCopyBytes = partition.indexCopyBytes || 0;
                 results.push(result);
@@ -216,7 +222,67 @@ class SubworkerPool {
         };
 
         await Promise.all(this.workers.map(worker => runWorker(worker)));
-        return {results, dispatchTime};
+        return {results, dispatchTime, spawnedJobCount: 0};
+    }
+
+    async processTreeJobsRecursive(initialJobs, materializePartition, options = {}) {
+        if (this.workers.length === 0 || initialJobs.length === 0) {
+            return {results: [], dispatchTime: 0, spawnedJobCount: 0};
+        }
+
+        const queue = initialJobs.slice().sort((a, b) => estimateTreeJobWork(b) - estimateTreeJobWork(a));
+        const idleWorkers = this.workers.slice();
+        const results = [];
+        let activeCount = 0;
+        let dispatchTime = 0;
+        let spawnedJobCount = 0;
+
+        return await new Promise((resolve, reject) => {
+            const pump = () => {
+                while (idleWorkers.length > 0 && queue.length > 0) {
+                    const worker = idleWorkers.shift();
+                    const job = queue.shift();
+                    activeCount += 1;
+
+                    const t = performance.now();
+                    const partition = materializePartition({jobs: [job]});
+                    dispatchTime += performance.now() - t;
+
+                    if (!partition || partition.jobCount === 0) {
+                        activeCount -= 1;
+                        idleWorkers.push(worker);
+                        continue;
+                    }
+
+                    this._processTreePartition(worker, partition, "process-tree-recursive", options)
+                        .then((result) => {
+                            result.descriptorBytes = partition.descriptorBytes || 0;
+                            result.indexCopyBytes = partition.indexCopyBytes || 0;
+                            results.push(result);
+
+                            if (Array.isArray(result.spawnedJobs) && result.spawnedJobs.length > 0) {
+                                spawnedJobCount += result.spawnedJobs.length;
+                                for (const spawnedJob of result.spawnedJobs) {
+                                    queue.push(spawnedJob);
+                                }
+                                queue.sort((a, b) => estimateTreeJobWork(b) - estimateTreeJobWork(a));
+                            }
+                        })
+                        .then(() => {
+                            activeCount -= 1;
+                            idleWorkers.push(worker);
+                            pump();
+                        })
+                        .catch(reject);
+                }
+
+                if (activeCount === 0 && queue.length === 0) {
+                    resolve({results, dispatchTime, spawnedJobCount});
+                }
+            };
+
+            pump();
+        });
     }
 
 
@@ -265,13 +331,15 @@ class SubworkerPool {
         });
     }
 
-    _processTreePartition(worker, partition) {
+    _processTreePartition(worker, partition, type = "process-tree", options = {}) {
         const requestId = ++this._requestId;
         return new Promise((resolve, reject) => {
             this._pending.set(requestId, {resolve, reject});
             worker.postMessage({
-                type: "process-tree",
+                type,
                 requestId,
+                splitBudget: options.splitBudget,
+                minJobParticles: options.minJobParticles,
                 jobStartsBuffer: partition.jobStarts.buffer,
                 jobCountsBuffer: partition.jobCounts.buffer,
                 jobIndexBuffersBuffer: partition.jobIndexBuffers.buffer,
@@ -486,8 +554,11 @@ class WorkerMTBackendImpl {
             this.forceY.fill(0);
         }
 
+        const strategy = this._getWorkerMtTreeStrategy();
         let t = performance.now();
-        const treeJobs = this._buildParallelTreeJobs();
+        const treeJobs = strategy === WORKER_TREE_STRATEGY_RECURSIVE
+            ? this._buildRecursiveTreeSeedJobs()
+            : this._buildParallelTreeJobs();
         const topTreeTime = performance.now() - t;
 
         t = performance.now();
@@ -495,10 +566,37 @@ class WorkerMTBackendImpl {
         const partitionTime = performance.now() - t;
 
         t = performance.now();
-        const dynamicResult = await this._pool.processTreeJobsDynamic(partitionPlan.jobs, (partition) => this._materializeTreeJobPartition(partition));
+        let schedulerResult;
+        if (strategy === WORKER_TREE_STRATEGY_STATIC) {
+            const partitions = this._buildTreeJobPartitions(partitionPlan.jobs);
+            const results = await this._pool.processTreePartitions(partitions);
+            schedulerResult = {
+                results,
+                dispatchTime: 0,
+                spawnedJobCount: 0,
+            };
+            for (let i = 0; i < results.length; i++) {
+                results[i].descriptorBytes = partitions[i]?.descriptorBytes || 0;
+                results[i].indexCopyBytes = partitions[i]?.indexCopyBytes || 0;
+            }
+        } else if (strategy === WORKER_TREE_STRATEGY_RECURSIVE) {
+            schedulerResult = await this._pool.processTreeJobsRecursive(
+                partitionPlan.jobs,
+                (partition) => this._materializeTreeJobPartition(partition),
+                {
+                    splitBudget: this._getRecursiveTreeSplitBudget(),
+                    minJobParticles: this._getRecursiveTreeMinJobParticles(),
+                }
+            );
+        } else {
+            schedulerResult = await this._pool.processTreeJobsDynamic(
+                partitionPlan.jobs,
+                (partition) => this._materializeTreeJobPartition(partition)
+            );
+        }
         const parallelWaitTime = performance.now() - t;
-        const workerResults = dynamicResult.results;
-        const dispatchTime = dynamicResult.dispatchTime;
+        const workerResults = schedulerResult.results;
+        const dispatchTime = schedulerResult.dispatchTime || 0;
         const workerTiming = this._aggregateDynamicWorkerTiming(workerResults);
 
         const maxWorkerTreeTime = workerTiming.treeTimeMax;
@@ -520,10 +618,15 @@ class WorkerMTBackendImpl {
             taskCount: workerResults.reduce((sum, item) => sum + (item.leafCount || 0), 0),
             activeWorkers: workerTiming.activeWorkers,
             treeParallel: true,
+            treeStrategy: strategy,
             treeJobCount: treeJobs.jobs.length,
             treeTargetJobs: treeJobs.targetJobs,
             treeSplitLevels: treeJobs.splitLevels,
-            treeDynamicScheduling: true,
+            treeDynamicScheduling: strategy !== WORKER_TREE_STRATEGY_STATIC,
+            treeRecursiveScheduling: strategy === WORKER_TREE_STRATEGY_RECURSIVE,
+            treeSpawnedJobs: schedulerResult.spawnedJobCount || 0,
+            recursiveSplitBudget: strategy === WORKER_TREE_STRATEGY_RECURSIVE ? this._getRecursiveTreeSplitBudget() : null,
+            recursiveMinJobParticles: strategy === WORKER_TREE_STRATEGY_RECURSIVE ? this._getRecursiveTreeMinJobParticles() : null,
             topTreeTime,
             topTreeSplitTime: treeJobs.profile.populateTime,
             treeRootBoundsTime: treeJobs.profile.rootBoundsTime,
@@ -554,7 +657,7 @@ class WorkerMTBackendImpl {
         profile.exportTime = performance.now() - t;
 
         const treeStats = this._mergeParallelTreeStats(treeJobs.stats, workerResults);
-        const treeProfile = this._mergeParallelTreeProfile(treeJobs.profile, workerResults, workerTiming, treeJobs, dispatchTime);
+        const treeProfile = this._mergeParallelTreeProfile(treeJobs.profile, workerResults, workerTiming, treeJobs, dispatchTime, profile.mt);
         return this._buildParallelResult(timestamp, buffer, treeTime, dynamicPhysicsTime, treeStats, treeProfile, profile);
     }
 
@@ -584,7 +687,7 @@ class WorkerMTBackendImpl {
         };
     }
 
-    _mergeParallelTreeProfile(topProfile, workerResults, workerTiming, treeJobs, dispatchTime) {
+    _mergeParallelTreeProfile(topProfile, workerResults, workerTiming, treeJobs, dispatchTime, mtProfile = {}) {
         return {
             resetTime: topProfile.resetTime,
             rootBoundsTime: topProfile.rootBoundsTime,
@@ -592,7 +695,12 @@ class WorkerMTBackendImpl {
             aggregateTime: Math.max(0, ...workerResults.map(item => item.treeProfile?.aggregateTime || 0)),
             fastBucketPath: true,
             parallel: true,
-            dynamicScheduling: true,
+            strategy: mtProfile.treeStrategy || WORKER_TREE_STRATEGY_DYNAMIC,
+            dynamicScheduling: !!mtProfile.treeDynamicScheduling,
+            recursiveScheduling: !!mtProfile.treeRecursiveScheduling,
+            spawnedJobs: mtProfile.treeSpawnedJobs || 0,
+            recursiveSplitBudget: mtProfile.recursiveSplitBudget ?? null,
+            recursiveMinJobParticles: mtProfile.recursiveMinJobParticles ?? null,
             targetJobs: treeJobs.targetJobs,
             splitLevels: treeJobs.splitLevels,
             topPopulateTime: topProfile.populateTime,
@@ -684,6 +792,91 @@ class WorkerMTBackendImpl {
         stats.segmentCount = Math.max(0, stats.segmentCount - nodes.length);
 
         return {jobs: nodes, profile, stats, targetJobs, splitLevels};
+    }
+
+    _buildRecursiveTreeSeedJobs() {
+        const count = this.settings.physics.particleCount;
+        const source = this._treeWorkspace.indices;
+        const identity = this._treeWorkspace.identityIndices;
+        const profile = {
+            resetTime: 0,
+            rootBoundsTime: 0,
+            populateTime: 0,
+            aggregateTime: 0,
+            fastBucketPath: true,
+        };
+        const stats = {flops: 0, depth: 1, segmentCount: 1};
+
+        let t = performance.now();
+        source.set(identity.subarray(0, count), 0);
+        profile.resetTime = performance.now() - t;
+
+        t = performance.now();
+        const rootBounds = this._calculateBounds(source, 0, count);
+        profile.rootBoundsTime = performance.now() - t;
+
+        let nodes = [{
+            start: 0,
+            count,
+            indexBuffer: BUFFER_A,
+            depth: 1,
+            left: rootBounds.left,
+            top: rootBounds.top,
+            right: rootBounds.right,
+            bottom: rootBounds.bottom,
+            parentForceX: 0,
+            parentForceY: 0,
+        }];
+
+        const targetJobs = Math.max(4, this._threadCount);
+        let splitLevels = 0;
+        t = performance.now();
+        for (let level = 0; level < RECURSIVE_TREE_SEED_SPLIT_LEVELS; level++) {
+            const next = [];
+            let didSplit = false;
+            for (const node of nodes) {
+                if (node.count <= this.settings.simulation.segmentMaxCount || this._isParallelNodeTooSmall(node)) {
+                    next.push(node);
+                    continue;
+                }
+                const children = this._splitParallelNode(node, 1 - node.indexBuffer);
+                if (children.length <= 1) {
+                    next.push(node);
+                    continue;
+                }
+                didSplit = true;
+                stats.flops += Math.pow(children.length, 2) * TREE_FLOPS_PER_OP;
+                stats.segmentCount += children.length;
+                stats.depth = Math.max(stats.depth, ...children.map(item => item.depth));
+                next.push(...children);
+            }
+            nodes = next;
+            splitLevels = level + 1;
+            if (!didSplit || nodes.length >= targetJobs) {
+                break;
+            }
+        }
+        profile.populateTime = performance.now() - t;
+        stats.segmentCount = Math.max(0, stats.segmentCount - nodes.length);
+
+        return {jobs: nodes, profile, stats, targetJobs, splitLevels};
+    }
+
+    _getWorkerMtTreeStrategy() {
+        const value = this.settings.simulation.workerMtTreeStrategy;
+        if (value === WORKER_TREE_STRATEGY_STATIC || value === WORKER_TREE_STRATEGY_RECURSIVE) {
+            return value;
+        }
+        return WORKER_TREE_STRATEGY_DYNAMIC;
+    }
+
+    _getRecursiveTreeSplitBudget() {
+        return RECURSIVE_TREE_SPLIT_BUDGET;
+    }
+
+    _getRecursiveTreeMinJobParticles() {
+        const tuned = this._actualSegmentSize || this.settings.simulation.segmentMaxCount || 32;
+        return Math.max(RECURSIVE_TREE_MIN_JOB_PARTICLES, tuned * 64);
     }
 
     _splitParallelNode(node, targetBufferId) {

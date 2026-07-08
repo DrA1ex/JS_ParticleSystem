@@ -53,6 +53,15 @@ export const WorkerTreeJobCount = {
 /**
  * @enum(string)
  */
+export const WorkerTreeStrategy = {
+    static: "static",
+    dynamic: "dynamic",
+    recursive: "recursive"
+}
+
+/**
+ * @enum(string)
+ */
 export const MaxSpeedUpdateMode = {
     current: "current",
     throttle: "throttle",

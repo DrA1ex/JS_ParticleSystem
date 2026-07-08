@@ -10,6 +10,8 @@ let collisionVelX = new Float32Array(0);
 let collisionVelY = new Float32Array(0);
 let indexBuffers = null;
 let treeWorkspace = null;
+let recursiveBucketIds = new Int32Array(0);
+const EPSILON = 0.1e-6;
 
 function init(data) {
     settings = AppSimulationSettings.deserialize(data.settings);
@@ -233,6 +235,326 @@ function processLeafTasks(tasks) {
     return {forceTime, integrateTime, particleCount};
 }
 
+
+function ensureRecursiveBucketIds(length) {
+    if (recursiveBucketIds.length < length) {
+        recursiveBucketIds = new Int32Array(length);
+    }
+}
+
+function buildParallelMid(start, size) {
+    const randomness = settings.simulation.segmentRandomness;
+    const firstWeight = 1 + randomness * (Math.random() - 0.5);
+    const secondWeight = 1 + randomness * (Math.random() - 0.5);
+    return start + size * firstWeight / (firstWeight + secondWeight);
+}
+
+function parallelNodeHasSinglePoint(node, indices) {
+    if (node.count < 2) {
+        return true;
+    }
+    const firstOffset = indices[node.start] * ITEM_SIZE;
+    const x = particles[firstOffset];
+    const y = particles[firstOffset + 1];
+    const end = node.start + node.count;
+    for (let i = node.start + 1; i < end; i++) {
+        const offset = indices[i] * ITEM_SIZE;
+        if (Math.abs(particles[offset] - x) > EPSILON || Math.abs(particles[offset + 1] - y) > EPSILON) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function splitRecursiveNode(node) {
+    const sourceIndices = indexBuffers[node.indexBuffer];
+    const targetBufferId = 1 - node.indexBuffer;
+    const targetIndices = indexBuffers[targetBufferId];
+    const left = node.left;
+    const top = node.top;
+    const right = node.right;
+    const bottom = node.bottom;
+    const width = right - left;
+    const height = bottom - top;
+    const xMid = buildParallelMid(left, width);
+    const yMid = buildParallelMid(top, height);
+    const start = node.start;
+    const end = start + node.count;
+    const bucketCounts = new Int32Array(4);
+    const bucketMass = new Float64Array(4);
+    ensureRecursiveBucketIds(node.count);
+    let usedBuckets = 0;
+
+    for (let i = start; i < end; i++) {
+        const particleIndex = sourceIndices[i];
+        const offset = particleIndex * ITEM_SIZE;
+        const bucketIndex = (particles[offset] < xMid ? 0 : 2) + (particles[offset + 1] < yMid ? 0 : 1);
+        recursiveBucketIds[i - start] = bucketIndex;
+        if (bucketCounts[bucketIndex] === 0) {
+            usedBuckets += 1;
+        }
+        bucketCounts[bucketIndex] += 1;
+        bucketMass[bucketIndex] += particles[offset + 4];
+    }
+
+    if (usedBuckets <= 1 && parallelNodeHasSinglePoint(node, sourceIndices)) {
+        return [node];
+    }
+
+    const bucketStarts = new Int32Array(4);
+    const bucketWrites = new Int32Array(4);
+    let writeStart = start;
+    for (let i = 0; i < 4; i++) {
+        bucketStarts[i] = writeStart;
+        bucketWrites[i] = writeStart;
+        writeStart += bucketCounts[i];
+    }
+
+    for (let i = start; i < end; i++) {
+        const bucketIndex = recursiveBucketIds[i - start];
+        targetIndices[bucketWrites[bucketIndex]++] = sourceIndices[i];
+    }
+
+    const children = [];
+    for (let bucketIndex = 0; bucketIndex < 4; bucketIndex++) {
+        const bucketCount = bucketCounts[bucketIndex];
+        if (bucketCount === 0) {
+            continue;
+        }
+        const x = bucketIndex >> 1;
+        const y = bucketIndex & 1;
+        const childLeft = x === 0 ? left : xMid;
+        const childRight = x === 0 ? xMid : right + EPSILON;
+        const childTop = y === 0 ? top : yMid;
+        const childBottom = y === 0 ? yMid : bottom + EPSILON;
+        children.push({
+            start: bucketStarts[bucketIndex],
+            count: bucketCount,
+            indexBuffer: targetBufferId,
+            depth: node.depth + 1,
+            left: childLeft,
+            top: childTop,
+            right: childRight,
+            bottom: childBottom,
+            centerX: childLeft + (childRight - childLeft) / 2,
+            centerY: childTop + (childBottom - childTop) / 2,
+            mass: bucketMass[bucketIndex],
+            parentForceX: node.parentForceX,
+            parentForceY: node.parentForceY,
+        });
+    }
+
+    const particleGravity = settings.physics.particleGravity;
+    const minInteractionDistanceSq = settings.physics.minInteractionDistanceSq;
+    for (let i = 0; i < children.length; i++) {
+        const child = children[i];
+        let forceX = child.parentForceX;
+        let forceY = child.parentForceY;
+        for (let j = 0; j < children.length; j++) {
+            if (i === j) continue;
+            const other = children[j];
+            const dx = child.centerX - other.centerX;
+            const dy = child.centerY - other.centerY;
+            const distSquare = dx * dx + dy * dy;
+            if (distSquare >= minInteractionDistanceSq) {
+                const force = -(particleGravity * other.mass) / distSquare;
+                forceX += dx * force;
+                forceY += dy * force;
+            }
+        }
+        child.parentForceX = forceX;
+        child.parentForceY = forceY;
+    }
+
+    return children;
+}
+
+function shouldSplitRecursiveNode(node, splitBudget, minJobParticles) {
+    return splitBudget > 0 &&
+        node.count > Math.max(settings.simulation.segmentMaxCount, minJobParticles) &&
+        node.right - node.left > EPSILON &&
+        node.bottom - node.top > EPSILON;
+}
+
+function readTreeJobs(data) {
+    const jobStarts = new Uint32Array(data.jobStartsBuffer);
+    const jobCounts = new Uint32Array(data.jobCountsBuffer);
+    const jobIndexBuffers = new Uint8Array(data.jobIndexBuffersBuffer);
+    const jobDepths = new Uint16Array(data.jobDepthsBuffer);
+    const jobLeft = new Float64Array(data.jobLeftBuffer);
+    const jobTop = new Float64Array(data.jobTopBuffer);
+    const jobRight = new Float64Array(data.jobRightBuffer);
+    const jobBottom = new Float64Array(data.jobBottomBuffer);
+    const jobParentForceX = new Float32Array(data.jobParentForceXBuffer);
+    const jobParentForceY = new Float32Array(data.jobParentForceYBuffer);
+
+    const jobs = [];
+    for (let i = 0; i < jobStarts.length; i++) {
+        const count = jobCounts[i];
+        if (count === 0) {
+            continue;
+        }
+        jobs.push({
+            start: jobStarts[i],
+            count,
+            indexBuffer: jobIndexBuffers[i],
+            depth: jobDepths[i],
+            left: jobLeft[i],
+            top: jobTop[i],
+            right: jobRight[i],
+            bottom: jobBottom[i],
+            parentForceX: jobParentForceX[i],
+            parentForceY: jobParentForceY[i],
+        });
+    }
+    return jobs;
+}
+
+function createEmptyTreeProfile() {
+    return {
+        resetTime: 0,
+        rootBoundsTime: 0,
+        populateTime: 0,
+        aggregateTime: 0,
+        fastBucketPath: true,
+    };
+}
+
+function buildAndProcessTreeJobs(jobs, requestId, extra = {}) {
+    const tasks = [];
+    const treeProfile = createEmptyTreeProfile();
+    const treeStats = {flops: 0, depth: 0, segmentCount: 0};
+
+    if (!treeWorkspace) {
+        treeWorkspace = {
+            indices: indexBuffers[0],
+            scratchIndices: indexBuffers[1],
+        };
+    }
+
+    const treeStart = performance.now();
+    for (const job of jobs) {
+        if (job.count === 0) {
+            continue;
+        }
+
+        const tree = new FlatSpatialTree(
+            particles,
+            settings.simulation.segmentMaxCount,
+            settings.simulation.segmentDivider,
+            settings.simulation.segmentRandomness,
+            treeWorkspace,
+            {
+                count: job.count,
+                indexCapacity: Math.floor(particles.length / ITEM_SIZE),
+                skipIndexReset: true,
+                root: {
+                    start: job.start,
+                    count: job.count,
+                    indexBuffer: job.indexBuffer,
+                    depth: job.depth,
+                    left: job.left,
+                    top: job.top,
+                    right: job.right,
+                    bottom: job.bottom,
+                }
+            }
+        );
+
+        addTreeProfile(treeProfile, tree.profile);
+        const stats = buildTreeStats(tree);
+        treeStats.flops += stats.flops;
+        treeStats.depth = Math.max(treeStats.depth, stats.depth);
+        treeStats.segmentCount += stats.segmentCount;
+        collectLeafTasks(tree, tree.root, job.parentForceX, job.parentForceY, tasks);
+    }
+    const treeTime = performance.now() - treeStart;
+
+    const processed = processLeafTasks(tasks);
+
+    postMessage({
+        type: "done",
+        requestId,
+        treeTime,
+        treeProfile,
+        treeStats,
+        forceTime: processed.forceTime,
+        integrateTime: processed.integrateTime,
+        leafCount: tasks.length,
+        particleCount: processed.particleCount,
+        jobCount: jobs.length,
+        ...extra,
+    });
+}
+
+function processRecursiveTreeJobs(data) {
+    const jobs = readTreeJobs(data);
+    const splitBudget = Number.isFinite(data.splitBudget) ? data.splitBudget : 8;
+    const minJobParticles = Number.isFinite(data.minJobParticles) ? data.minJobParticles : 8192;
+    const stack = jobs.slice();
+    const localJobs = [];
+    const spawnedJobs = [];
+    let splitCount = 0;
+    const splitStart = performance.now();
+
+    while (stack.length > 0) {
+        const job = stack.pop();
+        if (shouldSplitRecursiveNode(job, splitBudget - splitCount, minJobParticles)) {
+            const children = splitRecursiveNode(job);
+            if (children.length > 1) {
+                splitCount += 1;
+                for (const child of children) {
+                    if (splitCount < splitBudget && child.count > minJobParticles * 2) {
+                        stack.push(child);
+                    } else if (child.count > minJobParticles) {
+                        spawnedJobs.push(child);
+                    } else {
+                        localJobs.push(child);
+                    }
+                }
+                continue;
+            }
+        }
+
+        if (job.count > minJobParticles && splitCount >= splitBudget) {
+            spawnedJobs.push(job);
+        } else {
+            localJobs.push(job);
+        }
+    }
+
+    const splitTime = performance.now() - splitStart;
+    if (localJobs.length === 0) {
+        postMessage({
+            type: "done",
+            requestId: data.requestId,
+            treeTime: splitTime,
+            treeProfile: {
+                resetTime: 0,
+                rootBoundsTime: 0,
+                populateTime: splitTime,
+                aggregateTime: 0,
+                fastBucketPath: true,
+            },
+            treeStats: {flops: 0, depth: 0, segmentCount: 0},
+            forceTime: 0,
+            integrateTime: 0,
+            leafCount: 0,
+            particleCount: 0,
+            jobCount: 0,
+            spawnedJobs,
+            recursiveSplitCount: splitCount,
+        });
+        return;
+    }
+
+    buildAndProcessTreeJobs(localJobs, data.requestId, {
+        spawnedJobs,
+        recursiveSplitCount: splitCount,
+        recursiveSplitTime: splitTime,
+    });
+}
+
 function processTreeJobs(data) {
     const jobStarts = new Uint32Array(data.jobStartsBuffer);
     const jobCounts = new Uint32Array(data.jobCountsBuffer);
@@ -367,6 +689,9 @@ onmessage = (event) => {
             break;
         case "process-tree":
             processTreeJobs(data);
+            break;
+        case "process-tree-recursive":
+            processRecursiveTreeJobs(data);
             break;
         case "dispose":
             close();
