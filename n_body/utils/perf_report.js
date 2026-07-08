@@ -272,6 +272,9 @@ function snapshotApp(app, collectorRafInterval, collectorTimestamp) {
             mtThreads: finite(profile.mt?.actualThreads),
             mtTaskBuild: finite(profile.mt?.taskBuildTime),
             mtPartition: finite(profile.mt?.partitionTime),
+            mtPartitionDescriptorBytes: finite(profile.mt?.partitionDescriptorBytes),
+            mtIndexCopyBytes: finite(profile.mt?.indexCopyBytes),
+            mtSharedIndexBuffers: !!profile.mt?.sharedIndexBuffers,
             mtParallelWait: finite(profile.mt?.parallelWaitTime),
         },
         dfri: {

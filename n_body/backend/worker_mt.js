@@ -127,7 +127,7 @@ class SubworkerPool {
         this._pending = new Map();
     }
 
-    async init(settings, particlesBuffer, forceXBuffer, forceYBuffer, threadCount) {
+    async init(settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB, threadCount) {
         this.dispose();
         this._requestId = 0;
         this._pending = new Map();
@@ -139,15 +139,15 @@ class SubworkerPool {
             };
             this.workers.push(worker);
         }
-        await Promise.all(this.workers.map(worker => this._sendInit(worker, "init", settings, particlesBuffer, forceXBuffer, forceYBuffer)));
+        await Promise.all(this.workers.map(worker => this._sendInit(worker, "init", settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB)));
     }
 
-    async reconfigure(settings, particlesBuffer, forceXBuffer, forceYBuffer, threadCount) {
+    async reconfigure(settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB, threadCount) {
         if (this.workers.length !== threadCount) {
-            await this.init(settings, particlesBuffer, forceXBuffer, forceYBuffer, threadCount);
+            await this.init(settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB, threadCount);
             return;
         }
-        await Promise.all(this.workers.map(worker => this._sendInit(worker, "reconfigure", settings, particlesBuffer, forceXBuffer, forceYBuffer)));
+        await Promise.all(this.workers.map(worker => this._sendInit(worker, "reconfigure", settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB)));
     }
 
     process(partitions) {
@@ -162,7 +162,7 @@ class SubworkerPool {
         return Promise.all(promises);
     }
 
-    _sendInit(worker, type, settings, particlesBuffer, forceXBuffer, forceYBuffer) {
+    _sendInit(worker, type, settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB) {
         return new Promise((resolve) => {
             const previous = worker.onmessage;
             worker.onmessage = (event) => {
@@ -173,7 +173,15 @@ class SubworkerPool {
                     previous?.(event);
                 }
             };
-            worker.postMessage({type, settings: settings.serialize(), particlesBuffer, forceXBuffer, forceYBuffer});
+            worker.postMessage({
+                type,
+                settings: settings.serialize(),
+                particlesBuffer,
+                forceXBuffer,
+                forceYBuffer,
+                indexBufferA,
+                indexBufferB,
+            });
         });
     }
 
@@ -184,15 +192,15 @@ class SubworkerPool {
             worker.postMessage({
                 type: "process",
                 requestId,
-                indicesBuffer: partition.indices.buffer,
                 leafStartsBuffer: partition.leafStarts.buffer,
                 leafCountsBuffer: partition.leafCounts.buffer,
+                leafIndexBuffersBuffer: partition.leafIndexBuffers.buffer,
                 parentForceXBuffer: partition.parentForceX.buffer,
                 parentForceYBuffer: partition.parentForceY.buffer,
             }, [
-                partition.indices.buffer,
                 partition.leafStarts.buffer,
                 partition.leafCounts.buffer,
+                partition.leafIndexBuffers.buffer,
                 partition.parentForceX.buffer,
                 partition.parentForceY.buffer,
             ]);
@@ -246,6 +254,7 @@ class WorkerMTBackendImpl {
         this._initParticles();
         this._applyParticlesState(state);
         this._initBuffers();
+        this._ensureTreeWorkspace();
         this._initDebugForceView();
         await this._configurePool();
     }
@@ -261,6 +270,7 @@ class WorkerMTBackendImpl {
             this._initParticles();
             this._initBuffers();
         }
+        this._ensureTreeWorkspace();
         this._applyParticlesState(state);
         this._initDebugForceView();
         await this._configurePool();
@@ -334,6 +344,9 @@ class WorkerMTBackendImpl {
             activeWorkers: workerResults.length,
             taskBuildTime,
             partitionTime,
+            partitionDescriptorBytes: partitions.reduce((sum, item) => sum + (item.descriptorBytes || 0), 0),
+            indexCopyBytes: partitions.reduce((sum, item) => sum + (item.indexCopyBytes || 0), 0),
+            sharedIndexBuffers: true,
             parallelWaitTime: parallelTime,
             forceTimeMax: forceTime,
             integrateTimeMax: integrateTime,
@@ -445,7 +458,45 @@ class WorkerMTBackendImpl {
             return;
         }
         this._fallbackReason = null;
-        await this._pool.reconfigure(this.settings, this.particles.buffer, this.forceX?.buffer ?? null, this.forceY?.buffer ?? null, this._threadCount);
+        this._ensureTreeWorkspace();
+        await this._pool.reconfigure(
+            this.settings,
+            this.particles.buffer,
+            this.forceX?.buffer ?? null,
+            this.forceY?.buffer ?? null,
+            this._treeWorkspace.indices.buffer,
+            this._treeWorkspace.scratchIndices.buffer,
+            this._threadCount,
+        );
+    }
+
+    _ensureTreeWorkspace() {
+        const count = this.settings?.physics?.particleCount ?? 0;
+        if (!count) {
+            this._treeWorkspace = {};
+            return;
+        }
+
+        if (!this._sharedMemoryAvailable) {
+            if (!this._treeWorkspace || this._treeWorkspace.indices instanceof Int32Array && this._treeWorkspace.indices.buffer instanceof SharedArrayBuffer) {
+                this._treeWorkspace = {};
+            }
+            return;
+        }
+
+        if (!this._treeWorkspace) {
+            this._treeWorkspace = {};
+        }
+
+        const byteLength = count * Int32Array.BYTES_PER_ELEMENT;
+        if (!(this._treeWorkspace.indices?.buffer instanceof SharedArrayBuffer) || this._treeWorkspace.indices.length < count) {
+            this._treeWorkspace.indices = new Int32Array(new SharedArrayBuffer(byteLength));
+            this._treeWorkspace.scratchIndices = new Int32Array(new SharedArrayBuffer(byteLength));
+            this._treeWorkspace.identityIndices = new Int32Array(count);
+            for (let i = 0; i < count; i++) {
+                this._treeWorkspace.identityIndices[i] = i;
+            }
+        }
     }
 
 
@@ -610,27 +661,36 @@ class WorkerMTBackendImpl {
         return partitions.map(partition => this._materializePartition(tree, partition));
     }
 
-    _materializePartition(tree, partition) {
+    _materializePartition(_tree, partition) {
         const leafCount = partition.tasks.length;
-        const indices = new Uint32Array(partition.particleCount);
         const leafStarts = new Uint32Array(leafCount);
         const leafCounts = new Uint32Array(leafCount);
+        const leafIndexBuffers = new Uint8Array(leafCount);
         const parentForceX = new Float32Array(leafCount);
         const parentForceY = new Float32Array(leafCount);
-        let cursor = 0;
 
         for (let i = 0; i < leafCount; i++) {
             const task = partition.tasks[i];
-            const source = tree.indexBuffers[task.indexBuffer].subarray(task.start, task.start + task.count);
-            indices.set(source, cursor);
-            leafStarts[i] = cursor;
+            leafStarts[i] = task.start;
             leafCounts[i] = task.count;
+            leafIndexBuffers[i] = task.indexBuffer;
             parentForceX[i] = task.forceX;
             parentForceY[i] = task.forceY;
-            cursor += task.count;
         }
 
-        return {indices, leafStarts, leafCounts, parentForceX, parentForceY, leafCount};
+        const descriptorBytes = leafStarts.byteLength + leafCounts.byteLength +
+            leafIndexBuffers.byteLength + parentForceX.byteLength + parentForceY.byteLength;
+
+        return {
+            leafStarts,
+            leafCounts,
+            leafIndexBuffers,
+            parentForceX,
+            parentForceY,
+            leafCount,
+            descriptorBytes,
+            indexCopyBytes: 0,
+        };
     }
 
     _calcTreeStats(tree) {

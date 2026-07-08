@@ -268,9 +268,16 @@ export class Debug {
             return `off${reason}`;
         }
         const wait = this._formatMs(state.parallelWaitTime);
+        const taskBuild = this._formatMs(state.taskBuildTime);
+        const partition = this._formatMs(state.partitionTime);
+        const descriptorBytes = this._formatBytes(state.partitionDescriptorBytes);
+        const indexCopyBytes = this._formatBytes(state.indexCopyBytes);
         const tasks = Number.isFinite(state.taskCount) ? state.taskCount : "n/a";
         const active = Number.isFinite(state.activeWorkers) ? state.activeWorkers : "n/a";
-        return `${state.actualThreads} threads, ${active} active, tasks ${tasks}, wait ${wait}`;
+        const sharedIndices = state.sharedIndexBuffers ? "shared indices" : "copied indices";
+        return `${state.actualThreads} threads, ${active} active, tasks ${tasks}, wait ${wait}, ` +
+            `build ${taskBuild}, partition ${partition}, descriptors ${descriptorBytes}, ` +
+            `index copy ${indexCopyBytes}, ${sharedIndices}`;
     }
 
     _formatAutoTune(state) {

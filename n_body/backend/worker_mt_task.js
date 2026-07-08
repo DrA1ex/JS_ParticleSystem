@@ -7,12 +7,14 @@ let forceX = null;
 let forceY = null;
 let collisionVelX = new Float32Array(0);
 let collisionVelY = new Float32Array(0);
+let indexBuffers = null;
 
 function init(data) {
     settings = AppSimulationSettings.deserialize(data.settings);
     particles = new Float32Array(data.particlesBuffer);
     forceX = data.forceXBuffer ? new Float32Array(data.forceXBuffer) : null;
     forceY = data.forceYBuffer ? new Float32Array(data.forceYBuffer) : null;
+    indexBuffers = [new Int32Array(data.indexBufferA), new Int32Array(data.indexBufferB)];
 }
 
 function ensureCollisionBuffer(length) {
@@ -119,9 +121,10 @@ function processCollisions(indices, start, count) {
     }
 }
 
-function integrate(indices) {
+function integrateLeaf(indices, start, count) {
     const resistance = settings.physics.resistance;
-    for (let i = 0; i < indices.length; i++) {
+    const end = start + count;
+    for (let i = start; i < end; i++) {
         const offset = indices[i] * ITEM_SIZE;
         const velX = particles[offset + 2] * resistance;
         const velY = particles[offset + 3] * resistance;
@@ -133,25 +136,30 @@ function integrate(indices) {
 }
 
 function processTasks(data) {
-    const indices = new Uint32Array(data.indicesBuffer);
     const leafStarts = new Uint32Array(data.leafStartsBuffer);
     const leafCounts = new Uint32Array(data.leafCountsBuffer);
+    const leafIndexBuffers = new Uint8Array(data.leafIndexBuffersBuffer);
     const parentForceX = new Float32Array(data.parentForceXBuffer);
     const parentForceY = new Float32Array(data.parentForceYBuffer);
 
+    let particleCount = 0;
     let t = performance.now();
     for (let i = 0; i < leafStarts.length; i++) {
+        const indices = indexBuffers[leafIndexBuffers[i]];
         const start = leafStarts[i];
         const count = leafCounts[i];
         calculateLeaf(indices, start, count, parentForceX[i], parentForceY[i]);
         if (settings.physics.enableCollision) {
             processCollisions(indices, start, count);
         }
+        particleCount += count;
     }
     const forceTime = performance.now() - t;
 
     t = performance.now();
-    integrate(indices);
+    for (let i = 0; i < leafStarts.length; i++) {
+        integrateLeaf(indexBuffers[leafIndexBuffers[i]], leafStarts[i], leafCounts[i]);
+    }
     const integrateTime = performance.now() - t;
 
     postMessage({
@@ -160,7 +168,7 @@ function processTasks(data) {
         forceTime,
         integrateTime,
         leafCount: leafStarts.length,
-        particleCount: indices.length,
+        particleCount,
     });
 }
 
