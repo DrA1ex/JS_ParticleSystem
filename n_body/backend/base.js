@@ -204,12 +204,15 @@ export class BackendImpl {
 export class WorkerHandler {
     constructor(backend) {
         this.backend = backend;
+        this._queue = Promise.resolve();
     }
 
     handleMessage(e) {
-        this._handleMessage(e).catch(e => setTimeout(() => {
-            throw new Error(e.message)
-        }));
+        this._queue = this._queue
+            .then(() => this._handleMessage(e))
+            .catch(e => setTimeout(() => {
+                throw new Error(e.message)
+            }));
     }
 
     async _handleMessage(e) {
@@ -231,7 +234,7 @@ export class WorkerHandler {
             case "step": {
                 const {timestamp} = e.data;
 
-                const data = this.backend.step(timestamp);
+                const data = await this.backend.step(timestamp);
                 if (data) {
                     postMessage({type: "data", ...data,}, [data.buffer.buffer]);
                 }

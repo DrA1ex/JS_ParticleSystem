@@ -143,7 +143,7 @@ export class Debug {
             `  - force: ${this._formatMs(profile.forceTime)}`,
             `- render: ${this._formatMs(this.renderTime)}`,
             `  - gpu draw: ${this._formatMs(rendererStats.gpuDrawTime)} (${rendererStats.gpuTimerStatus || "n/a"})`,
-            `backend: ${getDisplayName(this.backend, "Backend")}, block size: ${actualSegmentSize}`,
+            `backend: ${getDisplayName(this.backend, "Backend")}, block size: ${actualSegmentSize}${this._formatWorkerMT(profile.mt)}`,
             `renderer: ${getDisplayName(this.renderer, "Renderer")} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
         ];
     }
@@ -202,6 +202,7 @@ export class Debug {
             `  - filter mode: ${rendererStats.filterMode || "off"}`,
             `renderer: ${getDisplayName(this.renderer, "Renderer")} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
             `backend: ${getDisplayName(this.backend, "Backend")}, block size: ${actualSegmentSize}`,
+            `worker mt: ${this._formatWorkerMTVerbose(profile.mt)}`,
             `auto tune: ${this._formatAutoTune(this.segmentAutoTune)}`,
         ];
     }
@@ -232,6 +233,31 @@ export class Debug {
         }
         const mb = value / 1024 / 1024;
         return `${mb.toFixed(2)} MB`;
+    }
+
+
+    _formatWorkerMT(state) {
+        if (!state) {
+            return "";
+        }
+        if (!state.enabled) {
+            return state.fallbackReason ? `, mt fallback: ${state.fallbackReason}` : ", mt off";
+        }
+        return `, threads: ${state.actualThreads}`;
+    }
+
+    _formatWorkerMTVerbose(state) {
+        if (!state) {
+            return "n/a";
+        }
+        if (!state.enabled) {
+            const reason = state.fallbackReason ? `, ${state.fallbackReason}` : "";
+            return `off${reason}`;
+        }
+        const wait = this._formatMs(state.parallelWaitTime);
+        const tasks = Number.isFinite(state.taskCount) ? state.taskCount : "n/a";
+        const active = Number.isFinite(state.activeWorkers) ? state.activeWorkers : "n/a";
+        return `${state.actualThreads} threads, ${active} active, tasks ${tasks}, wait ${wait}`;
     }
 
     _formatAutoTune(state) {

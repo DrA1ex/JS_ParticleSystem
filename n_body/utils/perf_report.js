@@ -108,6 +108,10 @@ const BLOCK_METRICS = {
     "physics.integrate": "physics.integrate",
     "physics.exportBuffer": "physics.exportBuffer",
     "physics.stats": "physics.stats",
+    "physics.mtThreads": "physics.mtThreads",
+    "physics.mtTaskBuild": "physics.mtTaskBuild",
+    "physics.mtPartition": "physics.mtPartition",
+    "physics.mtParallelWait": "physics.mtParallelWait",
     "dfri.frame": "dfri.frame",
     "dfri.interpolateFrames": "dfri.interpolateFrames",
     "dfri.targetFrame": "dfri.targetFrame",
@@ -141,6 +145,7 @@ function snapshotSettings(app) {
             segmentDivider: settings.simulation.segmentDivider,
             segmentRandomness: settings.simulation.segmentRandomness,
             autoTuneSegmentSize: settings.simulation.autoTuneSegmentSize,
+            workerThreads: settings.simulation.workerThreads,
         },
         physics: {
             particleCount: settings.physics.particleCount,
@@ -198,6 +203,7 @@ function snapshotEnvironment(app) {
         } : null,
         visibilityState: document.visibilityState,
         crossOriginIsolated: window.crossOriginIsolated ?? false,
+        sharedArrayBuffer: typeof SharedArrayBuffer !== "undefined",
     };
 }
 
@@ -259,6 +265,11 @@ function snapshotApp(app, collectorRafInterval, collectorTimestamp) {
             segments: finite(debug?.segmentCount),
             actualSegmentSize: finite(actualSegmentSize),
             autoTune: debug?.segmentAutoTune ? {...debug.segmentAutoTune} : null,
+            workerMT: profile.mt ? {...profile.mt} : null,
+            mtThreads: finite(profile.mt?.actualThreads),
+            mtTaskBuild: finite(profile.mt?.taskBuildTime),
+            mtPartition: finite(profile.mt?.partitionTime),
+            mtParallelWait: finite(profile.mt?.parallelWaitTime),
         },
         dfri: {
             enabled: app.settings.render.enableDFRI,

@@ -24,8 +24,21 @@ export const RenderType = {
  */
 export const BackendType = {
     worker: "worker",
+    workerMt: "worker-mt",
     gpgpu: "gpgpu"
 }
+
+/**
+ * @enum(string)
+ */
+export const WorkerThreadCount = {
+    auto: "auto",
+    "2": "2",
+    "4": "4",
+    "6": "6",
+    "8": "8"
+}
+
 /**
  * @enum(string)
  */

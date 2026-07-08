@@ -1,5 +1,5 @@
 import {ComponentType, Property, ReadOnlyProperty, SettingsBase} from "./base.js";
-import {BackendType} from "./enum.js";
+import {BackendType, WorkerThreadCount} from "./enum.js";
 
 export class SimulationSettings extends SettingsBase {
     static Properties = {
@@ -26,6 +26,13 @@ export class SimulationSettings extends SettingsBase {
                 "This can improve performance because the best segment size depends on particle count, distribution and CPU.",
                 "While tuning is running, physics timing may fluctuate; after it finishes, the chosen block size is shown in stats.",
                 "GPGPU backend ignores this option because its segment size has a different meaning."
+            ].join("\n"))
+            .setBreaks(ComponentType.backend, ComponentType.debug),
+        workerThreads: Property.enum("worker_threads", WorkerThreadCount, WorkerThreadCount.auto)
+            .setName("Worker threads").setDescription([
+                "Worker MT backend only. Number of physics subworkers used for leaf force solving and integration.",
+                "auto uses navigator.hardwareConcurrency when available and otherwise falls back to 4.",
+                "This mode requires SharedArrayBuffer/cross-origin isolation for real multithreading; otherwise it falls back to the single worker path."
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug),
         segmentRandomness: Property.float("segment_random", 0.25)
@@ -56,6 +63,7 @@ export class SimulationSettings extends SettingsBase {
     get segmentRandomness() {return this.config.segmentRandomness;}
     get segmentSize() {return this.config.segmentSize;}
     get autoTuneSegmentSize() {return this.config.autoTuneSegmentSize;}
+    get workerThreads() {return this.config.workerThreads;}
     get segmentMaxCount() {return this.config.segmentMaxCount;}
     get bufferCount() {return this.config.bufferCount;}
 
