@@ -158,6 +158,7 @@ async function buildNBody() {
 
   await fs.mkdir(targetDir, { recursive: true });
   await copyIfExists(path.join(sourceDir, "favicon.png"), path.join(targetDir, "favicon.png"));
+  await copyIfExists(path.join(sourceDir, "coi-serviceworker.js"), path.join(targetDir, "coi-serviceworker.js"));
 
   await transformCss(path.join(sourceDir, "global.css"), path.join(targetDir, "assets", "global.css"));
   await transformCss(path.join(sourceDir, "player", "player.css"), path.join(targetDir, "assets", "player.css"));

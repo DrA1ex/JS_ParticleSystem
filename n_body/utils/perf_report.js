@@ -1,3 +1,5 @@
+import {getCrossOriginIsolationStatus} from "./coi.js";
+
 function getDisplayName(instance, fallback = "n/a") {
     return instance?.displayName || instance?.constructor?.displayName || instance?.constructor?.name || fallback;
 }
@@ -204,6 +206,7 @@ function snapshotEnvironment(app) {
         visibilityState: document.visibilityState,
         crossOriginIsolated: window.crossOriginIsolated ?? false,
         sharedArrayBuffer: typeof SharedArrayBuffer !== "undefined",
+        crossOriginIsolation: getCrossOriginIsolationStatus(),
     };
 }
 

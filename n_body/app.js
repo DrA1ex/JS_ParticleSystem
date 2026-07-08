@@ -8,6 +8,7 @@ import {RendererInitializer} from "./render/init.js";
 import {BackendInitializer} from "./backend/init.js";
 import {ComponentType} from "./settings/base.js";
 import {ITEM_SIZE, exportParticleState} from "./utils/particles.js";
+import {ensureCrossOriginIsolationForWorkerMT} from "./utils/coi.js";
 
 export class Application {
     /** @type{RendererBase} */
@@ -69,11 +70,13 @@ export class Application {
             // cannot be reconfigured safely after creation, such as WebGL
             // context attributes.
             this._updateUrl(newSettings);
+            this._maybeEnableCrossOriginIsolation(newSettings);
             this._notifyReloadRequired(diff.reloadRequired);
             newSettings = this._withCurrentReloadRequiredValues(newSettings);
             diff = this.settings.compare(newSettings);
         } else {
             this._updateUrl(newSettings);
+            this._maybeEnableCrossOriginIsolation(newSettings);
         }
 
         if (particles) {
@@ -168,6 +171,13 @@ export class Application {
         if (shouldReload) {
             window.location.reload();
         }
+    }
+
+
+    _maybeEnableCrossOriginIsolation(settings) {
+        ensureCrossOriginIsolationForWorkerMT(settings).catch(error => {
+            console.warn("Failed to enable worker-mt cross-origin isolation", error);
+        });
     }
 
     _updateUrl(newSettings) {

@@ -235,7 +235,8 @@ class WorkerMTBackendImpl {
         this._treeWorkspace = {};
         this._pool = new SubworkerPool();
         this._threadCount = 0;
-        this._sharedMemoryAvailable = typeof SharedArrayBuffer !== "undefined";
+        this._crossOriginIsolated = globalThis.crossOriginIsolated === true;
+        this._sharedMemoryAvailable = typeof SharedArrayBuffer !== "undefined" && this._crossOriginIsolated;
         this._fallbackReason = null;
     }
 
@@ -326,6 +327,7 @@ class WorkerMTBackendImpl {
         profile.mt = {
             enabled: true,
             sharedMemory: true,
+            crossOriginIsolated: this._crossOriginIsolated,
             requestedThreads: this.settings.simulation.workerThreads,
             actualThreads: this._threadCount,
             taskCount: tasks.length,
@@ -385,7 +387,7 @@ class WorkerMTBackendImpl {
         } else {
             this.particles = new Float32Array(length);
             this.physicalEngine = new FlatPhysicsEngine(this.settings);
-            this._fallbackReason = "SharedArrayBuffer unavailable";
+            this._fallbackReason = this._buildSharedMemoryFallbackReason();
         }
         const objectParticles = Particle_initializer.initialize(this.settings);
         this._copyObjectsToBuffer(objectParticles, this.particles);
@@ -438,12 +440,23 @@ class WorkerMTBackendImpl {
     async _configurePool() {
         this._threadCount = this._resolveThreadCount();
         if (!this._sharedMemoryAvailable) {
-            this._fallbackReason = "SharedArrayBuffer unavailable";
+            this._fallbackReason = this._buildSharedMemoryFallbackReason();
             this._pool.dispose();
             return;
         }
         this._fallbackReason = null;
         await this._pool.reconfigure(this.settings, this.particles.buffer, this.forceX?.buffer ?? null, this.forceY?.buffer ?? null, this._threadCount);
+    }
+
+
+    _buildSharedMemoryFallbackReason() {
+        if (!this._crossOriginIsolated) {
+            return "cross-origin isolation unavailable";
+        }
+        if (typeof SharedArrayBuffer === "undefined") {
+            return "SharedArrayBuffer unavailable";
+        }
+        return "shared memory unavailable";
     }
 
     _resolveThreadCount() {
@@ -658,6 +671,7 @@ class WorkerMTBackendImpl {
         profile.mt = {
             enabled: false,
             sharedMemory: this._sharedMemoryAvailable,
+            crossOriginIsolated: this._crossOriginIsolated,
             requestedThreads: this.settings.simulation.workerThreads,
             actualThreads: 1,
             fallbackReason: this._fallbackReason || "single-thread fallback",

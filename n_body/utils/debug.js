@@ -1,5 +1,6 @@
 import {DataSmoother} from "./smoother.js";
 import * as CommonUtils from "./common.js";
+import {getCrossOriginIsolationStatus} from "./coi.js";
 
 function getDisplayName(instance, fallback = "n/a") {
     return instance?.displayName || instance?.constructor?.displayName || instance?.constructor?.name || fallback;
@@ -203,6 +204,7 @@ export class Debug {
             `renderer: ${getDisplayName(this.renderer, "Renderer")} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
             `backend: ${getDisplayName(this.backend, "Backend")}, block size: ${actualSegmentSize}`,
             `worker mt: ${this._formatWorkerMTVerbose(profile.mt)}`,
+            `coi: ${this._formatCrossOriginIsolation()}`,
             `auto tune: ${this._formatAutoTune(this.segmentAutoTune)}`,
         ];
     }
@@ -235,6 +237,17 @@ export class Debug {
         return `${mb.toFixed(2)} MB`;
     }
 
+
+
+    _formatCrossOriginIsolation() {
+        const status = getCrossOriginIsolationStatus();
+        const isolated = status.crossOriginIsolated ? "isolated" : "not isolated";
+        const sab = status.sharedArrayBuffer ? "sab" : "no sab";
+        const sw = status.coiServiceWorkerControlled
+            ? "coi sw"
+            : (status.serviceWorkerControlled ? "other sw" : "no sw");
+        return `${isolated}, ${sab}, ${sw}`;
+    }
 
     _formatWorkerMT(state) {
         if (!state) {

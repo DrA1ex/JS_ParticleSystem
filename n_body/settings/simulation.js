@@ -32,7 +32,8 @@ export class SimulationSettings extends SettingsBase {
             .setName("Worker threads").setDescription([
                 "Worker MT backend only. Number of physics subworkers used for leaf force solving and integration.",
                 "auto uses navigator.hardwareConcurrency when available and otherwise falls back to 4.",
-                "This mode requires SharedArrayBuffer/cross-origin isolation for real multithreading; otherwise it falls back to the single worker path."
+                "This mode requires SharedArrayBuffer/cross-origin isolation for real multithreading; otherwise it falls back to the single worker path.",
+                "On static hosting such as GitHub Pages, n_body can install a local COOP/COEP service worker and then ask for a page reload to enable SharedArrayBuffer."
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug),
         segmentRandomness: Property.float("segment_random", 0.25)
