@@ -28,6 +28,7 @@ export class RendererBase {
             uploadMode: "n/a",
             gpuInterpolation: "off",
             uploadedBytes: 0,
+            filterMode: "off",
         };
 
         this.settings = settings;
@@ -123,6 +124,10 @@ export class RendererBase {
         if (this.settings.render.enableFilter) {
             this.canvas.style.filter = `brightness(2) hue-rotate(${this._hueAngle % 360}deg)`;
             this._hueAngle += 0.2;
+            this.stats.filterMode = "css";
+        } else {
+            this.canvas.style.filter = null;
+            this.stats.filterMode = "off";
         }
     }
 

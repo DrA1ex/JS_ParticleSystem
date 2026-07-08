@@ -74,6 +74,8 @@ function makeProgramConfig(colorMode, interpolated) {
             {type: "uniform1f", name: "max_speed"},
             {type: "uniform1f", name: "particle_scale"},
             {type: "uniform1f", name: "interpolation_factor"},
+            {type: "uniform1f", name: "filter_enabled"},
+            {type: "uniform1f", name: "hue_angle"},
         ],
         vertexArrays: [{name: "particle", entries}],
     };
@@ -154,6 +156,8 @@ export class Webgl2Renderer extends RendererBase {
             resolution: [this.canvasWidth, this.canvasHeight],
             particle_scale: this.settings.render.particleSizeScale,
             interpolation_factor: 0,
+            filter_enabled: 0,
+            hue_angle: 0,
         });
 
         this.gl.viewport(0, 0, this.canvasWidth, this.canvasHeight);
@@ -244,7 +248,7 @@ export class Webgl2Renderer extends RendererBase {
 
     render(particles) {
         const renderStart = performance.now();
-        super.render(particles);
+        this._updateShaderFilterState();
 
         this.debugCtx?.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
         const {count, prepareDataTime, uploadTime, programName} = this._updateData(particles)
@@ -271,6 +275,7 @@ export class Webgl2Renderer extends RendererBase {
         this.stats.uploadMode = this.settings.render.bufferUploadMode;
         this.stats.uploadedBytes = this._lastUploadedBytes;
         this.stats.gpuInterpolation = this._useInterpolationProgram() ? "on" : "off";
+        this.stats.filterMode = this.settings.render.enableFilter ? "shader" : "off";
     }
 
     _updateData(particles) {
@@ -318,6 +323,8 @@ export class Webgl2Renderer extends RendererBase {
             offset: [this.xOffset, this.yOffset],
             particle_scale: particleScale,
             interpolation_factor: interpolationEnabled ? this._interpolationFactor : 0,
+            filter_enabled: this.settings.render.enableFilter ? 1 : 0,
+            hue_angle: this.settings.render.enableFilter ? this._hueAngle * Math.PI / 180 : 0,
         });
 
         const prepareDataTime = performance.now() - prepareStart;
@@ -576,12 +583,33 @@ export class Webgl2Renderer extends RendererBase {
         if (values.interpolation_factor !== undefined) {
             uniforms.push({name: "interpolation_factor", values: [values.interpolation_factor]});
         }
+        if (values.filter_enabled !== undefined) {
+            uniforms.push({name: "filter_enabled", values: [values.filter_enabled]});
+        }
+        if (values.hue_angle !== undefined) {
+            uniforms.push({name: "hue_angle", values: [values.hue_angle]});
+        }
 
         if (uniforms.length === 0) {
             return;
         }
 
         WebglUtils.loadDataFromConfig(this.gl, this._stateConfig, [{program, uniforms, buffers: []}]);
+    }
+
+
+    _updateShaderFilterState() {
+        // CSS filters on a large WebGL canvas are applied by the browser
+        // compositor after WebGL rendering and are not included in our GPU draw
+        // query. Keep the effect inside the particle shader instead so frame
+        // pacing is not dominated by a full-canvas CSS post-process.
+        if (this.canvas.style.filter) {
+            this.canvas.style.filter = null;
+        }
+
+        if (this.settings.render.enableFilter) {
+            this._hueAngle = (this._hueAngle + 0.2) % 360;
+        }
     }
 
     _applyBlendMode() {

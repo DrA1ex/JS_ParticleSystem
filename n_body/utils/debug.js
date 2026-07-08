@@ -16,6 +16,17 @@ export class Debug {
     profile = null;
     actualSegmentSize = null;
     segmentAutoTune = null;
+    mainStats = {
+        rafInterval: null,
+        callbackTime: null,
+        prepareStepTime: null,
+        debugOverlayTime: null,
+        statsDomTime: null,
+        onDataTime: null,
+        bufferSwitchTime: null,
+    };
+    longTaskCount = 0;
+    longTaskTime = 0;
 
     get elapsed() {
         return this.frameRateSmoother.smoothedValue;
@@ -40,11 +51,27 @@ export class Debug {
         this.settings = settings;
 
         this.frameRateSmoother = new DataSmoother(this.settings.world.fps, 3, true);
+        this.rawFrameRateSmoother = new DataSmoother(Math.max(10, Math.min(120, this.settings.world.fps)), 3, false);
         this.frameLatencySmoother = new DataSmoother(this.settings.world.fps);
         this.flopsSmoother = new DataSmoother(this.settings.world.fps, 0, true);
         this._lastStatsDrawTime = 0;
         this._statsDrawInterval = 250;
         this._maxDebugVectors = 1000;
+
+        this._longTaskObserver = null;
+        if (this.settings.common.verboseStats && typeof PerformanceObserver !== "undefined") {
+            try {
+                this._longTaskObserver = new PerformanceObserver((list) => {
+                    for (const entry of list.getEntries()) {
+                        this.longTaskCount += 1;
+                        this.longTaskTime += entry.duration || 0;
+                    }
+                });
+                this._longTaskObserver.observe({entryTypes: ["longtask"]});
+            } catch (_) {
+                this._longTaskObserver = null;
+            }
+        }
 
         if (this.settings.common.stats) {
             const div = document.createElement("div");
@@ -61,8 +88,12 @@ export class Debug {
         this.settings = null;
 
         this.frameRateSmoother = null;
+        this.rawFrameRateSmoother = null;
         this.frameLatencySmoother = null;
         this.flopsSmoother = null;
+
+        this._longTaskObserver?.disconnect();
+        this._longTaskObserver = null;
 
         this.infoElem?.remove();
         this.infoElem = null;
@@ -71,24 +102,67 @@ export class Debug {
     drawStats() {
         const now = performance.now();
         if (now - this._lastStatsDrawTime < this._statsDrawInterval) {
-            return;
+            return 0;
         }
+        const drawStart = performance.now();
         this._lastStatsDrawTime = now;
 
+        const lines = this.settings.common.verboseStats ? this._buildVerboseStatsLines() : this._buildCompactStatsLines();
+        this.infoElem.innerText = lines.join("\n");
+
+        return performance.now() - drawStart;
+    }
+
+    _buildCompactStatsLines() {
         const flops = CommonUtils.formatUnit(this.flops, "FLOPS");
         const profile = this.profile || {};
         const rendererStats = this.renderer.stats || {};
         const actualSegmentSize = this.actualSegmentSize ?? this.settings.simulation.segmentMaxCount;
+        const physicsTotal = this._sumFinite(this.treeTime, this.physicsTime, profile.exportTime, profile.statsTime);
 
-        // Keep the stats layout stable: fields that may be temporarily unknown
-        // are rendered as n/a instead of being added/removed between frames.
-        this.infoElem.innerText = [
+        return [
+            `fps: ${(1000 / this.elapsed || 0).toFixed(1)}`,
+            `interpolated: ${this.settings.render.enableDFRI ? `${this.interpolateFrames} frames` : "off"}`,
+            `ahead buffers: ${this.bufferCount}`,
+            `particles: ${this.settings.physics.particleCount}`,
+            `segments: ${this.segmentCount}, depth: ${this.depth}`,
+            `complexity: ${flops}`,
+            `- physics: ${this._formatMs(physicsTotal)}`,
+            `  - tree: ${this._formatMs(this.treeTime)}`,
+            `  - force: ${this._formatMs(profile.forceTime)}`,
+            `- render: ${this._formatMs(this.renderTime)}`,
+            `  - gpu draw: ${this._formatMs(rendererStats.gpuDrawTime)} (${rendererStats.gpuTimerStatus || "n/a"})`,
+            `backend: ${this.backend.constructor.name}, block size: ${actualSegmentSize}`,
+            `renderer: ${this.renderer.constructor.name} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
+        ];
+    }
+
+    _buildVerboseStatsLines() {
+        const flops = CommonUtils.formatUnit(this.flops, "FLOPS");
+        const profile = this.profile || {};
+        const rendererStats = this.renderer.stats || {};
+        const actualSegmentSize = this.actualSegmentSize ?? this.settings.simulation.segmentMaxCount;
+        const main = this.mainStats || {};
+        const rawFrameTime = this.rawFrameRateSmoother?.smoothedValue;
+        const rawFps = rawFrameTime > 0 ? 1000 / rawFrameTime : 0;
+
+        // Keep the verbose stats layout stable: fields that may be temporarily
+        // unknown are rendered as n/a instead of being added/removed between frames.
+        return [
             `max depth: ${this.depth}`,
             `segments: ${this.segmentCount}`,
             `complexity: ${flops}`,
             `ahead buffers: ${this.bufferCount}`,
             `interpolated: ${this.settings.render.enableDFRI ? `${this.interpolateFrames} frames` : "off"}`,
             `fps: ${(1000 / this.elapsed || 0).toFixed(1)}`,
+            `raw fps: ${rawFps ? rawFps.toFixed(1) : "n/a"}, raf: ${this._formatMs(main.rafInterval)}`,
+            `- main frame: ${this._formatMs(main.callbackTime)}`,
+            `  - prepare step: ${this._formatMs(main.prepareStepTime)}`,
+            `  - buffer switch: ${this._formatMs(main.bufferSwitchTime)}`,
+            `  - on data: ${this._formatMs(main.onDataTime)}`,
+            `  - debug overlay: ${this._formatMs(main.debugOverlayTime)}`,
+            `  - stats dom: ${this._formatMs(main.statsDomTime)}`,
+            `  - long tasks: ${this.longTaskCount} / ${this._formatMs(this.longTaskTime)}`,
             `- tree building: ${this._formatMs(this.treeTime)}`,
             `- physics calc: ${this._formatMs(this.physicsTime)}`,
             `  - force solve: ${this._formatMs(profile.forceTime)}`,
@@ -104,10 +178,24 @@ export class Debug {
             `  - color mode: ${rendererStats.colorMode || "n/a"}`,
             `  - upload mode: ${rendererStats.uploadMode || "n/a"}`,
             `  - gpu interpolation: ${rendererStats.gpuInterpolation || "off"}`,
+            `  - filter mode: ${rendererStats.filterMode || "off"}`,
             `renderer: ${this.renderer.constructor.name} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
             `backend: ${this.backend.constructor.name}, block size: ${actualSegmentSize}`,
             `auto tune: ${this._formatAutoTune(this.segmentAutoTune)}`,
-        ].join("\n");
+        ];
+    }
+
+    _sumFinite(...values) {
+        let hasValue = false;
+        let sum = 0;
+        for (const value of values) {
+            if (Number.isFinite(value)) {
+                hasValue = true;
+                sum += value;
+            }
+        }
+
+        return hasValue ? sum : null;
     }
 
     _formatMs(value) {
@@ -139,7 +227,8 @@ export class Debug {
     }
 
     postFrameTime(elapsed) {
-        this.frameRateSmoother.postValue(elapsed)
+        this.frameRateSmoother.postValue(elapsed);
+        this.rawFrameRateSmoother.postValue(elapsed);
     }
 
     postFlops(flops) {
@@ -184,6 +273,10 @@ export class Debug {
                 this.renderer.drawWorldLine(x, y, x + forceX * 50, y + forceY * 50);
             }
         }
+    }
+
+    importMainStats(stats) {
+        this.mainStats = Object.assign({}, this.mainStats, stats);
     }
 
     importPhysicsStats(physics) {

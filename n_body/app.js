@@ -27,6 +27,15 @@ export class Application {
     pendingBufferCount = 0;
     refreshTime;
     lastRenderTime;
+    mainStats = {
+        rafInterval: null,
+        callbackTime: null,
+        prepareStepTime: null,
+        debugOverlayTime: null,
+        statsDomTime: null,
+        onDataTime: null,
+        bufferSwitchTime: null,
+    };
 
     /**
      * @param {AppSimulationSettings} settings
@@ -194,6 +203,7 @@ export class Application {
     }
 
     onData(data) {
+        const onDataStart = performance.now();
         if (this.simulationCtrl.currentState === SimulationStateEnum.reconfigure) {
             return;
         }
@@ -223,6 +233,7 @@ export class Application {
         this.requestNextStepIfNeeded();
 
         if (this.settings.common.stats) this.debug.importPhysicsStats(data);
+        this.mainStats.onDataTime = performance.now() - onDataStart;
     }
 
     prepareNextStep() {
@@ -241,6 +252,7 @@ export class Application {
             return;
         }
 
+        const bufferSwitchStart = performance.now();
         const previousBuffer = this.currentBuffer;
         const bufferEntry = this.aheadBuffers.shift();
         const data = bufferEntry.buffer;
@@ -278,6 +290,8 @@ export class Application {
         if (this.settings.render.enableDFRI && this.dfriHelper.needNextFrame()) {
             this.dfriHelper.bufferSwitched(this.particles, this.aheadBuffers[0]);
         }
+
+        this.mainStats.bufferSwitchTime = performance.now() - bufferSwitchStart;
     }
 
     requestNextStep() {
@@ -296,34 +310,50 @@ export class Application {
     }
 
     render(timestamp) {
+        // Queue the next RAF as early as possible. If this callback performs a
+        // costly buffer switch or stats update, registering at the end can make
+        // the browser miss the next high-refresh display slot more easily.
+        requestAnimationFrame(this._renderFrame);
+
+        const callbackStart = performance.now();
+        const elapsed = timestamp - this.lastRenderTime;
+        this.mainStats.rafInterval = elapsed;
+
         if (this.simulationCtrl.currentState === SimulationStateEnum.loading) {
             this.lastRenderTime = timestamp;
-            requestAnimationFrame(this._renderFrame);
+            this.mainStats.callbackTime = performance.now() - callbackStart;
             return;
         }
 
+        const prepareStart = performance.now();
         this.prepareNextStep();
+        this.mainStats.prepareStepTime = performance.now() - prepareStart;
+
         if (this.settings.render.enableDFRI && this.simulationCtrl.currentState !== SimulationStateEnum.paused) {
             this.dfriHelper.render(this.particles);
         } else {
             this.renderer.render(this.particles);
         }
 
+        const debugStart = performance.now();
         if (this.settings.common.debugTree) this.debug.drawTreeDebug();
         if (this.settings.common.debugForce || this.settings.common.debugVelocity) this.debug.drawVelocityDebug(this.particles);
+        this.mainStats.debugOverlayTime = performance.now() - debugStart;
 
-        const elapsed = timestamp - this.lastRenderTime;
         this.dfriHelper.postRenderTime(elapsed);
         this.debug.postFrameTime(elapsed);
 
+        let statsDomTime = 0;
         if (this.settings.common.stats) {
             this.debug.renderTime = this.renderer.stats.renderTime;
             this.debug.bufferCount = this.aheadBuffers.length;
             this.debug.interpolateFrames = this.dfriHelper.interpolateFrames;
-            this.debug.drawStats();
+            this.debug.importMainStats(this.mainStats);
+            statsDomTime = this.debug.drawStats();
+            this.mainStats.statsDomTime = statsDomTime;
         }
 
         this.lastRenderTime = timestamp;
-        requestAnimationFrame(this._renderFrame);
+        this.mainStats.callbackTime = performance.now() - callbackStart;
     }
 }

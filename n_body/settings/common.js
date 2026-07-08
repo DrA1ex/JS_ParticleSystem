@@ -18,11 +18,21 @@ export class CommonSettings extends SettingsBase {
             .setAffects(ComponentType.debug, ComponentType.backend),
         stats: Property.bool("stats", true)
             .setName("Show statistics")
+            .setDescription("Show compact runtime statistics overlay with FPS, physics, render and backend summary.")
+            .setBreaks(ComponentType.debug),
+        verboseStats: Property.bool("verbose_stats", false)
+            .setName("Verbose statistics")
+            .setDescription([
+                "Show detailed diagnostic timing in the statistics overlay.",
+                "Disabled by default to keep the overlay stable and readable during normal use.",
+                "Enable it when profiling frame pacing, main-thread work, WebGL upload, GPU timing, auto-tune state or other performance details."
+            ].join("\n"))
             .setBreaks(ComponentType.debug),
     }
 
     static PropertiesDependencies = new Map([
-        [this.Properties.debug, [this.Properties.debugTree, this.Properties.debugVelocity, this.Properties.debugForce]]
+        [this.Properties.debug, [this.Properties.debugTree, this.Properties.debugVelocity, this.Properties.debugForce]],
+        [this.Properties.stats, [this.Properties.verboseStats]],
     ]);
 
     get debug() {return this.config.debug};
@@ -30,9 +40,14 @@ export class CommonSettings extends SettingsBase {
     get debugVelocity() {return this.config.debugVelocity;}
     get debugForce() {return this.config.debugForce;}
     get stats() {return this.config.stats;}
+    get verboseStats() {return this.config.verboseStats;}
 
     constructor(values) {
         super(values);
+
+        if (this.stats === false) {
+            this.config.verboseStats = false;
+        }
 
         if (this.debug === false) {
             this.config.debugTree = false;
