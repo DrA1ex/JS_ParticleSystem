@@ -85,6 +85,82 @@ function pickMetric(sample, path) {
     return Number.isFinite(current) ? current : null;
 }
 
+function sumFinite(...values) {
+    let hasValue = false;
+    let sum = 0;
+    for (const value of values) {
+        if (Number.isFinite(value)) {
+            hasValue = true;
+            sum += value;
+        }
+    }
+    return hasValue ? sum : null;
+}
+
+function ratio(numerator, denominator) {
+    return Number.isFinite(numerator) && Number.isFinite(denominator) && denominator !== 0
+        ? numerator / denominator
+        : null;
+}
+
+function cloneWorkerMTState(state) {
+    if (!state) {
+        return null;
+    }
+
+    const actualThreads = finite(state.actualThreads);
+    const activeWorkers = finite(state.activeWorkers);
+    const taskCount = finite(state.taskCount);
+    const taskBuildTime = finite(state.taskBuildTime);
+    const partitionTime = finite(state.partitionTime);
+    const parallelWaitTime = finite(state.parallelWaitTime);
+    const forceTimeMax = finite(state.forceTimeMax);
+    const integrateTimeMax = finite(state.integrateTimeMax);
+    const forceTimeTotal = finite(state.forceTimeTotal);
+    const integrateTimeTotal = finite(state.integrateTimeTotal);
+    const coordinationTime = sumFinite(taskBuildTime, partitionTime);
+    const wallTime = sumFinite(coordinationTime, parallelWaitTime);
+    const workerCpuTime = sumFinite(forceTimeTotal, integrateTimeTotal);
+    const workerMaxTime = sumFinite(forceTimeMax, integrateTimeMax);
+    const activeWorkerTime = Number.isFinite(parallelWaitTime) && Number.isFinite(activeWorkers)
+        ? parallelWaitTime * activeWorkers
+        : null;
+
+    return {
+        enabled: !!state.enabled,
+        sharedMemory: !!state.sharedMemory,
+        crossOriginIsolated: !!state.crossOriginIsolated,
+        requestedThreads: state.requestedThreads ?? null,
+        actualThreads,
+        activeWorkers,
+        fallbackReason: state.fallbackReason || null,
+        taskCount,
+        taskBuildTime,
+        partitionTime,
+        coordinationTime,
+        partitionDescriptorBytes: finite(state.partitionDescriptorBytes),
+        descriptorBytesPerTask: ratio(state.partitionDescriptorBytes, taskCount),
+        indexCopyBytes: finite(state.indexCopyBytes),
+        sharedIndexBuffers: !!state.sharedIndexBuffers,
+        parallelWaitTime,
+        wallTime,
+        forceTimeMax,
+        integrateTimeMax,
+        forceTimeTotal,
+        integrateTimeTotal,
+        workerCpuTime,
+        workerMaxTime,
+        workerIdleRatio: ratio(
+            Number.isFinite(activeWorkerTime) && Number.isFinite(workerCpuTime)
+                ? Math.max(0, activeWorkerTime - workerCpuTime)
+                : null,
+            activeWorkerTime,
+        ),
+        parallelEfficiency: ratio(workerCpuTime, activeWorkerTime),
+        parallelSpeedupEstimate: ratio(workerCpuTime, parallelWaitTime),
+    };
+}
+
 const BLOCK_METRICS = {
     "collector.rafInterval": "collectorRafInterval",
     "fps.smoothed": "fps.smoothed",
@@ -104,16 +180,33 @@ const BLOCK_METRICS = {
     "render.preload": "render.preload",
     "render.preloadedBytes": "render.preloadedBytes",
     "render.uploadQueue": "render.uploadQueue",
+    "physics.stepTotal": "physics.stepTotal",
     "physics.tree": "physics.tree",
     "physics.total": "physics.total",
     "physics.force": "physics.force",
     "physics.integrate": "physics.integrate",
     "physics.exportBuffer": "physics.exportBuffer",
     "physics.stats": "physics.stats",
-    "physics.mtThreads": "physics.mtThreads",
-    "physics.mtTaskBuild": "physics.mtTaskBuild",
-    "physics.mtPartition": "physics.mtPartition",
-    "physics.mtParallelWait": "physics.mtParallelWait",
+    "physics.mt.actualThreads": "physics.workerMT.actualThreads",
+    "physics.mt.activeWorkers": "physics.workerMT.activeWorkers",
+    "physics.mt.taskCount": "physics.workerMT.taskCount",
+    "physics.mt.taskBuild": "physics.workerMT.taskBuildTime",
+    "physics.mt.partition": "physics.workerMT.partitionTime",
+    "physics.mt.coordination": "physics.workerMT.coordinationTime",
+    "physics.mt.parallelWait": "physics.workerMT.parallelWaitTime",
+    "physics.mt.wall": "physics.workerMT.wallTime",
+    "physics.mt.forceMax": "physics.workerMT.forceTimeMax",
+    "physics.mt.integrateMax": "physics.workerMT.integrateTimeMax",
+    "physics.mt.forceTotal": "physics.workerMT.forceTimeTotal",
+    "physics.mt.integrateTotal": "physics.workerMT.integrateTimeTotal",
+    "physics.mt.workerCpu": "physics.workerMT.workerCpuTime",
+    "physics.mt.workerMax": "physics.workerMT.workerMaxTime",
+    "physics.mt.parallelEfficiency": "physics.workerMT.parallelEfficiency",
+    "physics.mt.parallelSpeedupEstimate": "physics.workerMT.parallelSpeedupEstimate",
+    "physics.mt.workerIdleRatio": "physics.workerMT.workerIdleRatio",
+    "physics.mt.descriptorBytes": "physics.workerMT.partitionDescriptorBytes",
+    "physics.mt.descriptorBytesPerTask": "physics.workerMT.descriptorBytesPerTask",
+    "physics.mt.indexCopyBytes": "physics.workerMT.indexCopyBytes",
     "dfri.frame": "dfri.frame",
     "dfri.interpolateFrames": "dfri.interpolateFrames",
     "dfri.targetFrame": "dfri.targetFrame",
@@ -257,6 +350,7 @@ function snapshotApp(app, collectorRafInterval, collectorTimestamp) {
             filterMode: rendererStats.filterMode || "off",
         },
         physics: {
+            stepTotal: sumFinite(debug?.treeTime, debug?.physicsTime, profile.exportTime, profile.statsTime),
             tree: finite(debug?.treeTime),
             total: finite(debug?.physicsTime),
             force: finite(profile.forceTime),
@@ -268,14 +362,7 @@ function snapshotApp(app, collectorRafInterval, collectorTimestamp) {
             segments: finite(debug?.segmentCount),
             actualSegmentSize: finite(actualSegmentSize),
             autoTune: debug?.segmentAutoTune ? {...debug.segmentAutoTune} : null,
-            workerMT: profile.mt ? {...profile.mt} : null,
-            mtThreads: finite(profile.mt?.actualThreads),
-            mtTaskBuild: finite(profile.mt?.taskBuildTime),
-            mtPartition: finite(profile.mt?.partitionTime),
-            mtPartitionDescriptorBytes: finite(profile.mt?.partitionDescriptorBytes),
-            mtIndexCopyBytes: finite(profile.mt?.indexCopyBytes),
-            mtSharedIndexBuffers: !!profile.mt?.sharedIndexBuffers,
-            mtParallelWait: finite(profile.mt?.parallelWaitTime),
+            workerMT: cloneWorkerMTState(profile.mt),
         },
         dfri: {
             enabled: app.settings.render.enableDFRI,
@@ -330,6 +417,13 @@ function summarizeSlowFrames(samples, targetFrameTime) {
             pendingBuffers: finite(sample.queue?.pendingBuffers),
             dfriFrame: finite(sample.dfri?.frame),
             dfriInterpolateFrames: finite(sample.dfri?.interpolateFrames),
+            mtEnabled: !!sample.physics?.workerMT?.enabled,
+            mtThreads: finite(sample.physics?.workerMT?.actualThreads),
+            mtActiveWorkers: finite(sample.physics?.workerMT?.activeWorkers),
+            mtTaskCount: finite(sample.physics?.workerMT?.taskCount),
+            mtParallelWait: finite(sample.physics?.workerMT?.parallelWaitTime),
+            mtCoordination: finite(sample.physics?.workerMT?.coordinationTime),
+            mtEfficiency: finite(sample.physics?.workerMT?.parallelEfficiency),
         }));
 }
 
@@ -405,6 +499,57 @@ async function collectFrameBlock(app, blockIndex, frames, longTasks, includeSamp
     };
 }
 
+function uniqueValues(values) {
+    return [...new Set(values.filter(value => value !== null && value !== undefined && value !== ""))];
+}
+
+function pickBlockMetricAvg(block, name) {
+    const value = block.metrics?.[name]?.avg;
+    return Number.isFinite(value) ? value : null;
+}
+
+function summarizeAcrossBlocks(blocks, metricName) {
+    return summarize(blocks.map(block => pickBlockMetricAvg(block, metricName)));
+}
+
+function summarizeWorkerMTBlocks(blocks) {
+    const states = [];
+    for (const block of blocks) {
+        if (block.firstSample?.physics?.workerMT) {
+            states.push(block.firstSample.physics.workerMT);
+        }
+        if (block.lastSample?.physics?.workerMT) {
+            states.push(block.lastSample.physics.workerMT);
+        }
+    }
+
+    return {
+        enabled: states.some(state => state.enabled),
+        fallbackReasons: uniqueValues(states.map(state => state.fallbackReason)),
+        requestedThreads: uniqueValues(states.map(state => state.requestedThreads)),
+        actualThreads: summarizeAcrossBlocks(blocks, "physics.mt.actualThreads"),
+        activeWorkers: summarizeAcrossBlocks(blocks, "physics.mt.activeWorkers"),
+        taskCount: summarizeAcrossBlocks(blocks, "physics.mt.taskCount"),
+        wallTime: summarizeAcrossBlocks(blocks, "physics.mt.wall"),
+        coordinationTime: summarizeAcrossBlocks(blocks, "physics.mt.coordination"),
+        taskBuildTime: summarizeAcrossBlocks(blocks, "physics.mt.taskBuild"),
+        partitionTime: summarizeAcrossBlocks(blocks, "physics.mt.partition"),
+        parallelWaitTime: summarizeAcrossBlocks(blocks, "physics.mt.parallelWait"),
+        forceMax: summarizeAcrossBlocks(blocks, "physics.mt.forceMax"),
+        integrateMax: summarizeAcrossBlocks(blocks, "physics.mt.integrateMax"),
+        forceTotal: summarizeAcrossBlocks(blocks, "physics.mt.forceTotal"),
+        integrateTotal: summarizeAcrossBlocks(blocks, "physics.mt.integrateTotal"),
+        workerCpuTime: summarizeAcrossBlocks(blocks, "physics.mt.workerCpu"),
+        parallelEfficiency: summarizeAcrossBlocks(blocks, "physics.mt.parallelEfficiency"),
+        parallelSpeedupEstimate: summarizeAcrossBlocks(blocks, "physics.mt.parallelSpeedupEstimate"),
+        workerIdleRatio: summarizeAcrossBlocks(blocks, "physics.mt.workerIdleRatio"),
+        descriptorBytes: summarizeAcrossBlocks(blocks, "physics.mt.descriptorBytes"),
+        descriptorBytesPerTask: summarizeAcrossBlocks(blocks, "physics.mt.descriptorBytesPerTask"),
+        indexCopyBytes: summarizeAcrossBlocks(blocks, "physics.mt.indexCopyBytes"),
+        sharedIndexBuffers: states.some(state => state.sharedIndexBuffers),
+    };
+}
+
 function summarizeReportBlocks(blocks) {
     const measuredFps = summarize(blocks.map(block => block.measuredFps));
     const rafIntervals = summarize(blocks.flatMap(block => {
@@ -417,6 +562,16 @@ function summarizeReportBlocks(blocks) {
     return {
         measuredFps,
         rafIntervals,
+        physics: {
+            stepTotal: summarizeAcrossBlocks(blocks, "physics.stepTotal"),
+            tree: summarizeAcrossBlocks(blocks, "physics.tree"),
+            calc: summarizeAcrossBlocks(blocks, "physics.total"),
+            force: summarizeAcrossBlocks(blocks, "physics.force"),
+            integrate: summarizeAcrossBlocks(blocks, "physics.integrate"),
+            exportBuffer: summarizeAcrossBlocks(blocks, "physics.exportBuffer"),
+            stats: summarizeAcrossBlocks(blocks, "physics.stats"),
+        },
+        workerMT: summarizeWorkerMTBlocks(blocks),
         noAheadBuffer: blocks.reduce((sum, block) => sum + block.countersDelta.noAheadBuffer, 0),
         missedAheadFrames: blocks.reduce((sum, block) => sum + block.countersDelta.missedAheadFrames, 0),
         droppedRafFrames: blocks.reduce((sum, block) => sum + block.countersDelta.droppedRafFrames, 0),
@@ -459,6 +614,56 @@ async function copyReportText(text) {
     }
 }
 
+function fixed(value, digits = 1) {
+    return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
+}
+
+function metricAvg(report, path) {
+    let current = report;
+    for (const key of path.split(".")) {
+        if (!current || typeof current !== "object") {
+            return null;
+        }
+        current = current[key];
+    }
+    return Number.isFinite(current?.avg) ? current.avg : null;
+}
+
+function buildCompactSummaryRows(reports) {
+    return reports.map((report, index) => ({
+        report: index + 1,
+        backend: report.comparisonKey?.backend || report.settings?.simulation?.backend || "n/a",
+        threads: report.comparisonKey?.workerThreads || report.settings?.simulation?.workerThreads || "n/a",
+        actualThreads: fixed(metricAvg(report, "summary.workerMT.actualThreads"), 0),
+        fps: fixed(metricAvg(report, "summary.measuredFps"), 1),
+        rafP95: fixed(metricAvg(report, "summary.rafIntervals"), 1),
+        step: fixed(metricAvg(report, "summary.physics.stepTotal"), 1),
+        tree: fixed(metricAvg(report, "summary.physics.tree"), 1),
+        calc: fixed(metricAvg(report, "summary.physics.calc"), 1),
+        force: fixed(metricAvg(report, "summary.physics.force"), 1),
+        integrate: fixed(metricAvg(report, "summary.physics.integrate"), 1),
+        mtWall: fixed(metricAvg(report, "summary.workerMT.wallTime"), 1),
+        mtWait: fixed(metricAvg(report, "summary.workerMT.parallelWaitTime"), 1),
+        mtCoord: fixed(metricAvg(report, "summary.workerMT.coordinationTime"), 1),
+        mtEff: fixed(metricAvg(report, "summary.workerMT.parallelEfficiency"), 2),
+        mtSpeedup: fixed(metricAvg(report, "summary.workerMT.parallelSpeedupEstimate"), 2),
+        indexCopyBytes: fixed(metricAvg(report, "summary.workerMT.indexCopyBytes"), 0),
+        fallback: report.summary?.workerMT?.fallbackReasons?.join(", ") || "",
+    }));
+}
+
+function collectReportsFromArguments(items) {
+    const reports = items.length ? items : [window.nBodyLastReport];
+    return reports.flat().filter(item => item && item.type === "n-body-performance-report");
+}
+
+export function comparePerformanceReports(...items) {
+    const reports = collectReportsFromArguments(items);
+    const rows = buildCompactSummaryRows(reports);
+    console.table(rows);
+    return rows;
+}
+
 /**
  * Collects render/physics pacing diagnostics from the live app without relying
  * on the visible stats overlay. A block samples several RAF callbacks; multiple
@@ -483,6 +688,17 @@ export async function collectPerformanceReport(app, options = {}) {
         options: {frames, blocks, intervalMs, includeSamples},
         environment: snapshotEnvironment(app),
         settings: snapshotSettings(app),
+        comparisonKey: {
+            backend: app.settings.simulation.backend,
+            workerThreads: app.settings.simulation.workerThreads,
+            particleCount: app.settings.physics.particleCount,
+            segmentSize: app.settings.simulation.segmentSize,
+            autoTuneSegmentSize: app.settings.simulation.autoTuneSegmentSize,
+            bufferCount: app.settings.simulation.bufferCount,
+            colorMode: app.settings.render.colorMode,
+            bufferUploadMode: app.settings.render.bufferUploadMode,
+            webglLowLatency: app.settings.render.webglLowLatency,
+        },
         initialSnapshot: snapshotApp(app, null, performance.now()),
         blocks: [],
         summary: null,
@@ -505,6 +721,8 @@ export async function collectPerformanceReport(app, options = {}) {
     report.finalSnapshot = snapshotApp(app, null, performance.now());
     report.summary = summarizeReportBlocks(report.blocks);
 
+    console.table(buildCompactSummaryRows([report]));
+
     const text = JSON.stringify(report, null, 2);
     window.nBodyLastReport = report;
     window.nBodyLastReportText = text;
@@ -523,16 +741,28 @@ export function installPerformanceReportConsole(app) {
     window.nBodyApp = app;
     window.nBodyCollectReport = (options) => collectPerformanceReport(app, options);
     window.nBodyCollectStats = window.nBodyCollectReport;
+    window.nBodyCompareReports = (...reports) => comparePerformanceReports(...reports);
     window.nBodyReportHelp = () => {
         const message = [
             "Collect a performance report:",
             "  await window.nBodyCollectReport({frames: 240, blocks: 4, intervalMs: 5000})",
+            "Recommended worker / worker-mt comparison:",
+            "  1) Run the same URL with backend=worker",
+            "  2) Run backend=worker-mt&workerThreads=2",
+            "  3) Run backend=worker-mt&workerThreads=4",
+            "  4) Run backend=worker-mt&workerThreads=6",
+            "  Use the same particles, segment size, render settings, and warmed-up auto-tune state.",
             "Options:",
             "  frames: RAF samples per block, default 240",
             "  blocks: number of blocks, default 4",
             "  intervalMs: delay between blocks, default 5000",
             "  includeSamples: include every per-frame sample, default false",
             "  copy: copy JSON to clipboard, default true",
+            "MT fields:",
+            "  summary.workerMT.wallTime / parallelWaitTime / coordinationTime / parallelEfficiency / parallelSpeedupEstimate",
+            "  metrics.physics.mt.* inside each block",
+            "Compare reports already loaded in this page:",
+            "  window.nBodyCompareReports(reportWorker, reportMt2, reportMt4, reportMt6)",
             "Last report is also available as window.nBodyLastReport and window.nBodyLastReportText."
         ].join("\n");
         console.info(message);
