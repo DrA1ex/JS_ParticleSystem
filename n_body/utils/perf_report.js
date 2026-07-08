@@ -1,3 +1,7 @@
+function getDisplayName(instance, fallback = "n/a") {
+    return instance?.displayName || instance?.constructor?.displayName || instance?.constructor?.name || fallback;
+}
+
 function finite(value) {
     return Number.isFinite(value) ? value : null;
 }
@@ -168,6 +172,10 @@ function snapshotSettings(app) {
 function snapshotEnvironment(app) {
     const canvas = app.renderer?.canvas;
     return {
+        runtime: {
+            renderer: getDisplayName(app.renderer, "Renderer"),
+            backend: getDisplayName(app.backend, "Backend"),
+        },
         userAgent: navigator.userAgent,
         hardwareConcurrency: navigator.hardwareConcurrency ?? null,
         deviceMemory: navigator.deviceMemory ?? null,

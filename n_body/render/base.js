@@ -1,4 +1,6 @@
 export class RendererBase {
+    displayName = "Renderer";
+
     canvas;
     /** @type{AppSimulationSettings} */
     settings;

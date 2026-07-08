@@ -4,6 +4,7 @@ import {GPUPhysicsEngine} from "./gpgpu/gpgpu_physics.js";
 export class GPUBackend extends BackendBase {
     constructor() {
         super("./backend/gpgpu.js");
+        this.displayName = "GPUBackend";
     }
 }
 

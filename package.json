@@ -1,8 +1,8 @@
 {
+  "name": "js-particlesystem-pages",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/build-pages.mjs",
     "build:pages": "node scripts/build-pages.mjs"
   },
   "devDependencies": {

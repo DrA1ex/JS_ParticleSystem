@@ -10,6 +10,8 @@ import {ITEM_SIZE} from "../utils/particles.js";
 export {ITEM_SIZE};
 
 export class BackendBase {
+    displayName = "Backend";
+
     /**
      * @param {string} workerPath
      */

@@ -11,6 +11,7 @@ export class CanvasRenderer extends RendererBase {
      */
     constructor(canvas, settings) {
         super(canvas, settings);
+        this.displayName = "CanvasRenderer";
         this._maxSpeed = this.settings.physics.gravity / 100;
 
         this.ctx = canvas.getContext('2d');

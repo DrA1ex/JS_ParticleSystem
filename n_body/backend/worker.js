@@ -116,6 +116,7 @@ class SegmentSizeAutoTuner {
 export class WorkerBackend extends BackendBase {
     constructor() {
         super("./backend/worker.js");
+        this.displayName = "WorkerBackend";
     }
 }
 

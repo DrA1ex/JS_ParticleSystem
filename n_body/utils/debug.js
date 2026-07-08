@@ -1,5 +1,9 @@
 import {DataSmoother} from "./smoother.js";
 import * as CommonUtils from "./common.js";
+
+function getDisplayName(instance, fallback = "n/a") {
+    return instance?.displayName || instance?.constructor?.displayName || instance?.constructor?.name || fallback;
+}
 import {getParticleCount, getParticleVelX, getParticleVelY, getParticleX, getParticleY} from "./particles.js";
 
 export class Debug {
@@ -139,8 +143,8 @@ export class Debug {
             `  - force: ${this._formatMs(profile.forceTime)}`,
             `- render: ${this._formatMs(this.renderTime)}`,
             `  - gpu draw: ${this._formatMs(rendererStats.gpuDrawTime)} (${rendererStats.gpuTimerStatus || "n/a"})`,
-            `backend: ${this.backend.constructor.name}, block size: ${actualSegmentSize}`,
-            `renderer: ${this.renderer.constructor.name} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
+            `backend: ${getDisplayName(this.backend, "Backend")}, block size: ${actualSegmentSize}`,
+            `renderer: ${getDisplayName(this.renderer, "Renderer")} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
         ];
     }
 
@@ -196,8 +200,8 @@ export class Debug {
             `  - low latency ctx: ${rendererStats.webglLowLatency ? "on" : "off"}`,
             `  - gpu interpolation: ${rendererStats.gpuInterpolation || "off"}`,
             `  - filter mode: ${rendererStats.filterMode || "off"}`,
-            `renderer: ${this.renderer.constructor.name} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
-            `backend: ${this.backend.constructor.name}, block size: ${actualSegmentSize}`,
+            `renderer: ${getDisplayName(this.renderer, "Renderer")} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
+            `backend: ${getDisplayName(this.backend, "Backend")}, block size: ${actualSegmentSize}`,
             `auto tune: ${this._formatAutoTune(this.segmentAutoTune)}`,
         ];
     }

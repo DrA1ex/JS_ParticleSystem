@@ -105,6 +105,7 @@ export class Webgl2Renderer extends RendererBase {
      */
     constructor(canvas, settings) {
         super(canvas, settings);
+        this.displayName = "Webgl2Renderer";
 
         const contextOptions = this._getContextOptions();
         this.gl = canvas.getContext("webgl2", contextOptions);
