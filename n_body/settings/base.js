@@ -122,6 +122,7 @@ export class Property {
         this.exportable = false;
         this.affects = [];
         this.breaks = [];
+        this.requiresReload = false;
         this.name = "";
         this._description = "";
         this.min = null;
@@ -222,6 +223,18 @@ export class Property {
      */
     setBreaks(...breaks) {
         this.breaks = breaks;
+        return this;
+    }
+
+    /**
+     * Mark a setting as requiring a full page reload to take effect. This is
+     * used for options that are consumed only while creating browser-owned
+     * objects, such as WebGL context attributes.
+     *
+     * @return {Property<T>}
+     */
+    setRequiresReload() {
+        this.requiresReload = true;
         return this;
     }
 

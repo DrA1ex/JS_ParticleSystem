@@ -37,14 +37,23 @@ export class RenderSettings extends SettingsBase {
                 "fixed: uses one fixed color; uploads only positions and is the fastest mode."
             ].join("\n"))
             .setAffects(ComponentType.renderer),
-        bufferUploadMode: Property.enum("upload_mode", BufferUploadMode, BufferUploadMode.bufferSubData)
+        bufferUploadMode: Property.enum("upload_mode", BufferUploadMode, BufferUploadMode.stream)
             .setName("Buffer upload mode").setDescription([
                 "Controls how dynamic WebGL buffers are updated after a new physics frame arrives.",
                 "bufferData: replaces buffer storage with the provided data each upload; can be faster on some drivers.",
                 "bufferSubData: keeps allocated storage and updates its content; usually avoids extra reallocations for stable particle counts.",
+                "stream: orphans the previous GPU storage before upload, then writes with bufferSubData. This can avoid stalls when the driver still uses the old buffer for a previous frame.",
                 "This affects CPU/GPU upload cost, not the physics calculation itself."
             ].join("\n"))
             .setAffects(ComponentType.renderer),
+        webglLowLatency: Property.bool("webgl_low_latency", true)
+            .setName("Low latency WebGL context").setDescription([
+                "Requests a WebGL2 context optimized for interactive rendering.",
+                "When enabled, the renderer asks the browser for high-performance, non-antialiased, non-alpha, desynchronized WebGL where supported.",
+                "Browser and GPU drivers may ignore some of these hints.",
+                "This option is read only while creating the WebGL context. Changing it updates the URL/state and requires a page reload; it is not applied live."
+            ].join("\n"))
+            .setRequiresReload(),
         maxSpeedUpdateMode: Property.enum("max_speed_mode", MaxSpeedUpdateMode, MaxSpeedUpdateMode.throttle)
             .setName("Max speed update").setDescription([
                 "Controls how often the renderer scans all velocities to update the color normalization value.",
@@ -92,6 +101,7 @@ export class RenderSettings extends SettingsBase {
     get enableBlending() {return this.config.enableBlending}
     get colorMode() {return this.config.colorMode}
     get bufferUploadMode() {return this.config.bufferUploadMode}
+    get webglLowLatency() {return this.config.webglLowLatency}
     get maxSpeedUpdateMode() {return this.config.maxSpeedUpdateMode}
     get enableDFRI() {return this.config.enableDFRI}
     get DFRIMaxFrames() {return this.config.DFRIMaxFrames}

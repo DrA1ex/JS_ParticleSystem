@@ -42,6 +42,7 @@ export class Application {
         dfriTargetFrameTime: null,
     };
     _lastNoAheadWarningTime = 0;
+    _lastReloadPromptSignature = null;
 
     /**
      * @param {AppSimulationSettings} settings
@@ -60,9 +61,21 @@ export class Application {
 
     reconfigure(newSettings, particles, renderer) {
         this.simulationCtrl.setState(SimulationStateEnum.reconfigure);
-        this._updateUrl(newSettings);
 
-        const diff = this.settings.compare(newSettings);
+        let diff = this.settings.compare(newSettings);
+        if (diff.reloadRequired?.size > 0) {
+            // Keep the requested value in the URL so a user reload applies it,
+            // but do not mutate live settings for browser-owned objects that
+            // cannot be reconfigured safely after creation, such as WebGL
+            // context attributes.
+            this._updateUrl(newSettings);
+            this._notifyReloadRequired(diff.reloadRequired);
+            newSettings = this._withCurrentReloadRequiredValues(newSettings);
+            diff = this.settings.compare(newSettings);
+        } else {
+            this._updateUrl(newSettings);
+        }
+
         if (particles) {
             diff.affects.add(ComponentType.backend);
         }
@@ -119,6 +132,42 @@ export class Application {
 
         this.settings = newSettings;
         this.init({particles, renderer}, diff);
+    }
+
+
+    _withCurrentReloadRequiredValues(newSettings) {
+        const serialized = newSettings.serialize();
+        for (const [groupName, group] of Object.entries(newSettings.constructor.Types)) {
+            for (const [name, prop] of Object.entries(group.type.Properties)) {
+                if (prop.requiresReload) {
+                    serialized[groupName][name] = this.settings[groupName][name];
+                }
+            }
+        }
+
+        return newSettings.constructor.deserialize(serialized);
+    }
+
+    _notifyReloadRequired(properties) {
+        const names = [...properties]
+            .map(prop => prop.name || prop.key)
+            .filter(Boolean)
+            .join(", ");
+        const signature = names || "reload-required-settings";
+        if (this._lastReloadPromptSignature === signature) {
+            return;
+        }
+
+        this._lastReloadPromptSignature = signature;
+        const shouldReload = window.confirm([
+            `${names || "This setting"} requires a page reload to take effect.`,
+            "The URL has already been updated with the new value.",
+            "Reload the page now?"
+        ].join("\n"));
+
+        if (shouldReload) {
+            window.location.reload();
+        }
     }
 
     _updateUrl(newSettings) {
@@ -233,7 +282,10 @@ export class Application {
         // already switched. Refresh the renderer ahead-frame as soon as it
         // becomes available instead of waiting for the next switch.
         if (this.settings.render.enableDFRI && this.hasCurrentFrame) {
-            this.dfriHelper.updateAheadFrame?.(this.particles, this.aheadBuffers[0]);
+            const updated = this.dfriHelper.updateAheadFrame?.(this.particles, this.aheadBuffers[0]);
+            if (updated) {
+                this.renderer.preloadInterpolationFrame?.(this.aheadBuffers[0]?.buffer, 4);
+            }
         }
 
         this.requestNextStepIfNeeded();
@@ -297,6 +349,7 @@ export class Application {
 
         if (this.settings.render.enableDFRI && this.dfriHelper.needNextFrame()) {
             this.dfriHelper.bufferSwitched(this.particles, this.aheadBuffers[0]);
+            this.renderer.preloadInterpolationFrame?.(this.aheadBuffers[0]?.buffer || this.particles, 4);
         }
 
         this.mainStats.bufferSwitchTime = performance.now() - bufferSwitchStart;

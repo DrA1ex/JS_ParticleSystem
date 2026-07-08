@@ -104,14 +104,18 @@ export class AppSettingsBase {
 
     /**
      * @param {SettingsGroup} newSettings
-     * @returns {{breaks: Set<ComponentType>, affects: Set<ComponentType>}}
+     * @returns {{breaks: Set<ComponentType>, affects: Set<ComponentType>, reloadRequired: Set<Property>}}
      */
     compare(newSettings) {
         const affects = new Set();
         const breaks = new Set();
+        const reloadRequired = new Set();
         for (const [groupName, group] of Object.entries(this.constructor.Types)) {
             for (const [name, prop] of Object.entries(group.type.Properties)) {
                 if (this[groupName][name] !== newSettings[groupName][name]) {
+                    if (prop.requiresReload) {
+                        reloadRequired.add(prop);
+                    }
                     for (const component of prop.affects) {
                         affects.add(component);
                     }
@@ -124,7 +128,8 @@ export class AppSettingsBase {
 
         return {
             affects: affects,
-            breaks: breaks
+            breaks: breaks,
+            reloadRequired: reloadRequired
         }
     }
 }

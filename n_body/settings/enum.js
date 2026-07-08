@@ -49,5 +49,6 @@ export const RenderColorMode = {
  */
 export const BufferUploadMode = {
     bufferData: "bufferData",
-    bufferSubData: "bufferSubData"
+    bufferSubData: "bufferSubData",
+    stream: "stream"
 }

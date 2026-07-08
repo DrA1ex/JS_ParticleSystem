@@ -41,7 +41,7 @@ function makeProgramConfig(colorMode, interpolated) {
     const program = PROGRAM_NAMES[colorMode][interpolated ? "interpolated" : "plain"];
     const attributes = [{name: "position"}];
     const entries = [
-        {name: "position", buffer: `${RENDER_BUFFER_PROGRAM}.position`, type: GL.FLOAT, size: 2}
+        {name: "position", buffer: `${RENDER_BUFFER_PROGRAM}.particles`, type: GL.FLOAT, size: 2, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 0}
     ];
 
     if (interpolated) {
@@ -52,12 +52,12 @@ function makeProgramConfig(colorMode, interpolated) {
     if (colorMode === RenderColorMode.velocity) {
         attributes.push({name: "velocity"}, {name: "mass"});
         entries.push(
-            {name: "velocity", buffer: `${RENDER_BUFFER_PROGRAM}.velocity`, type: GL.FLOAT, size: 2},
-            {name: "mass", buffer: `${RENDER_BUFFER_PROGRAM}.mass`, type: GL.FLOAT, size: 1}
+            {name: "velocity", buffer: `${RENDER_BUFFER_PROGRAM}.particles`, type: GL.FLOAT, size: 2, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 2 * Float32Array.BYTES_PER_ELEMENT},
+            {name: "mass", buffer: `${RENDER_BUFFER_PROGRAM}.particles`, type: GL.FLOAT, size: 1, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 4 * Float32Array.BYTES_PER_ELEMENT}
         );
     } else if (colorMode === RenderColorMode.mass) {
         attributes.push({name: "mass"});
-        entries.push({name: "mass", buffer: `${RENDER_BUFFER_PROGRAM}.mass`, type: GL.FLOAT, size: 1});
+        entries.push({name: "mass", buffer: `${RENDER_BUFFER_PROGRAM}.particles`, type: GL.FLOAT, size: 1, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 4 * Float32Array.BYTES_PER_ELEMENT});
     }
 
     return {
@@ -86,10 +86,8 @@ const CONFIGURATION = [
         program: RENDER_BUFFER_PROGRAM,
         internal: true,
         buffers: [
-            {name: "position", usageHint: GL.STREAM_DRAW},
+            {name: "particles", usageHint: GL.STREAM_DRAW},
             {name: "nextPosition", usageHint: GL.STREAM_DRAW},
-            {name: "velocity", usageHint: GL.STREAM_DRAW},
-            {name: "mass", usageHint: GL.STATIC_DRAW},
         ]
     },
     makeProgramConfig(RenderColorMode.velocity, false),
@@ -108,7 +106,11 @@ export class Webgl2Renderer extends RendererBase {
     constructor(canvas, settings) {
         super(canvas, settings);
 
-        this.gl = canvas.getContext("webgl2");
+        const contextOptions = this._getContextOptions();
+        this.gl = canvas.getContext("webgl2", contextOptions);
+        if (!this.gl && contextOptions) {
+            this.gl = canvas.getContext("webgl2");
+        }
         this._stateConfig = {};
 
         this._gpuTimerExt = this.gl.getExtension("EXT_disjoint_timer_query_webgl2");
@@ -116,9 +118,6 @@ export class Webgl2Renderer extends RendererBase {
         this.stats.gpuTimerStatus = this._gpuTimerExt ? "waiting" : "unsupported";
 
         this._particleBufferData = new Float32Array(this.settings.physics.particleCount * ITEM_SIZE);
-        this._positionBufferData = new Float32Array(this.settings.physics.particleCount * POSITION_ITEM_SIZE);
-        this._velocityBufferData = new Float32Array(this.settings.physics.particleCount * VELOCITY_ITEM_SIZE);
-        this._massBufferData = new Float32Array(this.settings.physics.particleCount * MASS_ITEM_SIZE);
         this._nextPositionBufferData = new Float32Array(this.settings.physics.particleCount * POSITION_ITEM_SIZE);
 
         this._maxSpeed = this.settings.physics.gravity / 100;
@@ -127,8 +126,6 @@ export class Webgl2Renderer extends RendererBase {
         this._particleDataDirty = true;
         this._uploadedParticleSource = null;
         this._uploadedParticleCount = 0;
-        this._massBufferInitialized = false;
-        this._uploadedMassCount = 0;
 
         this._nextParticles = null;
         this._nextParticlesDirty = true;
@@ -137,12 +134,34 @@ export class Webgl2Renderer extends RendererBase {
         this._interpolationFactor = 0;
 
         this._bufferCapacities = new Map();
+        this._uploadQueue = [];
+        this._uploadQueueTimer = null;
+        this._uploadQueueTimerIsIdle = false;
         this._lastUploadedBytes = 0;
+        this._lastPreloadedBytes = 0;
+        this._lastPreloadTime = 0;
+        this._lastQueuedUploads = 0;
 
         this.initWebgl();
         if (this.settings.common.debug) {
             this.initDebugCanvas();
         }
+    }
+
+    _getContextOptions() {
+        if (!this.settings.render.webglLowLatency) {
+            return undefined;
+        }
+
+        return {
+            alpha: false,
+            antialias: false,
+            depth: false,
+            stencil: false,
+            preserveDrawingBuffer: false,
+            powerPreference: "high-performance",
+            desynchronized: true,
+        };
     }
 
     initWebgl() {
@@ -206,7 +225,6 @@ export class Webgl2Renderer extends RendererBase {
         super.reset();
         this._maxSpeed = this.settings.physics.gravity / 100;
         this._lastMaxSpeedScanTime = 0;
-        this._massBufferInitialized = false;
         this.markParticlesDirty();
         this.setInterpolationFrame(null);
         this.setInterpolationFactor(0);
@@ -235,6 +253,7 @@ export class Webgl2Renderer extends RendererBase {
             this._nextParticles = null;
         }
         this._nextParticlesDirty = true;
+        this._scheduleNextPositionPreload();
     }
 
     setInterpolationFactor(factor) {
@@ -244,6 +263,80 @@ export class Webgl2Renderer extends RendererBase {
 
     markParticlesDirty() {
         this._particleDataDirty = true;
+    }
+
+    preloadInterpolationFrame(particles, budgetMs = 4) {
+        if (!particles || !isParticleBuffer(particles)) {
+            return false;
+        }
+
+        if (this._nextParticles !== particles) {
+            this._nextParticles = particles;
+            this._nextParticlesDirty = true;
+        }
+
+        this._queueNextPositionUpload();
+        this._flushUploadQueue(budgetMs);
+        return true;
+    }
+
+    _scheduleNextPositionPreload() {
+        if (!this._nextParticles || !isParticleBuffer(this._nextParticles)) {
+            return;
+        }
+
+        this._queueNextPositionUpload();
+        if (this._uploadQueueTimer !== null) {
+            return;
+        }
+
+        this._uploadQueueTimerIsIdle = typeof window.requestIdleCallback === "function";
+        const schedule = this._uploadQueueTimerIsIdle
+            ? (cb) => window.requestIdleCallback(cb, {timeout: 50})
+            : (cb) => setTimeout(() => cb({timeRemaining: () => 4}), 0);
+
+        this._uploadQueueTimer = schedule((deadline) => {
+            this._uploadQueueTimer = null;
+            this._uploadQueueTimerIsIdle = false;
+            const budget = Math.max(1, Math.min(6, deadline?.timeRemaining?.() ?? 4));
+            this._flushUploadQueue(budget);
+        });
+    }
+
+    _queueNextPositionUpload() {
+        if (!this._uploadQueue.some(job => job.type === "nextPosition")) {
+            this._uploadQueue.push({type: "nextPosition"});
+        }
+    }
+
+    _flushUploadQueue(budgetMs = 4) {
+        if (!this._uploadQueue.length) {
+            return 0;
+        }
+
+        const start = performance.now();
+        const previousPreloadedBytes = this._lastPreloadedBytes || 0;
+        let jobs = 0;
+
+        while (this._uploadQueue.length) {
+            const job = this._uploadQueue.shift();
+            if (job.type === "nextPosition") {
+                const count = this._nextParticles ? getParticleCount(this._nextParticles) : 0;
+                this._uploadNextPositionIfNeeded(count, false);
+            }
+            jobs += 1;
+
+            if (performance.now() - start >= budgetMs) {
+                break;
+            }
+        }
+
+        this._lastPreloadTime = performance.now() - start;
+        this._lastQueuedUploads = jobs;
+        if (this._lastPreloadedBytes === previousPreloadedBytes) {
+            this._lastPreloadedBytes = 0;
+        }
+        return jobs;
     }
 
     render(particles) {
@@ -274,7 +367,11 @@ export class Webgl2Renderer extends RendererBase {
         this.stats.colorMode = this._colorMode;
         this.stats.uploadMode = this.settings.render.bufferUploadMode;
         this.stats.uploadedBytes = this._lastUploadedBytes;
-        this.stats.gpuInterpolation = this._useInterpolationProgram() ? "on" : "off";
+        this.stats.preloadedBytes = this._lastPreloadedBytes || 0;
+        this.stats.preloadTime = this._lastPreloadTime || 0;
+        this.stats.uploadQueue = this._uploadQueue?.length || 0;
+        this.stats.webglLowLatency = !!this.settings.render.webglLowLatency;
+        this.stats.gpuInterpolation = this._getGpuInterpolationStatus(count);
         this.stats.filterMode = this.settings.render.enableFilter ? "shader" : "off";
     }
 
@@ -285,23 +382,21 @@ export class Webgl2Renderer extends RendererBase {
         const count = getParticleCount(particles);
         const colorMode = this._colorMode;
         const needsVelocity = colorMode === RenderColorMode.velocity;
-        const needsMass = colorMode === RenderColorMode.velocity || colorMode === RenderColorMode.mass;
         const scanMaxSpeed = needsVelocity && this._shouldScanMaxSpeed(prepareStart);
         const canUseSourceDirectly = isBuffer && !this.coordinateTransformer;
         const sourceData = canUseSourceDirectly ? particles : this._ensureParticleBufferCapacity(count);
         let maxSpeed = this._maxSpeed;
 
-        this._ensureSplitBufferCapacity(count);
+        this._ensureNextPositionBufferCapacity(count);
 
-        const needsCurrentPrepare = !canUseSourceDirectly || this._particleDataDirty ||
+        const needsCurrentUpload = this._particleDataDirty ||
             this._uploadedParticleSource !== sourceData || this._uploadedParticleCount !== count;
 
         if (!canUseSourceDirectly) {
+            // CPU DFRI and object-particle fallback still need a compact
+            // interleaved upload buffer. The fast WebGL path below uses the
+            // worker's interleaved Float32Array directly.
             maxSpeed = this._fillUploadBuffer(particles, count, isBuffer, scanMaxSpeed, maxSpeed);
-        }
-
-        if (needsCurrentPrepare) {
-            maxSpeed = this._fillCurrentSplitBuffers(sourceData, count, scanMaxSpeed, maxSpeed, needsVelocity, needsMass);
         } else if (scanMaxSpeed) {
             maxSpeed = this._scanMaxSpeedFromBuffer(sourceData, count, maxSpeed);
         }
@@ -314,7 +409,7 @@ export class Webgl2Renderer extends RendererBase {
         const particleScale = this.settings.render.fixedParticleSize ?
             this.settings.render.particleSizeScale :
             this.settings.render.particleSizeScale * this.scale;
-        const interpolationEnabled = this._useInterpolationProgram();
+        const interpolationEnabled = this._useInterpolationProgram(count);
         const programName = this._getProgramName(colorMode, interpolationEnabled);
 
         this._loadUniforms(programName, {
@@ -329,7 +424,7 @@ export class Webgl2Renderer extends RendererBase {
 
         const prepareDataTime = performance.now() - prepareStart;
         const uploadStart = performance.now();
-        this._uploadCurrentBuffers(sourceData, count, needsVelocity, needsMass, needsCurrentPrepare);
+        this._uploadCurrentBuffer(sourceData, count, needsCurrentUpload);
         if (interpolationEnabled) {
             this._uploadNextPositionIfNeeded(count);
         }
@@ -347,8 +442,27 @@ export class Webgl2Renderer extends RendererBase {
         return programs[interpolated ? "interpolated" : "plain"];
     }
 
-    _useInterpolationProgram() {
-        return !!this._nextParticles && this._interpolationFactor > 0;
+    _hasInterpolationFrame(count = null) {
+        if (!this._nextParticles) {
+            return false;
+        }
+        if (count === null) {
+            return true;
+        }
+        return getParticleCount(this._nextParticles) >= count;
+    }
+
+    _useInterpolationProgram(count = null) {
+        // Keep the shader interpolation path active for the whole DFRI span.
+        // The interpolation factor is allowed to be 0 on the first rendered
+        // frame after a physics buffer switch; that should draw the current
+        // frame through the interpolation shader, not temporarily fall back to
+        // the non-interpolated program and make the stats flicker on/off.
+        return this._hasInterpolationFrame(count);
+    }
+
+    _getGpuInterpolationStatus(count) {
+        return this._hasInterpolationFrame(count) ? "on" : "off";
     }
 
     _ensureParticleBufferCapacity(count) {
@@ -359,17 +473,7 @@ export class Webgl2Renderer extends RendererBase {
         return this._particleBufferData;
     }
 
-    _ensureSplitBufferCapacity(count) {
-        if (!this._positionBufferData || this._positionBufferData.length < count * POSITION_ITEM_SIZE) {
-            this._positionBufferData = new Float32Array(count * POSITION_ITEM_SIZE);
-        }
-        if (!this._velocityBufferData || this._velocityBufferData.length < count * VELOCITY_ITEM_SIZE) {
-            this._velocityBufferData = new Float32Array(count * VELOCITY_ITEM_SIZE);
-        }
-        if (!this._massBufferData || this._massBufferData.length < count * MASS_ITEM_SIZE) {
-            this._massBufferData = new Float32Array(count * MASS_ITEM_SIZE);
-            this._massBufferInitialized = false;
-        }
+    _ensureNextPositionBufferCapacity(count) {
         if (!this._nextPositionBufferData || this._nextPositionBufferData.length < count * POSITION_ITEM_SIZE) {
             this._nextPositionBufferData = new Float32Array(count * POSITION_ITEM_SIZE);
         }
@@ -448,73 +552,25 @@ export class Webgl2Renderer extends RendererBase {
         return maxSpeed;
     }
 
-    _fillCurrentSplitBuffers(data, count, scanMaxSpeed, currentMaxSpeed, needsVelocity, needsMass) {
-        let maxSpeed = currentMaxSpeed;
-        const position = this._positionBufferData;
-        const velocity = this._velocityBufferData;
-        const mass = this._massBufferData;
-        const shouldRefreshMass = needsMass && (!this._massBufferInitialized || this._uploadedMassCount !== count);
-
-        // Deinterleave only the attributes used by the selected shader variant.
-        // This costs one CPU pass when a physics frame changes, but it avoids
-        // uploading unused velocity/mass data and lets DFRI upload x/y only.
-        for (let i = 0; i < count; i++) {
-            const srcOffset = i * ITEM_SIZE;
-            const posOffset = i * POSITION_ITEM_SIZE;
-            position[posOffset] = data[srcOffset];
-            position[posOffset + 1] = data[srcOffset + 1];
-
-            if (needsVelocity || scanMaxSpeed) {
-                const velX = data[srcOffset + 2];
-                const velY = data[srcOffset + 3];
-                if (needsVelocity) {
-                    const velOffset = i * VELOCITY_ITEM_SIZE;
-                    velocity[velOffset] = velX;
-                    velocity[velOffset + 1] = velY;
-                }
-                if (scanMaxSpeed) {
-                    const speed = Math.max(Math.abs(velX), Math.abs(velY));
-                    if (Number.isFinite(speed) && maxSpeed < speed) {
-                        maxSpeed = speed;
-                    }
-                }
-            }
-
-            if (shouldRefreshMass) {
-                mass[i] = data[srcOffset + 4];
-            }
-        }
-
-        if (shouldRefreshMass) {
-            this._massBufferInitialized = false;
-        }
-
-        return maxSpeed;
-    }
-
-    _uploadCurrentBuffers(data, count, needsVelocity, needsMass, forceUpload = false) {
+    _uploadCurrentBuffer(data, count, forceUpload = false) {
         const needsUpload = forceUpload || this._particleDataDirty ||
             this._uploadedParticleSource !== data || this._uploadedParticleCount !== count;
         if (!needsUpload) {
             return;
         }
 
-        this._uploadArrayBuffer("position", this._positionBufferData, count * POSITION_ITEM_SIZE);
-        if (needsVelocity) {
-            this._uploadArrayBuffer("velocity", this._velocityBufferData, count * VELOCITY_ITEM_SIZE);
-        }
-        if (needsMass && (!this._massBufferInitialized || this._uploadedMassCount !== count)) {
-            this._uploadArrayBuffer("mass", this._massBufferData, count * MASS_ITEM_SIZE);
-            this._massBufferInitialized = true;
-            this._uploadedMassCount = count;
-        }
+        // The current frame is uploaded as the same interleaved layout the
+        // worker produces: [x, y, vx, vy, mass]. Vertex attributes use stride
+        // and offsets instead of CPU-side deinterleaving. This removes the
+        // largest prepareData spike from the WebGL path.
+        this._uploadArrayBuffer("particles", data, count * ITEM_SIZE);
 
         this._uploadedParticleSource = data;
         this._uploadedParticleCount = count;
         this._particleDataDirty = false;
     }
 
-    _uploadNextPositionIfNeeded(count) {
+    _uploadNextPositionIfNeeded(count, trackRenderBytes = true) {
         const data = this._nextParticles;
         if (!data || getParticleCount(data) < count) {
             return;
@@ -534,13 +590,13 @@ export class Webgl2Renderer extends RendererBase {
             nextPosition[dstOffset + 1] = data[srcOffset + 1];
         }
 
-        this._uploadArrayBuffer("nextPosition", nextPosition, count * POSITION_ITEM_SIZE);
+        this._uploadArrayBuffer("nextPosition", nextPosition, count * POSITION_ITEM_SIZE, trackRenderBytes);
         this._uploadedNextParticleSource = data;
         this._uploadedNextParticleCount = count;
         this._nextParticlesDirty = false;
     }
 
-    _uploadArrayBuffer(name, data, length) {
+    _uploadArrayBuffer(name, data, length, trackRenderBytes = true) {
         const buffer = this._stateConfig[RENDER_BUFFER_PROGRAM].buffers[name];
         const view = data.length === length ? data : data.subarray(0, length);
         const byteLength = view.byteLength;
@@ -550,18 +606,37 @@ export class Webgl2Renderer extends RendererBase {
 
         const usageHint = this._stateConfig[RENDER_BUFFER_PROGRAM]._config.buffers[name]?.usageHint || GL.STREAM_DRAW;
         this.gl.bindBuffer(GL.ARRAY_BUFFER, buffer);
-        if (this.settings.render.bufferUploadMode === BufferUploadMode.bufferSubData) {
-            const capacity = this._bufferCapacities.get(name) || 0;
-            if (capacity < byteLength) {
-                this.gl.bufferData(GL.ARRAY_BUFFER, byteLength, usageHint);
-                this._bufferCapacities.set(name, byteLength);
+
+        switch (this.settings.render.bufferUploadMode) {
+            case BufferUploadMode.bufferSubData: {
+                const capacity = this._bufferCapacities.get(name) || 0;
+                if (capacity < byteLength) {
+                    this.gl.bufferData(GL.ARRAY_BUFFER, byteLength, usageHint);
+                    this._bufferCapacities.set(name, byteLength);
+                }
+                this.gl.bufferSubData(GL.ARRAY_BUFFER, 0, view);
+                break;
             }
-            this.gl.bufferSubData(GL.ARRAY_BUFFER, 0, view);
-        } else {
-            this.gl.bufferData(GL.ARRAY_BUFFER, view, usageHint);
-            this._bufferCapacities.set(name, byteLength);
+            case BufferUploadMode.stream: {
+                // Orphan the previous storage before writing. This gives the
+                // driver a fresh backing store and avoids waiting for a buffer
+                // still referenced by an in-flight draw.
+                this.gl.bufferData(GL.ARRAY_BUFFER, byteLength, usageHint);
+                this.gl.bufferSubData(GL.ARRAY_BUFFER, 0, view);
+                this._bufferCapacities.set(name, byteLength);
+                break;
+            }
+            case BufferUploadMode.bufferData:
+            default:
+                this.gl.bufferData(GL.ARRAY_BUFFER, view, usageHint);
+                this._bufferCapacities.set(name, byteLength);
+                break;
         }
-        this._lastUploadedBytes += byteLength;
+        if (trackRenderBytes) {
+            this._lastUploadedBytes += byteLength;
+        } else {
+            this._lastPreloadedBytes = (this._lastPreloadedBytes || 0) + byteLength;
+        }
     }
 
     _loadUniformsForAllPrograms(values) {
@@ -702,14 +777,21 @@ export class Webgl2Renderer extends RendererBase {
     dispose() {
         this._stateConfig = null;
         this._particleBufferData = null;
-        this._positionBufferData = null;
-        this._velocityBufferData = null;
-        this._massBufferData = null;
         this._nextPositionBufferData = null;
         this._nextParticles = null;
         this._uploadedParticleSource = null;
         this._uploadedNextParticleSource = null;
         this._bufferCapacities = null;
+        this._uploadQueue = null;
+        if (this._uploadQueueTimer !== null) {
+            if (this._uploadQueueTimerIsIdle && typeof window.cancelIdleCallback === "function") {
+                window.cancelIdleCallback(this._uploadQueueTimer);
+            } else {
+                clearTimeout(this._uploadQueueTimer);
+            }
+            this._uploadQueueTimer = null;
+            this._uploadQueueTimerIsIdle = false;
+        }
         if (this._gpuTimerQuery) {
             this.gl.deleteQuery(this._gpuTimerQuery);
             this._gpuTimerQuery = null;
