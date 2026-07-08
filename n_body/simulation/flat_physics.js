@@ -16,6 +16,7 @@ export class FlatPhysicsEngine {
                 depth: 0,
                 segmentCount: 0
             },
+            treeProfile: null,
             profile: {
                 forceTime: 0,
                 integrateTime: 0,
@@ -65,6 +66,7 @@ export class FlatPhysicsEngine {
             this.settings.simulation.segmentRandomness,
             this._treeWorkspace);
         this.stats.treeTime = performance.now() - t;
+        this.stats.treeProfile = tree.profile ? {...tree.profile} : null;
 
         t = performance.now();
         this._calculateTree(tree);

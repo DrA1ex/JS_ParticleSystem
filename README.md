@@ -33,6 +33,8 @@ _Visualization of 1,000,000 particles (click image to open YouTube video)_
 - Accurate simulation, galaxy-like pattern may born (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?segment_max_count=32&particle_count=100000&particle_init=bang)
 - Fast simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=rotation&g=1000)
 - Fast simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=collision&g=1000)
+- Big CPU multithreaded simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&particle_count=200000&segment_auto=1)
+- Big CPU multithreaded simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=6&particle_count=300000&segment_auto=1)
 - Big GPGPU simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=16384&segment_max_count=128&particle_init=uniform&particle_mass=10&g=10)
 - Big GPGPU simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=16384&segment_max_count=128&particle_mass=10&g=100)
 - Particle collisions CPU (accurate): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?collision=1)
@@ -134,6 +136,24 @@ _Simulation demo links with maximum accuracy_:
 - Max segment size `1024`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&particle_count=1024&segment_max_count=1024)
 - Max segment size `2048`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&particle_count=2048&segment_max_count=2048)
 - Max segment size `4096`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&particle_count=4096&segment_max_count=4096)
+
+
+##### `worker-mt`
+`worker-mt` is a multithreaded CPU backend. It keeps the same spatial-tree approximation as `worker`, but distributes leaf force solving and particle integration across several subworkers. This backend is useful when the simulation is CPU-bound and the machine has several available cores.
+
+The number of subworkers can be selected with the `worker_threads` parameter. Supported values are `auto`, `2`, `4`, `6`, and `8`. The `auto` mode uses browser hardware concurrency information when available and otherwise falls back to a safe default. In practice, `4` threads is usually a good starting point; higher values can help on some desktops, but may also add scheduling overhead.
+
+This backend requires `SharedArrayBuffer` and cross-origin isolation for real multithreading. On static hosting, the app can install a local COOP/COEP service worker and then ask to reload the page. If isolation cannot be enabled, the backend falls back to the single-worker path.
+
+_Demos with different worker thread counts_:
+- Auto threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=auto&particle_count=200000&segment_auto=1)
+- 2 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=2&particle_count=200000&segment_auto=1)
+- 4 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&particle_count=200000&segment_auto=1)
+- 6 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=6&particle_count=200000&segment_auto=1)
+
+_Heavier multithreaded demos_:
+- 300k particles with 4 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&particle_count=300000&segment_auto=1)
+- 300k particles with 6 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=6&particle_count=300000&segment_auto=1)
 
 
 ##### `gpgpu`

@@ -182,6 +182,11 @@ const BLOCK_METRICS = {
     "render.uploadQueue": "render.uploadQueue",
     "physics.stepTotal": "physics.stepTotal",
     "physics.tree": "physics.tree",
+    "physics.treeShare": "physics.treeShare",
+    "physics.tree.reset": "physics.treeProfile.resetTime",
+    "physics.tree.rootBounds": "physics.treeProfile.rootBoundsTime",
+    "physics.tree.populate": "physics.treeProfile.populateTime",
+    "physics.tree.aggregate": "physics.treeProfile.aggregateTime",
     "physics.total": "physics.total",
     "physics.force": "physics.force",
     "physics.integrate": "physics.integrate",
@@ -313,6 +318,7 @@ function snapshotApp(app, collectorRafInterval, collectorTimestamp) {
     const rawFrameTime = debug?.rawFrameRateSmoother?.smoothedValue;
     const smoothedFrameTime = debug?.elapsed;
     const actualSegmentSize = debug?.actualSegmentSize ?? app.settings.simulation.segmentMaxCount;
+    const physicsStepTotal = sumFinite(debug?.treeTime, debug?.physicsTime, profile.exportTime, profile.statsTime);
 
     return {
         timestamp: finite(collectorTimestamp),
@@ -350,8 +356,10 @@ function snapshotApp(app, collectorRafInterval, collectorTimestamp) {
             filterMode: rendererStats.filterMode || "off",
         },
         physics: {
-            stepTotal: sumFinite(debug?.treeTime, debug?.physicsTime, profile.exportTime, profile.statsTime),
+            stepTotal: physicsStepTotal,
             tree: finite(debug?.treeTime),
+            treeShare: ratio(debug?.treeTime, physicsStepTotal),
+            treeProfile: debug?.treeProfile ? {...debug.treeProfile} : null,
             total: finite(debug?.physicsTime),
             force: finite(profile.forceTime),
             integrate: finite(profile.integrateTime),
@@ -565,6 +573,11 @@ function summarizeReportBlocks(blocks) {
         physics: {
             stepTotal: summarizeAcrossBlocks(blocks, "physics.stepTotal"),
             tree: summarizeAcrossBlocks(blocks, "physics.tree"),
+            treeShare: summarizeAcrossBlocks(blocks, "physics.treeShare"),
+            treeReset: summarizeAcrossBlocks(blocks, "physics.tree.reset"),
+            treeRootBounds: summarizeAcrossBlocks(blocks, "physics.tree.rootBounds"),
+            treePopulate: summarizeAcrossBlocks(blocks, "physics.tree.populate"),
+            treeAggregate: summarizeAcrossBlocks(blocks, "physics.tree.aggregate"),
             calc: summarizeAcrossBlocks(blocks, "physics.total"),
             force: summarizeAcrossBlocks(blocks, "physics.force"),
             integrate: summarizeAcrossBlocks(blocks, "physics.integrate"),
@@ -618,6 +631,10 @@ function fixed(value, digits = 1) {
     return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
 }
 
+function fixedPercent(value, digits = 1) {
+    return Number.isFinite(value) ? fixed(value * 100, digits) : null;
+}
+
 function metricAvg(report, path) {
     let current = report;
     for (const key of path.split(".")) {
@@ -639,6 +656,8 @@ function buildCompactSummaryRows(reports) {
         rafP95: fixed(metricAvg(report, "summary.rafIntervals"), 1),
         step: fixed(metricAvg(report, "summary.physics.stepTotal"), 1),
         tree: fixed(metricAvg(report, "summary.physics.tree"), 1),
+        treeShare: fixedPercent(metricAvg(report, "summary.physics.treeShare"), 1),
+        treePopulate: fixed(metricAvg(report, "summary.physics.treePopulate"), 1),
         calc: fixed(metricAvg(report, "summary.physics.calc"), 1),
         force: fixed(metricAvg(report, "summary.physics.force"), 1),
         integrate: fixed(metricAvg(report, "summary.physics.integrate"), 1),
@@ -748,9 +767,9 @@ export function installPerformanceReportConsole(app) {
             "  await window.nBodyCollectReport({frames: 240, blocks: 4, intervalMs: 5000})",
             "Recommended worker / worker-mt comparison:",
             "  1) Run the same URL with backend=worker",
-            "  2) Run backend=worker-mt&workerThreads=2",
-            "  3) Run backend=worker-mt&workerThreads=4",
-            "  4) Run backend=worker-mt&workerThreads=6",
+            "  2) Run backend=worker-mt&worker_threads=2",
+            "  3) Run backend=worker-mt&worker_threads=4",
+            "  4) Run backend=worker-mt&worker_threads=6",
             "  Use the same particles, segment size, render settings, and warmed-up auto-tune state.",
             "Options:",
             "  frames: RAF samples per block, default 240",
@@ -758,6 +777,8 @@ export function installPerformanceReportConsole(app) {
             "  intervalMs: delay between blocks, default 5000",
             "  includeSamples: include every per-frame sample, default false",
             "  copy: copy JSON to clipboard, default true",
+            "Physics fields:",
+            "  summary.physics.treeShare / treePopulate / treeAggregate show how much of the step is tree-bound",
             "MT fields:",
             "  summary.workerMT.wallTime / parallelWaitTime / coordinationTime / parallelEfficiency / parallelSpeedupEstimate",
             "  metrics.physics.mt.* inside each block",

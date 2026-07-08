@@ -382,6 +382,7 @@ class WorkerMTBackendImpl {
                 physicsTime,
                 treeTime,
                 tree: treeStats,
+                treeProfile: tree.profile ? {...tree.profile} : null,
                 profile,
                 actualSegmentSize: this._actualSegmentSize,
                 segmentAutoTune: this._segmentTuner?.getStats(this._actualSegmentSize) ?? null
@@ -750,6 +751,7 @@ class WorkerMTBackendImpl {
                     depth: this.physicalEngine.stats.tree.depth,
                     segmentCount: this.physicalEngine.stats.tree.segmentCount
                 },
+                treeProfile: this.physicalEngine.stats.treeProfile ? {...this.physicalEngine.stats.treeProfile} : null,
                 profile,
                 actualSegmentSize: this._actualSegmentSize,
                 segmentAutoTune: this._segmentTuner?.getStats(this._actualSegmentSize) ?? null

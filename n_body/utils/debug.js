@@ -19,6 +19,7 @@ export class Debug {
     treeDebugData = [];
     forceDebugData = [];
     profile = null;
+    treeProfile = null;
     actualSegmentSize = null;
     segmentAutoTune = null;
     mainStats = {
@@ -140,7 +141,7 @@ export class Debug {
             `segments: ${this.segmentCount}, depth: ${this.depth}`,
             `complexity: ${flops}`,
             `- physics: ${this._formatMs(physicsTotal)}`,
-            `  - tree: ${this._formatMs(this.treeTime)}`,
+            `  - tree: ${this._formatMs(this.treeTime)} (${this._formatPercent(this._ratio(this.treeTime, physicsTotal))})`,
             `  - force: ${this._formatMs(profile.forceTime)}`,
             `- render: ${this._formatMs(this.renderTime)}`,
             `  - gpu draw: ${this._formatMs(rendererStats.gpuDrawTime)} (${rendererStats.gpuTimerStatus || "n/a"})`,
@@ -182,7 +183,12 @@ export class Debug {
             `  - target frame: ${this._formatMs(main.dfriTargetFrameTime)}`,
             `  - no ahead buffer: ${main.noAheadBufferCount ?? 0}`,
             `  - missed ahead frames: ${main.missedAheadFrames ?? 0}`,
-            `- tree building: ${this._formatMs(this.treeTime)}`,
+            `- tree building: ${this._formatMs(this.treeTime)} (${this._formatPercent(this._ratio(this.treeTime, this._sumFinite(this.treeTime, this.physicsTime, profile.exportTime, profile.statsTime)))})`,
+            `  - reset: ${this._formatMs(this.treeProfile?.resetTime)}`,
+            `  - root bounds: ${this._formatMs(this.treeProfile?.rootBoundsTime)}`,
+            `  - populate: ${this._formatMs(this.treeProfile?.populateTime)}`,
+            `  - aggregate: ${this._formatMs(this.treeProfile?.aggregateTime)}`,
+            `  - fast buckets: ${this.treeProfile?.fastBucketPath ? "on" : "off"}`,
             `- physics calc: ${this._formatMs(this.physicsTime)}`,
             `  - force solve: ${this._formatMs(profile.forceTime)}`,
             `  - integrate: ${this._formatMs(profile.integrateTime)}`,
@@ -220,6 +226,16 @@ export class Debug {
         }
 
         return hasValue ? sum : null;
+    }
+
+    _ratio(numerator, denominator) {
+        return Number.isFinite(numerator) && Number.isFinite(denominator) && denominator !== 0
+            ? numerator / denominator
+            : null;
+    }
+
+    _formatPercent(value) {
+        return Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : "n/a";
     }
 
     _formatMs(value) {
@@ -352,6 +368,7 @@ export class Debug {
         this.depth = physics.stats.tree.depth;
         this.segmentCount = physics.stats.tree.segmentCount;
         this.profile = physics.stats.profile || null;
+        this.treeProfile = physics.stats.treeProfile || null;
         this.actualSegmentSize = physics.stats.actualSegmentSize ?? null;
         this.segmentAutoTune = physics.stats.segmentAutoTune ?? null;
 

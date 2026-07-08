@@ -185,6 +185,7 @@ class WorkerBackendImpl {
                     depth: this.physicalEngine.stats.tree.depth,
                     segmentCount: this.physicalEngine.stats.tree.segmentCount
                 },
+                treeProfile: this.physicalEngine.stats.treeProfile ? {...this.physicalEngine.stats.treeProfile} : null,
                 profile: this.physicalEngine.stats.profile,
                 actualSegmentSize: this._actualSegmentSize,
                 segmentAutoTune: this._segmentTuner?.getStats(this._actualSegmentSize) ?? null

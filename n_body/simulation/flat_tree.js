@@ -38,6 +38,13 @@ export class FlatSpatialTree {
         this.nodeCount = 0;
         this.maxDepth = 0;
         this.root = 0;
+        this.profile = {
+            resetTime: 0,
+            rootBoundsTime: 0,
+            populateTime: 0,
+            aggregateTime: 0,
+            fastBucketPath: false,
+        };
 
         workspace = this._prepareWorkspace(workspace);
         this._workspace = workspace;
@@ -46,7 +53,9 @@ export class FlatSpatialTree {
         this._scratchIndices = workspace.scratchIndices;
         this.indexBuffers = workspace.indexBuffers;
         this._identityIndices = workspace.identityIndices;
+        let profileStart = performance.now();
         this.indices.set(this._identityIndices.subarray(0, this.count), 0);
+        this.profile.resetTime = performance.now() - profileStart;
 
         this._bucketsCount = this.divideFactor * this.divideFactor;
         this._bucketCounts = workspace.bucketCounts;
@@ -77,11 +86,21 @@ export class FlatSpatialTree {
             return;
         }
 
+        profileStart = performance.now();
         const rootBounds = this._calculateRangeBounds(this.indices, 0, this.count);
+        this.profile.rootBoundsTime = performance.now() - profileStart;
+
         this.root = this._createNode(0, this.count, BUFFER_A, 1,
             rootBounds.left, rootBounds.top, rootBounds.right, rootBounds.bottom);
+
+        profileStart = performance.now();
         this._populate(this.root, BUFFER_B);
+        this.profile.populateTime = performance.now() - profileStart;
+
+        profileStart = performance.now();
         this._aggregateMassBottomUp();
+        this.profile.aggregateTime = performance.now() - profileStart;
+        this.profile.fastBucketPath = this.divideFactor === 2;
     }
 
     _prepareWorkspace(workspace) {
@@ -241,19 +260,38 @@ export class FlatSpatialTree {
 
         // Counting pass: compute the child bucket once and remember it. The
         // scatter pass can then move only integer particle ids without reading
-        // x/y again or repeating edge lookup.
+        // x/y again or repeating edge lookup. The common 2x2 split has a
+        // specialized branch because it is by far the hottest tree-build path:
+        // avoid function calls and the generic edge loop for every particle at
+        // every tree level.
         let usedBuckets = 0;
-        for (let i = start; i < end; i++) {
-            const offset = sourceIndices[i] * ITEM_SIZE;
-            const x = this._findEdgeIndex(particles[offset], xEdges);
-            const y = this._findEdgeIndex(particles[offset + 1], yEdges);
-            const bucketIndex = x * divideFactor + y;
+        if (divideFactor === 2) {
+            const xMid = xEdges[1];
+            const yMid = yEdges[1];
+            for (let i = start; i < end; i++) {
+                const particleIndex = sourceIndices[i];
+                const offset = particleIndex * ITEM_SIZE;
+                const bucketIndex = (particles[offset] < xMid ? 0 : 2) + (particles[offset + 1] < yMid ? 0 : 1);
 
-            bucketIds[i] = bucketIndex;
-            if (bucketCounts[bucketIndex] === 0) {
-                usedBuckets += 1;
+                bucketIds[i] = bucketIndex;
+                if (bucketCounts[bucketIndex] === 0) {
+                    usedBuckets += 1;
+                }
+                bucketCounts[bucketIndex] += 1;
             }
-            bucketCounts[bucketIndex] += 1;
+        } else {
+            for (let i = start; i < end; i++) {
+                const offset = sourceIndices[i] * ITEM_SIZE;
+                const x = this._findEdgeIndex(particles[offset], xEdges);
+                const y = this._findEdgeIndex(particles[offset + 1], yEdges);
+                const bucketIndex = x * divideFactor + y;
+
+                bucketIds[i] = bucketIndex;
+                if (bucketCounts[bucketIndex] === 0) {
+                    usedBuckets += 1;
+                }
+                bucketCounts[bucketIndex] += 1;
+            }
         }
 
         if (usedBuckets === 0 || (usedBuckets === 1 && this._hasSinglePoint(nodeId))) {
@@ -279,17 +317,31 @@ export class FlatSpatialTree {
         let childCount = 0;
         const childDepth = this.nodeDepth[nodeId] + 1;
 
-        for (let x = 0; x < divideFactor; x++) {
-            for (let y = 0; y < divideFactor; y++) {
-                const bucketIndex = x * divideFactor + y;
+        if (divideFactor === 2) {
+            for (let bucketIndex = 0; bucketIndex < 4; bucketIndex++) {
                 const bucketCount = bucketCounts[bucketIndex];
                 if (bucketCount === 0) {
                     continue;
                 }
-
+                const x = bucketIndex >> 1;
+                const y = bucketIndex & 1;
                 this._createNode(bucketStarts[bucketIndex], bucketCount, targetBufferId, childDepth,
                     xEdges[x], yEdges[y], xEdges[x + 1], yEdges[y + 1]);
                 childCount += 1;
+            }
+        } else {
+            for (let x = 0; x < divideFactor; x++) {
+                for (let y = 0; y < divideFactor; y++) {
+                    const bucketIndex = x * divideFactor + y;
+                    const bucketCount = bucketCounts[bucketIndex];
+                    if (bucketCount === 0) {
+                        continue;
+                    }
+
+                    this._createNode(bucketStarts[bucketIndex], bucketCount, targetBufferId, childDepth,
+                        xEdges[x], yEdges[y], xEdges[x + 1], yEdges[y + 1]);
+                    childCount += 1;
+                }
             }
         }
 
