@@ -20,6 +20,9 @@ const RECURSIVE_TREE_MIN_JOB_PARTICLES = 8192;
 const WORKER_TREE_STRATEGY_STATIC = "static";
 const WORKER_TREE_STRATEGY_DYNAMIC = "dynamic";
 const WORKER_TREE_STRATEGY_RECURSIVE = "recursive";
+const WORKER_TREE_STRATEGY_HYBRID = "hybrid";
+const HYBRID_TREE_SPLIT_BUDGET = 3;
+const HYBRID_TREE_MIN_JOB_PARTICLES = 16384;
 const TREE_FLOPS_PER_OP = 14;
 const EPSILON = 0.1e-6;
 
@@ -579,13 +582,13 @@ class WorkerMTBackendImpl {
                 results[i].descriptorBytes = partitions[i]?.descriptorBytes || 0;
                 results[i].indexCopyBytes = partitions[i]?.indexCopyBytes || 0;
             }
-        } else if (strategy === WORKER_TREE_STRATEGY_RECURSIVE) {
+        } else if (strategy === WORKER_TREE_STRATEGY_RECURSIVE || strategy === WORKER_TREE_STRATEGY_HYBRID) {
             schedulerResult = await this._pool.processTreeJobsRecursive(
                 partitionPlan.jobs,
                 (partition) => this._materializeTreeJobPartition(partition),
                 {
-                    splitBudget: this._getRecursiveTreeSplitBudget(),
-                    minJobParticles: this._getRecursiveTreeMinJobParticles(),
+                    splitBudget: this._getTreeRecursiveSplitBudget(strategy),
+                    minJobParticles: this._getTreeRecursiveMinJobParticles(strategy),
                 }
             );
         } else {
@@ -623,10 +626,11 @@ class WorkerMTBackendImpl {
             treeTargetJobs: treeJobs.targetJobs,
             treeSplitLevels: treeJobs.splitLevels,
             treeDynamicScheduling: strategy !== WORKER_TREE_STRATEGY_STATIC,
-            treeRecursiveScheduling: strategy === WORKER_TREE_STRATEGY_RECURSIVE,
+            treeRecursiveScheduling: strategy === WORKER_TREE_STRATEGY_RECURSIVE || strategy === WORKER_TREE_STRATEGY_HYBRID,
+            treeHybridScheduling: strategy === WORKER_TREE_STRATEGY_HYBRID,
             treeSpawnedJobs: schedulerResult.spawnedJobCount || 0,
-            recursiveSplitBudget: strategy === WORKER_TREE_STRATEGY_RECURSIVE ? this._getRecursiveTreeSplitBudget() : null,
-            recursiveMinJobParticles: strategy === WORKER_TREE_STRATEGY_RECURSIVE ? this._getRecursiveTreeMinJobParticles() : null,
+            recursiveSplitBudget: (strategy === WORKER_TREE_STRATEGY_RECURSIVE || strategy === WORKER_TREE_STRATEGY_HYBRID) ? this._getTreeRecursiveSplitBudget(strategy) : null,
+            recursiveMinJobParticles: (strategy === WORKER_TREE_STRATEGY_RECURSIVE || strategy === WORKER_TREE_STRATEGY_HYBRID) ? this._getTreeRecursiveMinJobParticles(strategy) : null,
             topTreeTime,
             topTreeSplitTime: treeJobs.profile.populateTime,
             treeRootBoundsTime: treeJobs.profile.rootBoundsTime,
@@ -698,6 +702,7 @@ class WorkerMTBackendImpl {
             strategy: mtProfile.treeStrategy || WORKER_TREE_STRATEGY_DYNAMIC,
             dynamicScheduling: !!mtProfile.treeDynamicScheduling,
             recursiveScheduling: !!mtProfile.treeRecursiveScheduling,
+            hybridScheduling: !!mtProfile.treeHybridScheduling,
             spawnedJobs: mtProfile.treeSpawnedJobs || 0,
             recursiveSplitBudget: mtProfile.recursiveSplitBudget ?? null,
             recursiveMinJobParticles: mtProfile.recursiveMinJobParticles ?? null,
@@ -864,19 +869,25 @@ class WorkerMTBackendImpl {
 
     _getWorkerMtTreeStrategy() {
         const value = this.settings.simulation.workerMtTreeStrategy;
-        if (value === WORKER_TREE_STRATEGY_STATIC || value === WORKER_TREE_STRATEGY_RECURSIVE) {
+        if (value === WORKER_TREE_STRATEGY_STATIC ||
+            value === WORKER_TREE_STRATEGY_RECURSIVE ||
+            value === WORKER_TREE_STRATEGY_HYBRID) {
             return value;
         }
         return WORKER_TREE_STRATEGY_DYNAMIC;
     }
 
-    _getRecursiveTreeSplitBudget() {
-        return RECURSIVE_TREE_SPLIT_BUDGET;
+    _getTreeRecursiveSplitBudget(strategy) {
+        return strategy === WORKER_TREE_STRATEGY_HYBRID ? HYBRID_TREE_SPLIT_BUDGET : RECURSIVE_TREE_SPLIT_BUDGET;
     }
 
-    _getRecursiveTreeMinJobParticles() {
+    _getTreeRecursiveMinJobParticles(strategy) {
         const tuned = this._actualSegmentSize || this.settings.simulation.segmentMaxCount || 32;
-        return Math.max(RECURSIVE_TREE_MIN_JOB_PARTICLES, tuned * 64);
+        const base = strategy === WORKER_TREE_STRATEGY_HYBRID
+            ? HYBRID_TREE_MIN_JOB_PARTICLES
+            : RECURSIVE_TREE_MIN_JOB_PARTICLES;
+        const multiplier = strategy === WORKER_TREE_STRATEGY_HYBRID ? 96 : 64;
+        return Math.max(base, tuned * multiplier);
     }
 
     _splitParallelNode(node, targetBufferId) {

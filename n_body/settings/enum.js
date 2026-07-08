@@ -56,7 +56,8 @@ export const WorkerTreeJobCount = {
 export const WorkerTreeStrategy = {
     static: "static",
     dynamic: "dynamic",
-    recursive: "recursive"
+    recursive: "recursive",
+    hybrid: "hybrid"
 }
 
 /**

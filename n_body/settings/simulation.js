@@ -48,7 +48,8 @@ export class SimulationSettings extends SettingsBase {
                 "Worker MT backend only. Strategy used to split parallel tree work between subworkers.",
                 "static uses the shallow coordinator split and assigns jobs once.",
                 "dynamic uses the current coordinator queue, but with a conservative shallow split to avoid expensive single-thread preparation.",
-                "recursive starts from coarse jobs and lets subworkers split heavy jobs further, returning spawned jobs to the coordinator queue."
+                "recursive starts from coarse jobs and lets subworkers split heavy jobs further, returning spawned jobs to the coordinator queue.",
+                "hybrid starts from the shallow dynamic split, but lets subworkers recursively split only heavy jobs. It is meant to combine low coordinator preparation with better downstream balancing."
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug),
         segmentRandomness: Property.float("segment_random", 0.25)

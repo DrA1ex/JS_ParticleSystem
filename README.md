@@ -193,3 +193,22 @@ Application originally developed and optimized for Chrome browser. In other brow
 ### Known issues
 - Due to lack of [WebWorker modules](https://caniuse.com/mdn-api_worker_worker_ecmascript_modules) the simulation may not work in Firefox.
 - Due to lack of [OffscreenCanvas](https://caniuse.com/offscreencanvas) GPGPU backend may not be available in Safari/Firefox.
+
+
+### Worker MT hybrid tree strategy
+
+`n_body` also includes an experimental hybrid tree scheduler for `worker-mt`:
+
+```text
+/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid
+```
+
+Hybrid mode starts with the conservative shallow dynamic tree split, then allows subworkers to recursively split only heavy jobs and return spawned jobs to the coordinator queue. It is intended to keep coordinator preparation lower than deep dynamic scheduling while avoiding the high downstream idle ratio seen in pure recursive mode.
+
+Recommended comparison links:
+
+```text
+/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=dynamic
+/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=recursive
+/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid
+```
