@@ -17,6 +17,11 @@ const AUTO_TREE_JOBS_MAX = 64;
 const TREE_FLOPS_PER_OP = 14;
 const EPSILON = 0.1e-6;
 
+function estimateTreeJobWork(job) {
+    const count = job?.count || 0;
+    return count * Math.max(1, Math.log2(Math.max(2, count)));
+}
+
 class SegmentSizeAutoTuner {
     constructor(settings) {
         this.enabled = !!settings.simulation.autoTuneSegmentSize;
@@ -188,7 +193,7 @@ class SubworkerPool {
             return {results: [], dispatchTime: 0};
         }
 
-        const queue = jobs.slice().sort((a, b) => this._estimateTreeJobWork(b) - this._estimateTreeJobWork(a));
+        const queue = jobs.slice().sort((a, b) => estimateTreeJobWork(b) - estimateTreeJobWork(a));
         const results = [];
         let nextJobIndex = 0;
         let dispatchTime = 0;
@@ -214,10 +219,6 @@ class SubworkerPool {
         return {results, dispatchTime};
     }
 
-    _estimateTreeJobWork(job) {
-        const count = job?.count || 0;
-        return count * Math.max(1, Math.log2(Math.max(2, count)));
-    }
 
     _sendInit(worker, type, settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB) {
         return new Promise((resolve) => {
@@ -798,7 +799,7 @@ class WorkerMTBackendImpl {
 
     _buildDynamicTreeJobPlan(jobs) {
         return {
-            jobs: jobs.slice().sort((a, b) => this._estimateTreeJobWork(b) - this._estimateTreeJobWork(a)),
+            jobs: jobs.slice().sort((a, b) => estimateTreeJobWork(b) - estimateTreeJobWork(a)),
         };
     }
 
@@ -880,7 +881,7 @@ class WorkerMTBackendImpl {
                     bestWork = partitions[i].work;
                 }
             }
-            const work = job.count * Math.max(1, Math.log2(job.count));
+            const work = estimateTreeJobWork(job);
             partitions[bestIndex].jobs.push(job);
             partitions[bestIndex].work += work;
             partitions[bestIndex].particleCount += job.count;
