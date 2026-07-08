@@ -24,6 +24,10 @@ export class RendererBase {
             drawTime: 0,
             gpuDrawTime: null,
             gpuTimerStatus: "unsupported",
+            colorMode: "n/a",
+            uploadMode: "n/a",
+            gpuInterpolation: "off",
+            uploadedBytes: 0,
         };
 
         this.settings = settings;

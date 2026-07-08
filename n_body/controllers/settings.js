@@ -24,6 +24,16 @@ export class SettingsController extends ControllerBase {
         super(viewControl.element, parentCtrl);
 
         this.content = this.root.getElementsByClassName("settings-content")[0];
+
+        this.tooltip = document.createElement("div");
+        this.tooltip.classList.add("settings-tooltip");
+        document.body.appendChild(this.tooltip);
+
+        this.tooltipTarget = null;
+        this.content.addEventListener("pointerover", event => this._onTooltipPointerOver(event));
+        this.content.addEventListener("pointerout", event => this._onTooltipPointerOut(event));
+        this.content.addEventListener("focusin", event => this._onTooltipFocusIn(event));
+        this.content.addEventListener("focusout", event => this._onTooltipFocusOut(event));
     }
 
     /**
@@ -132,6 +142,8 @@ export class SettingsController extends ControllerBase {
             caption.classList.add("settings-caption")
             if (prop.description) {
                 caption.setAttribute("data-tooltip", prop.description);
+                caption.setAttribute("aria-label", prop.description);
+                caption.tabIndex = 0;
             }
             parent.appendChild(caption);
 
@@ -159,6 +171,8 @@ export class SettingsController extends ControllerBase {
             caption.classList.add("settings-caption")
             if (prop.description) {
                 caption.setAttribute("data-tooltip", prop.description);
+                caption.setAttribute("aria-label", prop.description);
+                caption.tabIndex = 0;
             }
             parent.appendChild(caption);
 
@@ -178,6 +192,86 @@ export class SettingsController extends ControllerBase {
         }
 
         parent.style.gridTemplateRows = `repeat(${count}, 2em)`;
+    }
+
+
+    _onTooltipPointerOver(event) {
+        const target = event.target.closest?.("[data-tooltip]");
+        if (target && this.content.contains(target)) {
+            this._showTooltip(target);
+        }
+    }
+
+    _onTooltipPointerOut(event) {
+        if (!this.tooltipTarget) {
+            return;
+        }
+
+        const relatedTarget = event.relatedTarget;
+        if (relatedTarget instanceof Node && this.tooltipTarget.contains(relatedTarget)) {
+            return;
+        }
+
+        this._hideTooltip();
+    }
+
+    _onTooltipFocusIn(event) {
+        const target = event.target.closest?.("[data-tooltip]");
+        if (target && this.content.contains(target)) {
+            this._showTooltip(target);
+        }
+    }
+
+    _onTooltipFocusOut(event) {
+        if (event.target === this.tooltipTarget) {
+            this._hideTooltip();
+        }
+    }
+
+    /**
+     * Settings dialogs are scrollable, so a CSS-only tooltip attached to the caption can be
+     * clipped by the dialog overflow. This fixed-position overlay is measured against the
+     * viewport and clamped to the visible area, allowing long help text to grow naturally.
+     *
+     * @param {HTMLElement} target
+     * @private
+     */
+    _showTooltip(target) {
+        const text = target.getAttribute("data-tooltip");
+        if (!text) {
+            this._hideTooltip();
+            return;
+        }
+
+        this.tooltipTarget = target;
+        this.tooltip.innerText = text;
+        this.tooltip.classList.add("settings-tooltip-visible");
+        this.tooltip.style.visibility = "hidden";
+        this.tooltip.style.left = "0px";
+        this.tooltip.style.top = "0px";
+
+        const targetRect = target.getBoundingClientRect();
+        const tooltipRect = this.tooltip.getBoundingClientRect();
+        const margin = 12;
+
+        let left = targetRect.left + targetRect.width / 2 - tooltipRect.width / 2;
+        left = Math.max(margin, Math.min(left, window.innerWidth - tooltipRect.width - margin));
+
+        let top = targetRect.top - tooltipRect.height - margin / 2;
+        if (top < margin) {
+            top = targetRect.bottom + margin / 2;
+        }
+        top = Math.max(margin, Math.min(top, window.innerHeight - tooltipRect.height - margin));
+
+        this.tooltip.style.left = `${left}px`;
+        this.tooltip.style.top = `${top}px`;
+        this.tooltip.style.visibility = "visible";
+    }
+
+    _hideTooltip() {
+        this.tooltipTarget = null;
+        this.tooltip.classList.remove("settings-tooltip-visible");
+        this.tooltip.style.visibility = "hidden";
     }
 
     /**

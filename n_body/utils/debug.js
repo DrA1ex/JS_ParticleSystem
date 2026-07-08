@@ -98,8 +98,12 @@ export class Debug {
             `- render: ${this._formatMs(this.renderTime)}`,
             `  - prepare data: ${this._formatMs(rendererStats.prepareDataTime)}`,
             `  - upload: ${this._formatMs(rendererStats.uploadTime)}`,
+            `  - uploaded: ${this._formatBytes(rendererStats.uploadedBytes)}`,
             `  - draw call: ${this._formatMs(rendererStats.drawTime)}`,
             `  - gpu draw: ${this._formatMs(rendererStats.gpuDrawTime)} (${rendererStats.gpuTimerStatus || "n/a"})`,
+            `  - color mode: ${rendererStats.colorMode || "n/a"}`,
+            `  - upload mode: ${rendererStats.uploadMode || "n/a"}`,
+            `  - gpu interpolation: ${rendererStats.gpuInterpolation || "off"}`,
             `renderer: ${this.renderer.constructor.name} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
             `backend: ${this.backend.constructor.name}, block size: ${actualSegmentSize}`,
             `auto tune: ${this._formatAutoTune(this.segmentAutoTune)}`,
@@ -108,6 +112,17 @@ export class Debug {
 
     _formatMs(value) {
         return Number.isFinite(value) ? `${value.toFixed(1)} ms` : "n/a";
+    }
+
+    _formatBytes(value) {
+        if (!Number.isFinite(value)) {
+            return "n/a";
+        }
+        if (value < 1024) {
+            return `${value} B`;
+        }
+        const mb = value / 1024 / 1024;
+        return `${mb.toFixed(2)} MB`;
     }
 
     _formatAutoTune(state) {

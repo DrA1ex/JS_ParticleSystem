@@ -17,6 +17,7 @@ export class Application {
     /** @type{Float32Array|null} */
     particles = null;
     currentBuffer = null;
+    hasCurrentFrame = false;
 
     canvasInteraction = null;
     dfriHelper = null;
@@ -97,6 +98,7 @@ export class Application {
             this.aheadBuffers = [];
             this.pendingBufferCount = 0;
             this.currentBuffer = null;
+            this.hasCurrentFrame = false;
             this.particles = null;
         }
 
@@ -164,11 +166,18 @@ export class Application {
             this.backend.reconfigure(this.settings, state?.particles);
         }
 
-        if ((!diff || diff.breaks.has(ComponentType.dfri)) && this.settings.render.enableDFRI) {
-            this.dfriHelper.enable();
-        } else if (diff?.affects?.has(ComponentType.dfri)) {
-            this.dfriHelper.reconfigure(this.settings);
-            this.dfriHelper.reset();
+        if (this.settings.render.enableDFRI) {
+            if (!diff || diff.breaks.has(ComponentType.dfri)) {
+                this.dfriHelper.enable();
+            } else if (diff?.affects?.has(ComponentType.dfri)) {
+                this.dfriHelper.reconfigure(this.settings);
+                this.dfriHelper.reset();
+            }
+        } else {
+            // Explicitly clear renderer interpolation state when DFRI is disabled.
+            // This prevents a previously uploaded WebGL ahead frame from continuing
+            // to affect direct renderer.render(...) calls after settings changes.
+            this.dfriHelper.disable();
         }
 
         if (!diff || diff.breaks.has(ComponentType.backend)) {
@@ -202,6 +211,14 @@ export class Application {
 
         this.aheadBuffers.push({buffer: data.buffer, treeDebug: data.treeDebug, forceDebug: data.forceDebug});
         this.pendingBufferCount -= 1;
+
+        // GPU DFRI needs an actual ahead frame. Some backends, especially the
+        // GPGPU backend, can deliver that frame after the current frame was
+        // already switched. Refresh the renderer ahead-frame as soon as it
+        // becomes available instead of waiting for the next switch.
+        if (this.settings.render.enableDFRI && this.hasCurrentFrame) {
+            this.dfriHelper.updateAheadFrame?.(this.particles, this.aheadBuffers[0]);
+        }
 
         this.requestNextStepIfNeeded();
 
@@ -250,6 +267,7 @@ export class Application {
             }
         }
 
+        this.hasCurrentFrame = true;
         this.renderer.markParticlesDirty?.();
 
         if (this.settings.common.debugTree) this.debug.importTreeDebugData(bufferEntry.treeDebug);

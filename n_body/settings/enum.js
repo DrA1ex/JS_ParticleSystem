@@ -34,3 +34,20 @@ export const MaxSpeedUpdateMode = {
     throttle: "throttle",
     off: "off"
 }
+
+/**
+ * @enum(string)
+ */
+export const RenderColorMode = {
+    velocity: "velocity",
+    mass: "mass",
+    fixed: "fixed"
+}
+
+/**
+ * @enum(string)
+ */
+export const BufferUploadMode = {
+    bufferData: "bufferData",
+    bufferSubData: "bufferSubData"
+}

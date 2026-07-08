@@ -492,7 +492,14 @@ button:disabled .record-icon {
 
 .settings-block .settings-caption {
     position: relative;
-    pointer-events: none;
+    min-width: 0;
+    cursor: help;
+    pointer-events: auto;
+}
+
+.settings-block .settings-caption:focus-visible {
+    outline: 0.1em solid rgba(255, 255, 255, 0.5);
+    outline-offset: 0.2em;
 }
 
 .settings-block .settings-input {
@@ -502,7 +509,7 @@ button:disabled .record-icon {
 
 .settings-block .settings-caption[data-tooltip]:after {
     content: "i";
-    pointer-events: all;
+    pointer-events: none;
 
     display: inline-block;
     text-align: center;
@@ -520,39 +527,34 @@ button:disabled .record-icon {
     background: #efefef;
 }
 
-[data-tooltip]:before {
-    content: attr(data-tooltip);
-    white-space: pre-line;
-    pointer-events: none;
-    display: none;
+.settings-tooltip {
+    position: fixed;
+    box-sizing: border-box;
+    z-index: 20000;
 
-    position: absolute;
-    left: 50%;
-    bottom: 100%;
-    margin: 0.2em;
-    max-width: 20em;
-    max-height: 8em;
     width: max-content;
-    height: max-content;
-    z-index: 10;
+    max-width: min(38rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    overflow: auto;
+
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
 
     background: #1f1f1f;
     border: 0.1em solid #2c2c2c;
-    padding: 0.2em;
+    padding: 0.6em 0.8em;
+    box-shadow: 0 0.4em 1.2em rgba(0, 0, 0, 0.45);
+
+    pointer-events: none;
     opacity: 0;
+    visibility: hidden;
     transition: opacity 100ms 0ms;
 }
 
-[data-tooltip]:hover::before {
-    display: block;
+.settings-tooltip.settings-tooltip-visible {
     opacity: 1;
-    transition: opacity 200ms 300ms;
-}
-
-[data-tooltip]:active::before {
-    display: block;
-    opacity: 1;
-    transition: opacity 200ms 0ms;
+    transition: opacity 200ms 200ms;
 }
 
 @keyframes pulsation {

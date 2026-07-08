@@ -11,12 +11,22 @@ export class SimulationSettings extends SettingsBase {
             .setAffects(ComponentType.backend, ComponentType.dfri)
             .setConstraints(2, 16),
         segmentSize: Property.int("segment_max_count", null)
-            .setName("Segment size").setDescription("Max particle count in segment, larger values increase accuracy")
+            .setName("Segment size").setDescription([
+                "Target maximum number of particles in a CPU spatial-tree leaf before it is subdivided.",
+                "Smaller values create a deeper tree and usually reduce exact pair interactions inside leaves.",
+                "Larger values make tree construction cheaper but can make force solving slower because leaf interactions are quadratic.",
+                "When Auto tune segment size is enabled, the CPU worker may override this value with the fastest measured candidate."
+            ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.dfri)
             .setAffects(ComponentType.debug)
             .setConstraints(1, 1e6),
         autoTuneSegmentSize: Property.bool("segment_auto", true)
-            .setName("Auto tune segment size").setDescription("Try several segment sizes in the CPU worker and keep the fastest one")
+            .setName("Auto tune segment size").setDescription([
+                "CPU worker only. Tries several real physics steps with different segment sizes and keeps the fastest measured value.",
+                "This can improve performance because the best segment size depends on particle count, distribution and CPU.",
+                "While tuning is running, physics timing may fluctuate; after it finishes, the chosen block size is shown in stats.",
+                "GPGPU backend ignores this option because its segment size has a different meaning."
+            ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug),
         segmentRandomness: Property.float("segment_random", 0.25)
             .setName("Segmentation randomness").setDescription("Spatial subdivision randomness factor")
@@ -29,7 +39,11 @@ export class SimulationSettings extends SettingsBase {
     }
 
     static ReadOnlyProperties = {
-        segmentMaxCount: ReadOnlyProperty.float().setName("Actual segment size"),
+        segmentMaxCount: ReadOnlyProperty.float().setName("Actual segment size").setDescription([
+            "Effective block size used by the active backend after defaults and backend-specific transformations are applied.",
+            "For CPU worker this is the active leaf size, possibly selected by auto-tune.",
+            "For GPGPU this may be derived from the configured segment size."
+        ].join("\n")),
     }
 
     static PropertiesDependencies = new Map([

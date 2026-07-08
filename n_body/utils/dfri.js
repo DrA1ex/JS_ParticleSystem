@@ -43,13 +43,24 @@ export class DFRIHelperBase {
 
     enable() {
         this._gpuInterpolation = this.preferGpuInterpolation && !!this.renderer.supportsGpuInterpolation?.();
+        this.renderer.setInterpolationFrame?.(null);
+        this.renderer.setInterpolationFactor?.(0);
         if (this._gpuInterpolation) {
             this.renderer.setCoordinateTransformer(null);
-            this.renderer.setInterpolationFactor(0);
         } else {
             this._ensureDeltas();
             this.renderer.setCoordinateTransformer(this._transformParticlePosition.bind(this));
         }
+    }
+
+    disable() {
+        this._gpuInterpolation = false;
+        this.frame = 0;
+        this.interpolateFrames = 0;
+        this._currentFactor = 0;
+        this.renderer.setCoordinateTransformer(null);
+        this.renderer.setInterpolationFrame?.(null);
+        this.renderer.setInterpolationFactor?.(0);
     }
 
     init() {
@@ -191,7 +202,12 @@ export class DFRIHelper extends DFRIHelperBase {
         }
 
         if (this._gpuInterpolation) {
-            this.renderer.setInterpolationFrame(buffer || null);
+            // GPU DFRI cannot synthesize a velocity-based fallback in the shader.
+            // If the real ahead frame is not ready yet, use the current frame as
+            // a zero-delta placeholder and replace it later from updateAheadFrame().
+            // This keeps the interpolation program in a valid state and avoids a
+            // long "off" period on slower backends such as GPGPU.
+            this.renderer.setInterpolationFrame(buffer || particles || null);
             this.reset();
             return;
         }
@@ -200,6 +216,20 @@ export class DFRIHelper extends DFRIHelperBase {
             out.x = buffer ? buffer[i * ITEM_SIZE] - getParticleX(particles, i) : getParticleVelX(particles, i);
             out.y = buffer ? buffer[i * ITEM_SIZE + 1] - getParticleY(particles, i) : getParticleVelY(particles, i);
         });
+    }
+
+    updateAheadFrame(_particles, aheadBufferEntry) {
+        if (!this._gpuInterpolation) {
+            return false;
+        }
+
+        const buffer = aheadBufferEntry?.buffer;
+        if (!buffer) {
+            return false;
+        }
+
+        this.renderer.setInterpolationFrame(buffer);
+        return true;
     }
 
     postStepTime(time, force = false) {
@@ -222,9 +252,7 @@ export class DFRIHelper extends DFRIHelperBase {
     }
 
     dispose() {
-        this.renderer.setCoordinateTransformer(null);
-        this.renderer.setInterpolationFrame?.(null);
-        this.renderer.setInterpolationFactor?.(0);
+        this.disable();
         this.renderer = null;
         this._deltas = null;
     }
