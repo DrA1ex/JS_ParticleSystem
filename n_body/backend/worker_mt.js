@@ -21,8 +21,12 @@ const WORKER_TREE_STRATEGY_STATIC = "static";
 const WORKER_TREE_STRATEGY_DYNAMIC = "dynamic";
 const WORKER_TREE_STRATEGY_RECURSIVE = "recursive";
 const WORKER_TREE_STRATEGY_HYBRID = "hybrid";
-const HYBRID_TREE_SPLIT_BUDGET = 3;
-const HYBRID_TREE_MIN_JOB_PARTICLES = 16384;
+const HYBRID_TREE_SEED_SPLIT_LEVELS = 2;
+const HYBRID_TREE_SEED_JOBS_PER_THREAD = 2;
+const HYBRID_TREE_SEED_JOBS_MIN = 4;
+const HYBRID_TREE_SEED_JOBS_MAX = 16;
+const HYBRID_TREE_SPLIT_BUDGET = 5;
+const HYBRID_TREE_MIN_JOB_PARTICLES = 32768;
 const TREE_FLOPS_PER_OP = 14;
 const EPSILON = 0.1e-6;
 
@@ -561,7 +565,9 @@ class WorkerMTBackendImpl {
         let t = performance.now();
         const treeJobs = strategy === WORKER_TREE_STRATEGY_RECURSIVE
             ? this._buildRecursiveTreeSeedJobs()
-            : this._buildParallelTreeJobs();
+            : strategy === WORKER_TREE_STRATEGY_HYBRID
+                ? this._buildHybridTreeSeedJobs()
+                : this._buildParallelTreeJobs();
         const topTreeTime = performance.now() - t;
 
         t = performance.now();
@@ -867,6 +873,84 @@ class WorkerMTBackendImpl {
         return {jobs: nodes, profile, stats, targetJobs, splitLevels};
     }
 
+    _buildHybridTreeSeedJobs() {
+        const count = this.settings.physics.particleCount;
+        const source = this._treeWorkspace.indices;
+        const identity = this._treeWorkspace.identityIndices;
+        const profile = {
+            resetTime: 0,
+            rootBoundsTime: 0,
+            populateTime: 0,
+            aggregateTime: 0,
+            fastBucketPath: true,
+        };
+        const stats = {flops: 0, depth: 1, segmentCount: 1};
+
+        let t = performance.now();
+        source.set(identity.subarray(0, count), 0);
+        profile.resetTime = performance.now() - t;
+
+        t = performance.now();
+        const rootBounds = this._calculateBounds(source, 0, count);
+        profile.rootBoundsTime = performance.now() - t;
+
+        let nodes = [{
+            start: 0,
+            count,
+            indexBuffer: BUFFER_A,
+            depth: 1,
+            left: rootBounds.left,
+            top: rootBounds.top,
+            right: rootBounds.right,
+            bottom: rootBounds.bottom,
+            parentForceX: 0,
+            parentForceY: 0,
+        }];
+
+        const targetJobs = this._getWorkerMtHybridSeedTargetJobs(count);
+        let splitLevels = 0;
+        t = performance.now();
+        for (let level = 0; level < HYBRID_TREE_SEED_SPLIT_LEVELS; level++) {
+            if (nodes.length >= targetJobs) {
+                break;
+            }
+
+            const next = [];
+            let didSplit = false;
+            nodes.sort((a, b) => b.count - a.count);
+            for (const node of nodes) {
+                if (next.length >= targetJobs) {
+                    next.push(node);
+                    continue;
+                }
+                if (node.count <= this.settings.simulation.segmentMaxCount || this._isParallelNodeTooSmall(node)) {
+                    next.push(node);
+                    continue;
+                }
+                const children = this._splitParallelNode(node, 1 - node.indexBuffer);
+                if (children.length <= 1) {
+                    next.push(node);
+                    continue;
+                }
+
+                didSplit = true;
+                stats.flops += Math.pow(children.length, 2) * TREE_FLOPS_PER_OP;
+                stats.segmentCount += children.length;
+                stats.depth = Math.max(stats.depth, ...children.map(item => item.depth));
+                next.push(...children);
+            }
+            nodes = next;
+            splitLevels = level + 1;
+            if (!didSplit) {
+                break;
+            }
+        }
+        profile.populateTime = performance.now() - t;
+        stats.segmentCount = Math.max(0, stats.segmentCount - nodes.length);
+
+        return {jobs: nodes, profile, stats, targetJobs, splitLevels};
+    }
+
     _getWorkerMtTreeStrategy() {
         const value = this.settings.simulation.workerMtTreeStrategy;
         if (value === WORKER_TREE_STRATEGY_STATIC ||
@@ -886,7 +970,7 @@ class WorkerMTBackendImpl {
         const base = strategy === WORKER_TREE_STRATEGY_HYBRID
             ? HYBRID_TREE_MIN_JOB_PARTICLES
             : RECURSIVE_TREE_MIN_JOB_PARTICLES;
-        const multiplier = strategy === WORKER_TREE_STRATEGY_HYBRID ? 96 : 64;
+        const multiplier = strategy === WORKER_TREE_STRATEGY_HYBRID ? 128 : 64;
         return Math.max(base, tuned * multiplier);
     }
 
@@ -1072,6 +1156,19 @@ class WorkerMTBackendImpl {
 
         const autoTarget = this._threadCount * AUTO_TREE_JOBS_PER_THREAD;
         return Math.max(AUTO_TREE_JOBS_MIN, Math.min(AUTO_TREE_JOBS_MAX, autoTarget, Math.max(this._threadCount, particleCount)));
+    }
+
+    _getWorkerMtHybridSeedTargetJobs(particleCount) {
+        const configured = this.settings.simulation.workerMtTreeJobs;
+        if (configured && configured !== "auto") {
+            const parsed = Number.parseInt(configured, 10);
+            if (Number.isFinite(parsed)) {
+                return Math.max(this._threadCount, Math.min(HYBRID_TREE_SEED_JOBS_MAX, parsed, particleCount));
+            }
+        }
+
+        const autoTarget = this._threadCount * HYBRID_TREE_SEED_JOBS_PER_THREAD;
+        return Math.max(HYBRID_TREE_SEED_JOBS_MIN, Math.min(HYBRID_TREE_SEED_JOBS_MAX, autoTarget, Math.max(this._threadCount, particleCount)));
     }
 
     _buildTreeJobPartitions(jobs) {

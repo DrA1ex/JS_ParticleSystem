@@ -49,7 +49,7 @@ export class SimulationSettings extends SettingsBase {
                 "static uses the shallow coordinator split and assigns jobs once.",
                 "dynamic uses the current coordinator queue, but with a conservative shallow split to avoid expensive single-thread preparation.",
                 "recursive starts from coarse jobs and lets subworkers split heavy jobs further, returning spawned jobs to the coordinator queue.",
-                "hybrid starts from the shallow dynamic split, but lets subworkers recursively split only heavy jobs. It is meant to combine low coordinator preparation with better downstream balancing."
+                "hybrid starts from a cheaper coarse seed split, then lets subworkers recursively split only heavy jobs. It is meant to reduce coordinator preparation while keeping better downstream balancing than pure recursive mode."
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug),
         segmentRandomness: Property.float("segment_random", 0.25)
