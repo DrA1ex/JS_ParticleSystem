@@ -42,6 +42,17 @@ export const WorkerThreadCount = {
 /**
  * @enum(string)
  */
+export const WorkerTreeJobCount = {
+    auto: "auto",
+    "16": "16",
+    "32": "32",
+    "64": "64",
+    "128": "128"
+}
+
+/**
+ * @enum(string)
+ */
 export const MaxSpeedUpdateMode = {
     current: "current",
     throttle: "throttle",

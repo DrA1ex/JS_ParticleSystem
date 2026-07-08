@@ -10,7 +10,10 @@ const SEGMENT_TUNE_SAMPLES_PER_CANDIDATE = 2;
 const THREAD_CHOICES = [2, 4, 6, 8];
 const BUFFER_A = 0;
 const BUFFER_B = 1;
-const PARALLEL_TREE_SPLIT_LEVELS = 2;
+const PARALLEL_TREE_MAX_SPLIT_LEVELS = 5;
+const AUTO_TREE_JOBS_PER_THREAD = 12;
+const AUTO_TREE_JOBS_MIN = 16;
+const AUTO_TREE_JOBS_MAX = 64;
 const TREE_FLOPS_PER_OP = 14;
 const EPSILON = 0.1e-6;
 
@@ -138,6 +141,7 @@ class SubworkerPool {
         this._pending = new Map();
         for (let i = 0; i < threadCount; i++) {
             const worker = new Worker(new URL("./worker_mt_task.js", import.meta.url), {type: "module"});
+            worker._mtIndex = i;
             worker.onmessage = (event) => this._handleMessage(worker, event.data);
             worker.onerror = (event) => {
                 console.error("Worker MT subworker error", event.message || event);
@@ -177,6 +181,42 @@ class SubworkerPool {
             promises.push(this._processTreePartition(this.workers[i], partition));
         }
         return Promise.all(promises);
+    }
+
+    async processTreeJobsDynamic(jobs, materializePartition) {
+        if (this.workers.length === 0 || jobs.length === 0) {
+            return {results: [], dispatchTime: 0};
+        }
+
+        const queue = jobs.slice().sort((a, b) => this._estimateTreeJobWork(b) - this._estimateTreeJobWork(a));
+        const results = [];
+        let nextJobIndex = 0;
+        let dispatchTime = 0;
+
+        const runWorker = async (worker) => {
+            while (nextJobIndex < queue.length) {
+                const job = queue[nextJobIndex++];
+                const t = performance.now();
+                const partition = materializePartition({jobs: [job]});
+                dispatchTime += performance.now() - t;
+                if (!partition || partition.jobCount === 0) {
+                    continue;
+                }
+
+                const result = await this._processTreePartition(worker, partition);
+                result.descriptorBytes = partition.descriptorBytes || 0;
+                result.indexCopyBytes = partition.indexCopyBytes || 0;
+                results.push(result);
+            }
+        };
+
+        await Promise.all(this.workers.map(worker => runWorker(worker)));
+        return {results, dispatchTime};
+    }
+
+    _estimateTreeJobWork(job) {
+        const count = job?.count || 0;
+        return count * Math.max(1, Math.log2(Math.max(2, count)));
     }
 
     _sendInit(worker, type, settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB) {
@@ -265,6 +305,9 @@ class SubworkerPool {
             return;
         }
         this._pending.delete(data.requestId);
+        if (Number.isFinite(_worker?._mtIndex)) {
+            data.workerIndex = _worker._mtIndex;
+        }
         pending.resolve(data);
     }
 
@@ -447,19 +490,23 @@ class WorkerMTBackendImpl {
         const topTreeTime = performance.now() - t;
 
         t = performance.now();
-        const partitions = this._buildTreeJobPartitions(treeJobs.jobs);
+        const partitionPlan = this._buildDynamicTreeJobPlan(treeJobs.jobs);
         const partitionTime = performance.now() - t;
 
         t = performance.now();
-        const workerResults = await this._pool.processTreePartitions(partitions);
+        const dynamicResult = await this._pool.processTreeJobsDynamic(partitionPlan.jobs, (partition) => this._materializeTreeJobPartition(partition));
         const parallelWaitTime = performance.now() - t;
+        const workerResults = dynamicResult.results;
+        const dispatchTime = dynamicResult.dispatchTime;
+        const workerTiming = this._aggregateDynamicWorkerTiming(workerResults);
 
-        const maxWorkerTreeTime = workerResults.reduce((max, item) => Math.max(max, item.treeTime || 0), 0);
+        const maxWorkerTreeTime = workerTiming.treeTimeMax;
         const treeTime = topTreeTime + maxWorkerTreeTime;
-        const forceTime = workerResults.reduce((max, item) => Math.max(max, item.forceTime || 0), 0);
-        const integrateTime = workerResults.reduce((max, item) => Math.max(max, item.integrateTime || 0), 0);
-        const workerCpuTime = workerResults.reduce((sum, item) => sum + (item.treeTime || 0) + (item.forceTime || 0) + (item.integrateTime || 0), 0);
-        const workerMaxTime = workerResults.reduce((max, item) => Math.max(max, (item.treeTime || 0) + (item.forceTime || 0) + (item.integrateTime || 0)), 0);
+        const forceTime = workerTiming.forceTimeMax;
+        const integrateTime = workerTiming.integrateTimeMax;
+        const workerCpuTime = workerTiming.workerCpuTime;
+        const workerMaxTime = workerTiming.workerMaxTime;
+        const dynamicPhysicsTime = Math.max(0, partitionTime + dispatchTime + parallelWaitTime - maxWorkerTreeTime);
 
         profile.forceTime = forceTime;
         profile.integrateTime = integrateTime;
@@ -470,25 +517,29 @@ class WorkerMTBackendImpl {
             requestedThreads: this.settings.simulation.workerThreads,
             actualThreads: this._threadCount,
             taskCount: workerResults.reduce((sum, item) => sum + (item.leafCount || 0), 0),
-            activeWorkers: workerResults.length,
+            activeWorkers: workerTiming.activeWorkers,
             treeParallel: true,
             treeJobCount: treeJobs.jobs.length,
+            treeTargetJobs: treeJobs.targetJobs,
+            treeSplitLevels: treeJobs.splitLevels,
+            treeDynamicScheduling: true,
             topTreeTime,
             topTreeSplitTime: treeJobs.profile.populateTime,
             treeRootBoundsTime: treeJobs.profile.rootBoundsTime,
             treeResetTime: treeJobs.profile.resetTime,
             treeTimeMax: maxWorkerTreeTime,
-            treeTimeTotal: workerResults.reduce((sum, item) => sum + (item.treeTime || 0), 0),
+            treeTimeTotal: workerTiming.treeTimeTotal,
             taskBuildTime: 0,
             partitionTime,
-            partitionDescriptorBytes: partitions.reduce((sum, item) => sum + (item.descriptorBytes || 0), 0),
-            indexCopyBytes: partitions.reduce((sum, item) => sum + (item.indexCopyBytes || 0), 0),
+            dispatchTime,
+            partitionDescriptorBytes: workerResults.reduce((sum, item) => sum + (item.descriptorBytes || 0), 0),
+            indexCopyBytes: workerResults.reduce((sum, item) => sum + (item.indexCopyBytes || 0), 0),
             sharedIndexBuffers: true,
             parallelWaitTime,
             forceTimeMax: forceTime,
             integrateTimeMax: integrateTime,
-            forceTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceTime || 0), 0),
-            integrateTimeTotal: workerResults.reduce((sum, item) => sum + (item.integrateTime || 0), 0),
+            forceTimeTotal: workerTiming.forceTimeTotal,
+            integrateTimeTotal: workerTiming.integrateTimeTotal,
             workerCpuTime,
             workerMaxTime,
         };
@@ -502,8 +553,8 @@ class WorkerMTBackendImpl {
         profile.exportTime = performance.now() - t;
 
         const treeStats = this._mergeParallelTreeStats(treeJobs.stats, workerResults);
-        const treeProfile = this._mergeParallelTreeProfile(treeJobs.profile, workerResults, maxWorkerTreeTime);
-        return this._buildParallelResult(timestamp, buffer, treeTime, forceTime + integrateTime + partitionTime, treeStats, treeProfile, profile);
+        const treeProfile = this._mergeParallelTreeProfile(treeJobs.profile, workerResults, workerTiming, treeJobs, dispatchTime);
+        return this._buildParallelResult(timestamp, buffer, treeTime, dynamicPhysicsTime, treeStats, treeProfile, profile);
     }
 
     _buildParallelResult(timestamp, buffer, treeTime, physicsTime, treeStats, treeProfile, profile) {
@@ -532,20 +583,24 @@ class WorkerMTBackendImpl {
         };
     }
 
-    _mergeParallelTreeProfile(topProfile, workerResults, maxWorkerTreeTime) {
+    _mergeParallelTreeProfile(topProfile, workerResults, workerTiming, treeJobs, dispatchTime) {
         return {
             resetTime: topProfile.resetTime,
             rootBoundsTime: topProfile.rootBoundsTime,
-            populateTime: topProfile.populateTime + maxWorkerTreeTime,
+            populateTime: topProfile.populateTime + workerTiming.treeTimeMax,
             aggregateTime: Math.max(0, ...workerResults.map(item => item.treeProfile?.aggregateTime || 0)),
             fastBucketPath: true,
             parallel: true,
+            dynamicScheduling: true,
+            targetJobs: treeJobs.targetJobs,
+            splitLevels: treeJobs.splitLevels,
             topPopulateTime: topProfile.populateTime,
             parallelPopulateTime: Math.max(0, ...workerResults.map(item => item.treeProfile?.populateTime || 0)),
             parallelAggregateTime: Math.max(0, ...workerResults.map(item => item.treeProfile?.aggregateTime || 0)),
-            parallelTreeWaitTime: maxWorkerTreeTime,
-            parallelTreeWorkerTotal: workerResults.reduce((sum, item) => sum + (item.treeTime || 0), 0),
+            parallelTreeWaitTime: workerTiming.treeTimeMax,
+            parallelTreeWorkerTotal: workerTiming.treeTimeTotal,
             parallelTreeJobs: workerResults.reduce((sum, item) => sum + (item.jobCount || 0), 0),
+            dispatchTime,
         };
     }
 
@@ -583,10 +638,22 @@ class WorkerMTBackendImpl {
             parentForceY: 0,
         }];
 
+        const targetJobs = this._getWorkerMtTreeTargetJobs(count);
+        let splitLevels = 0;
         t = performance.now();
-        for (let level = 0; level < PARALLEL_TREE_SPLIT_LEVELS; level++) {
+        for (let level = 0; level < PARALLEL_TREE_MAX_SPLIT_LEVELS; level++) {
+            if (nodes.length >= targetJobs) {
+                break;
+            }
+
             const next = [];
+            let didSplit = false;
+            nodes.sort((a, b) => b.count - a.count);
             for (const node of nodes) {
+                if (next.length >= targetJobs) {
+                    next.push(node);
+                    continue;
+                }
                 if (node.count <= this.settings.simulation.segmentMaxCount || this._isParallelNodeTooSmall(node)) {
                     next.push(node);
                     continue;
@@ -597,13 +664,15 @@ class WorkerMTBackendImpl {
                     continue;
                 }
 
+                didSplit = true;
                 stats.flops += Math.pow(children.length, 2) * TREE_FLOPS_PER_OP;
                 stats.segmentCount += children.length;
                 stats.depth = Math.max(stats.depth, ...children.map(item => item.depth));
                 next.push(...children);
             }
             nodes = next;
-            if (nodes.length >= this._threadCount * 2) {
+            splitLevels = level + 1;
+            if (!didSplit) {
                 break;
             }
         }
@@ -613,7 +682,7 @@ class WorkerMTBackendImpl {
         // it actually materialized while partitioning the tree.
         stats.segmentCount = Math.max(0, stats.segmentCount - nodes.length);
 
-        return {jobs: nodes, profile, stats};
+        return {jobs: nodes, profile, stats, targetJobs, splitLevels};
     }
 
     _splitParallelNode(node, targetBufferId) {
@@ -725,6 +794,79 @@ class WorkerMTBackendImpl {
         const firstWeight = 1 + randomness * (Math.random() - 0.5);
         const secondWeight = 1 + randomness * (Math.random() - 0.5);
         return start + size * firstWeight / (firstWeight + secondWeight);
+    }
+
+    _buildDynamicTreeJobPlan(jobs) {
+        return {
+            jobs: jobs.slice().sort((a, b) => this._estimateTreeJobWork(b) - this._estimateTreeJobWork(a)),
+        };
+    }
+
+    _aggregateDynamicWorkerTiming(workerResults) {
+        const workerCount = Math.max(1, this._threadCount);
+        const treeTimes = new Float64Array(workerCount);
+        const forceTimes = new Float64Array(workerCount);
+        const integrateTimes = new Float64Array(workerCount);
+        const jobCounts = new Uint32Array(workerCount);
+
+        let treeTimeTotal = 0;
+        let forceTimeTotal = 0;
+        let integrateTimeTotal = 0;
+        for (const item of workerResults) {
+            const workerIndex = Number.isFinite(item.workerIndex)
+                ? Math.max(0, Math.min(workerCount - 1, item.workerIndex))
+                : 0;
+            const treeTime = item.treeTime || 0;
+            const forceTime = item.forceTime || 0;
+            const integrateTime = item.integrateTime || 0;
+            treeTimes[workerIndex] += treeTime;
+            forceTimes[workerIndex] += forceTime;
+            integrateTimes[workerIndex] += integrateTime;
+            jobCounts[workerIndex] += item.jobCount || 0;
+            treeTimeTotal += treeTime;
+            forceTimeTotal += forceTime;
+            integrateTimeTotal += integrateTime;
+        }
+
+        let activeWorkers = 0;
+        let treeTimeMax = 0;
+        let forceTimeMax = 0;
+        let integrateTimeMax = 0;
+        let workerMaxTime = 0;
+        for (let i = 0; i < workerCount; i++) {
+            if (jobCounts[i] > 0) {
+                activeWorkers += 1;
+            }
+            treeTimeMax = Math.max(treeTimeMax, treeTimes[i]);
+            forceTimeMax = Math.max(forceTimeMax, forceTimes[i]);
+            integrateTimeMax = Math.max(integrateTimeMax, integrateTimes[i]);
+            workerMaxTime = Math.max(workerMaxTime, treeTimes[i] + forceTimes[i] + integrateTimes[i]);
+        }
+
+        return {
+            activeWorkers,
+            treeTimeMax,
+            treeTimeTotal,
+            forceTimeMax,
+            integrateTimeMax,
+            forceTimeTotal,
+            integrateTimeTotal,
+            workerCpuTime: treeTimeTotal + forceTimeTotal + integrateTimeTotal,
+            workerMaxTime,
+        };
+    }
+
+    _getWorkerMtTreeTargetJobs(particleCount) {
+        const configured = this.settings.simulation.workerMtTreeJobs;
+        if (configured && configured !== "auto") {
+            const parsed = Number.parseInt(configured, 10);
+            if (Number.isFinite(parsed)) {
+                return Math.max(this._threadCount, Math.min(128, parsed));
+            }
+        }
+
+        const autoTarget = this._threadCount * AUTO_TREE_JOBS_PER_THREAD;
+        return Math.max(AUTO_TREE_JOBS_MIN, Math.min(AUTO_TREE_JOBS_MAX, autoTarget, Math.max(this._threadCount, particleCount)));
     }
 
     _buildTreeJobPartitions(jobs) {

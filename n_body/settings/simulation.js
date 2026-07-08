@@ -1,5 +1,5 @@
 import {ComponentType, Property, ReadOnlyProperty, SettingsBase} from "./base.js";
-import {BackendType, WorkerThreadCount} from "./enum.js";
+import {BackendType, WorkerThreadCount, WorkerTreeJobCount} from "./enum.js";
 
 export class SimulationSettings extends SettingsBase {
     static Properties = {
@@ -30,10 +30,17 @@ export class SimulationSettings extends SettingsBase {
             .setBreaks(ComponentType.backend, ComponentType.debug),
         workerThreads: Property.enum("worker_threads", WorkerThreadCount, WorkerThreadCount.auto)
             .setName("Worker threads").setDescription([
-                "Worker MT backend only. Number of physics subworkers used for leaf force solving and integration.",
+                "Worker MT backend only. Number of physics subworkers used for leaf force solving, integration and parallel subtree work.",
                 "auto uses navigator.hardwareConcurrency when available and otherwise falls back to 4.",
                 "This mode requires SharedArrayBuffer/cross-origin isolation for real multithreading; otherwise it falls back to the single worker path.",
                 "On static hosting such as GitHub Pages, n_body can install a local COOP/COEP service worker and reload once to enable SharedArrayBuffer."
+            ].join("\n"))
+            .setBreaks(ComponentType.backend, ComponentType.debug),
+        workerMtTreeJobs: Property.enum("worker_mt_tree_jobs", WorkerTreeJobCount, WorkerTreeJobCount.auto)
+            .setName("Worker MT tree jobs").setDescription([
+                "Worker MT backend only. Target number of subtree jobs used by the dynamic tree scheduler.",
+                "More jobs can improve load balancing between workers, but too many jobs add coordinator/message overhead.",
+                "auto uses a thread-count based target, currently about 12 jobs per worker and capped to a practical range."
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug),
         segmentRandomness: Property.float("segment_random", 0.25)
@@ -65,6 +72,7 @@ export class SimulationSettings extends SettingsBase {
     get segmentSize() {return this.config.segmentSize;}
     get autoTuneSegmentSize() {return this.config.autoTuneSegmentSize;}
     get workerThreads() {return this.config.workerThreads;}
+    get workerMtTreeJobs() {return this.config.workerMtTreeJobs;}
     get segmentMaxCount() {return this.config.segmentMaxCount;}
     get bufferCount() {return this.config.bufferCount;}
 

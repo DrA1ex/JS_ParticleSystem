@@ -113,12 +113,13 @@ function cloneWorkerMTState(state) {
     const taskCount = finite(state.taskCount);
     const taskBuildTime = finite(state.taskBuildTime);
     const partitionTime = finite(state.partitionTime);
+    const dispatchTime = finite(state.dispatchTime);
     const parallelWaitTime = finite(state.parallelWaitTime);
     const forceTimeMax = finite(state.forceTimeMax);
     const integrateTimeMax = finite(state.integrateTimeMax);
     const forceTimeTotal = finite(state.forceTimeTotal);
     const integrateTimeTotal = finite(state.integrateTimeTotal);
-    const coordinationTime = sumFinite(taskBuildTime, partitionTime);
+    const coordinationTime = sumFinite(taskBuildTime, partitionTime, dispatchTime);
     const wallTime = sumFinite(coordinationTime, parallelWaitTime);
     const treeTimeMax = finite(state.treeTimeMax);
     const treeTimeTotal = finite(state.treeTimeTotal);
@@ -139,7 +140,10 @@ function cloneWorkerMTState(state) {
         fallbackReason: state.fallbackReason || null,
         taskCount,
         treeParallel: !!state.treeParallel,
+        treeDynamicScheduling: !!state.treeDynamicScheduling,
         treeJobCount: finite(state.treeJobCount),
+        treeTargetJobs: finite(state.treeTargetJobs),
+        treeSplitLevels: finite(state.treeSplitLevels),
         topTreeTime,
         topTreeSplitTime: finite(state.topTreeSplitTime),
         treeRootBoundsTime: finite(state.treeRootBoundsTime),
@@ -148,6 +152,7 @@ function cloneWorkerMTState(state) {
         treeTimeTotal,
         taskBuildTime,
         partitionTime,
+        dispatchTime,
         coordinationTime,
         partitionDescriptorBytes: finite(state.partitionDescriptorBytes),
         descriptorBytesPerTask: ratio(state.partitionDescriptorBytes, taskCount),
@@ -208,6 +213,7 @@ const BLOCK_METRICS = {
     "physics.mt.taskCount": "physics.workerMT.taskCount",
     "physics.mt.taskBuild": "physics.workerMT.taskBuildTime",
     "physics.mt.partition": "physics.workerMT.partitionTime",
+    "physics.mt.dispatch": "physics.workerMT.dispatchTime",
     "physics.mt.coordination": "physics.workerMT.coordinationTime",
     "physics.mt.parallelWait": "physics.workerMT.parallelWaitTime",
     "physics.mt.wall": "physics.workerMT.wallTime",
@@ -215,6 +221,8 @@ const BLOCK_METRICS = {
     "physics.mt.treeMax": "physics.workerMT.treeTimeMax",
     "physics.mt.treeTotal": "physics.workerMT.treeTimeTotal",
     "physics.mt.treeJobs": "physics.workerMT.treeJobCount",
+    "physics.mt.treeTargetJobs": "physics.workerMT.treeTargetJobs",
+    "physics.mt.treeSplitLevels": "physics.workerMT.treeSplitLevels",
     "physics.mt.forceMax": "physics.workerMT.forceTimeMax",
     "physics.mt.integrateMax": "physics.workerMT.integrateTimeMax",
     "physics.mt.forceTotal": "physics.workerMT.forceTimeTotal",
@@ -261,6 +269,7 @@ function snapshotSettings(app) {
             segmentRandomness: settings.simulation.segmentRandomness,
             autoTuneSegmentSize: settings.simulation.autoTuneSegmentSize,
             workerThreads: settings.simulation.workerThreads,
+            workerMtTreeJobs: settings.simulation.workerMtTreeJobs,
         },
         physics: {
             particleCount: settings.physics.particleCount,
@@ -557,12 +566,16 @@ function summarizeWorkerMTBlocks(blocks) {
         coordinationTime: summarizeAcrossBlocks(blocks, "physics.mt.coordination"),
         taskBuildTime: summarizeAcrossBlocks(blocks, "physics.mt.taskBuild"),
         partitionTime: summarizeAcrossBlocks(blocks, "physics.mt.partition"),
+        dispatchTime: summarizeAcrossBlocks(blocks, "physics.mt.dispatch"),
         parallelWaitTime: summarizeAcrossBlocks(blocks, "physics.mt.parallelWait"),
         topTreeTime: summarizeAcrossBlocks(blocks, "physics.mt.topTree"),
         treeMax: summarizeAcrossBlocks(blocks, "physics.mt.treeMax"),
         treeTotal: summarizeAcrossBlocks(blocks, "physics.mt.treeTotal"),
-        treeJobs: summarizeAcrossBlocks(blocks, "physics.mt.treeJobs"),
+        treeJobCount: summarizeAcrossBlocks(blocks, "physics.mt.treeJobs"),
+        treeTargetJobs: summarizeAcrossBlocks(blocks, "physics.mt.treeTargetJobs"),
+        treeSplitLevels: summarizeAcrossBlocks(blocks, "physics.mt.treeSplitLevels"),
         treeParallel: states.some(state => state.treeParallel),
+        treeDynamicScheduling: states.some(state => state.treeDynamicScheduling),
         forceMax: summarizeAcrossBlocks(blocks, "physics.mt.forceMax"),
         integrateMax: summarizeAcrossBlocks(blocks, "physics.mt.integrateMax"),
         forceTotal: summarizeAcrossBlocks(blocks, "physics.mt.forceTotal"),
@@ -647,6 +660,39 @@ async function copyReportText(text) {
     }
 }
 
+function buildReportFileName(report) {
+    const date = (report.createdAt || new Date().toISOString())
+        .replace(/[:.]/g, "-")
+        .replace(/[^0-9A-Za-z_-]/g, "_");
+    const key = report.comparisonKey || {};
+    const backend = key.backend || "backend";
+    const threads = key.workerThreads ? `-${key.workerThreads}` : "";
+    const particles = Number.isFinite(key.particleCount) ? `-${key.particleCount}p` : "";
+    return `n-body-perf-${backend}${threads}${particles}-${date}.json`;
+}
+
+function downloadReportText(text, report) {
+    if (typeof document === "undefined" || typeof Blob === "undefined" || typeof URL === "undefined") {
+        return false;
+    }
+
+    try {
+        const blob = new Blob([text], {type: "application/json;charset=utf-8"});
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = buildReportFileName(report);
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
 function fixed(value, digits = 1) {
     return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
 }
@@ -671,6 +717,7 @@ function buildCompactSummaryRows(reports) {
         report: index + 1,
         backend: report.comparisonKey?.backend || report.settings?.simulation?.backend || "n/a",
         threads: report.comparisonKey?.workerThreads || report.settings?.simulation?.workerThreads || "n/a",
+        treeJobsTarget: report.comparisonKey?.workerMtTreeJobs || report.settings?.simulation?.workerMtTreeJobs || "n/a",
         actualThreads: fixed(metricAvg(report, "summary.workerMT.actualThreads"), 0),
         fps: fixed(metricAvg(report, "summary.measuredFps"), 1),
         rafP95: fixed(metricAvg(report, "summary.rafIntervals"), 1),
@@ -684,7 +731,11 @@ function buildCompactSummaryRows(reports) {
         mtWall: fixed(metricAvg(report, "summary.workerMT.wallTime"), 1),
         mtTree: fixed(metricAvg(report, "summary.workerMT.treeMax"), 1),
         mtTopTree: fixed(metricAvg(report, "summary.workerMT.topTreeTime"), 1),
+        mtJobs: fixed(metricAvg(report, "summary.workerMT.treeJobCount"), 0),
+        mtTargetJobs: fixed(metricAvg(report, "summary.workerMT.treeTargetJobs"), 0),
+        mtSplitLevels: fixed(metricAvg(report, "summary.workerMT.treeSplitLevels"), 0),
         mtWait: fixed(metricAvg(report, "summary.workerMT.parallelWaitTime"), 1),
+        mtDispatch: fixed(metricAvg(report, "summary.workerMT.dispatchTime"), 1),
         mtCoord: fixed(metricAvg(report, "summary.workerMT.coordinationTime"), 1),
         mtEff: fixed(metricAvg(report, "summary.workerMT.parallelEfficiency"), 2),
         mtSpeedup: fixed(metricAvg(report, "summary.workerMT.parallelSpeedupEstimate"), 2),
@@ -718,7 +769,8 @@ export async function collectPerformanceReport(app, options = {}) {
     const blocks = clampInt(options.blocks, 4, 1, 20);
     const intervalMs = clampNumber(options.intervalMs, 5000, 0, 60000);
     const includeSamples = options.includeSamples === true;
-    const copyToClipboard = options.copy !== false;
+    const downloadReport = options.download !== false;
+    const copyToClipboard = options.copy === true;
     const longTasks = [];
     const observer = startLongTaskObserver(longTasks);
 
@@ -726,12 +778,13 @@ export async function collectPerformanceReport(app, options = {}) {
         type: "n-body-performance-report",
         version: 1,
         createdAt: new Date().toISOString(),
-        options: {frames, blocks, intervalMs, includeSamples},
+        options: {frames, blocks, intervalMs, includeSamples, download: downloadReport, copy: copyToClipboard},
         environment: snapshotEnvironment(app),
         settings: snapshotSettings(app),
         comparisonKey: {
             backend: app.settings.simulation.backend,
             workerThreads: app.settings.simulation.workerThreads,
+            workerMtTreeJobs: app.settings.simulation.workerMtTreeJobs,
             particleCount: app.settings.physics.particleCount,
             segmentSize: app.settings.simulation.segmentSize,
             autoTuneSegmentSize: app.settings.simulation.autoTuneSegmentSize,
@@ -770,6 +823,11 @@ export async function collectPerformanceReport(app, options = {}) {
     console.log("[n-body] performance report", report);
     console.log("[n-body] performance report JSON\n" + text);
 
+    if (downloadReport) {
+        const downloaded = downloadReportText(text, report);
+        console.info(downloaded ? "[n-body] report download started" : "[n-body] report download failed; use window.nBodyLastReportText");
+    }
+
     if (copyToClipboard) {
         const copied = await copyReportText(text);
         console.info(copied ? "[n-body] report copied to clipboard" : "[n-body] clipboard copy failed; use window.nBodyLastReportText");
@@ -798,11 +856,13 @@ export function installPerformanceReportConsole(app) {
             "  blocks: number of blocks, default 4",
             "  intervalMs: delay between blocks, default 5000",
             "  includeSamples: include every per-frame sample, default false",
-            "  copy: copy JSON to clipboard, default true",
+            "  download: download JSON file, default true",
+            "  copy: copy JSON to clipboard, default false",
             "Physics fields:",
             "  summary.physics.treeShare / treePopulate / treeAggregate show how much of the step is tree-bound",
             "MT fields:",
-            "  summary.workerMT.wallTime / parallelWaitTime / coordinationTime / parallelEfficiency / parallelSpeedupEstimate",
+            "  summary.workerMT.wallTime / parallelWaitTime / dispatchTime / coordinationTime / parallelEfficiency / parallelSpeedupEstimate",
+            "  summary.workerMT.treeJobCount / treeTargetJobs / treeSplitLevels show dynamic tree scheduling",
             "  metrics.physics.mt.* inside each block",
             "Compare reports already loaded in this page:",
             "  window.nBodyCompareReports(reportWorker, reportMt2, reportMt4, reportMt6)",

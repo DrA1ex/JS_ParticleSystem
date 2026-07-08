@@ -143,6 +143,8 @@ _Simulation demo links with maximum accuracy_:
 
 The number of subworkers can be selected with the `worker_threads` parameter. Supported values are `auto`, `2`, `4`, `6`, and `8`. The `auto` mode uses browser hardware concurrency information when available and otherwise falls back to a safe default. In practice, `4` threads is usually a good starting point; higher values can help on some desktops, but may also add scheduling overhead.
 
+The parallel tree scheduler can be tuned with `worker_mt_tree_jobs`. Supported values are `auto`, `16`, `32`, `64`, and `128`. The default `auto` mode targets roughly 12 subtree jobs per worker and uses dynamic scheduling: when a subworker finishes one subtree job, it receives the next one from the queue. This usually improves load balancing on non-uniform particle distributions.
+
 This backend is the default for `n_body`. It requires `SharedArrayBuffer` and cross-origin isolation for real multithreading. On static hosting, the app can install a local COOP/COEP service worker and automatically reload once so the page becomes cross-origin isolated. If isolation cannot be enabled, the backend falls back to the single-worker path and shows the fallback reason in stats.
 
 _Demos with different worker thread counts_:
@@ -150,10 +152,12 @@ _Demos with different worker thread counts_:
 - 2 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=2&particle_count=200000&segment_auto=1)
 - 4 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&particle_count=200000&segment_auto=1)
 - 6 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=6&particle_count=200000&segment_auto=1)
+- 4 threads with 64 tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_jobs=64&particle_count=200000&segment_auto=1)
 
 _Heavier multithreaded demos_:
 - 300k particles with 4 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&particle_count=300000&segment_auto=1)
 - 300k particles with 6 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=6&particle_count=300000&segment_auto=1)
+- 500k particles with 4 threads and dynamic tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_jobs=auto&particle_count=500000&segment_auto=1)
 
 
 ##### `gpgpu`

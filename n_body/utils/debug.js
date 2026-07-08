@@ -189,9 +189,11 @@ export class Debug {
             `  - populate: ${this._formatMs(this.treeProfile?.populateTime)}`,
             `  - aggregate: ${this._formatMs(this.treeProfile?.aggregateTime)}`,
             `  - fast buckets: ${this.treeProfile?.fastBucketPath ? "on" : "off"}`,
-            `  - parallel: ${this.treeProfile?.parallel ? "on" : "off"}`,
+            `  - parallel: ${this.treeProfile?.parallel ? "on" : "off"}${this.treeProfile?.dynamicScheduling ? ", dynamic" : ""}`,
+            `  - target jobs: ${this.treeProfile?.targetJobs ?? "n/a"}, actual jobs: ${this.treeProfile?.parallelTreeJobs ?? "n/a"}, split levels: ${this.treeProfile?.splitLevels ?? "n/a"}`,
             `  - top populate: ${this._formatMs(this.treeProfile?.topPopulateTime)}`,
             `  - parallel wait: ${this._formatMs(this.treeProfile?.parallelTreeWaitTime)}`,
+            `  - dispatch: ${this._formatMs(this.treeProfile?.dispatchTime)}`,
             `- physics calc: ${this._formatMs(this.physicsTime)}`,
             `  - force solve: ${this._formatMs(profile.forceTime)}`,
             `  - integrate: ${this._formatMs(profile.integrateTime)}`,
@@ -294,11 +296,12 @@ export class Debug {
         const tasks = Number.isFinite(state.taskCount) ? state.taskCount : "n/a";
         const active = Number.isFinite(state.activeWorkers) ? state.activeWorkers : "n/a";
         const sharedIndices = state.sharedIndexBuffers ? "shared indices" : "copied indices";
+        const dispatch = this._formatMs(state.dispatchTime);
         const tree = state.treeParallel
-            ? `tree on, top ${this._formatMs(state.topTreeTime)}, tree max ${this._formatMs(state.treeTimeMax)}, jobs ${state.treeJobCount ?? "n/a"}, `
+            ? `tree on${state.treeDynamicScheduling ? " dynamic" : ""}, top ${this._formatMs(state.topTreeTime)}, tree max ${this._formatMs(state.treeTimeMax)}, jobs ${state.treeJobCount ?? "n/a"}/${state.treeTargetJobs ?? "n/a"}, levels ${state.treeSplitLevels ?? "n/a"}, `
             : "tree off, ";
         return `${state.actualThreads} threads, ${active} active, ${tree}tasks ${tasks}, wait ${wait}, ` +
-            `build ${taskBuild}, partition ${partition}, descriptors ${descriptorBytes}, ` +
+            `build ${taskBuild}, partition ${partition}, dispatch ${dispatch}, descriptors ${descriptorBytes}, ` +
             `index copy ${indexCopyBytes}, ${sharedIndices}`;
     }
 
