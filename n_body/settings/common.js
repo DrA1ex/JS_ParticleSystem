@@ -11,7 +11,8 @@ export class CommonSettings extends SettingsBase {
             .setAffects(ComponentType.renderer, ComponentType.backend),
         debugTree: Property.bool("debug_tree", null)
             .setName("Debug tree").setDescription("Show Spatial Tree segments")
-            .setAffects(ComponentType.debug, ComponentType.backend)
+            .setBreaks(ComponentType.backend)
+            .setAffects(ComponentType.debug)
             .setVisibleWhen(debugEnabled),
         debugVelocity: Property.bool("debug_velocity", false)
             .setName("Debug velocity").setDescription("Show velocity vectors")
@@ -19,7 +20,8 @@ export class CommonSettings extends SettingsBase {
             .setVisibleWhen(debugEnabled),
         debugForce: Property.bool("debug_force", null)
             .setName("Debug momentum").setDescription("Show momentum vectors")
-            .setAffects(ComponentType.debug, ComponentType.backend)
+            .setBreaks(ComponentType.backend)
+            .setAffects(ComponentType.debug)
             .setVisibleWhen(debugEnabled),
         stats: Property.bool("stats", true)
             .setName("Show statistics")

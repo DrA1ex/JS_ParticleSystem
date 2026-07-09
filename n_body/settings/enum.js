@@ -83,6 +83,7 @@ export const MaxSpeedUpdateMode = {
  */
 export const RenderColorMode = {
     velocity: "velocity",
+    velocityFixed: "velocity_fixed",
     mass: "mass",
     fixed: "fixed"
 }
