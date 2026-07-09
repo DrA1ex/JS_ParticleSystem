@@ -227,19 +227,19 @@ class SubworkerPool {
         return Promise.all(promises);
     }
 
-    processTreePartitions(partitions) {
+    processTreePartitions(partitions, options = {}) {
         const promises = [];
         for (let i = 0; i < this.workers.length; i++) {
             const partition = partitions[i];
             if (!partition || partition.jobCount === 0) {
                 continue;
             }
-            promises.push(this._processTreePartition(this.workers[i], partition));
+            promises.push(this._processTreePartition(this.workers[i], partition, "process-tree", options));
         }
         return Promise.all(promises);
     }
 
-    async processTreeJobsDynamic(jobs, materializePartition) {
+    async processTreeJobsDynamic(jobs, materializePartition, options = {}) {
         if (this.workers.length === 0 || jobs.length === 0) {
             return {results: [], dispatchTime: 0, spawnedJobCount: 0};
         }
@@ -259,7 +259,7 @@ class SubworkerPool {
                     continue;
                 }
 
-                const result = await this._processTreePartition(worker, partition, "process-tree");
+                const result = await this._processTreePartition(worker, partition, "process-tree", options);
                 result.descriptorBytes = partition.descriptorBytes || 0;
                 result.indexCopyBytes = partition.indexCopyBytes || 0;
                 results.push(result);
@@ -395,6 +395,7 @@ class SubworkerPool {
                 minJobParticles: options.minJobParticles,
                 hybridSplitFirst: options.hybridSplitFirst,
                 hybridSplitGainFilter: options.hybridSplitGainFilter,
+                debugTree: options.debugTree === true,
                 jobStartsBuffer: partition.jobStarts.buffer,
                 jobCountsBuffer: partition.jobCounts.buffer,
                 jobIndexBuffersBuffer: partition.jobIndexBuffers.buffer,
@@ -624,9 +625,10 @@ class WorkerMTBackendImpl {
 
         t = performance.now();
         let schedulerResult;
+        const debugTree = this.settings.common.debugTree === true;
         if (strategy === WORKER_TREE_STRATEGY_STATIC) {
             const partitions = this._buildTreeJobPartitions(partitionPlan.jobs);
-            const results = await this._pool.processTreePartitions(partitions);
+            const results = await this._pool.processTreePartitions(partitions, {debugTree});
             schedulerResult = {
                 results,
                 dispatchTime: 0,
@@ -646,12 +648,14 @@ class WorkerMTBackendImpl {
                     taskType: strategy === WORKER_TREE_STRATEGY_HYBRID ? "process-tree-hybrid" : "process-tree-recursive",
                     hybridSplitFirst: strategy === WORKER_TREE_STRATEGY_HYBRID ? this.settings.simulation.workerMtHybridSplitFirst : null,
                     hybridSplitGainFilter: strategy === WORKER_TREE_STRATEGY_HYBRID ? this.settings.simulation.workerMtHybridSplitGainFilter : null,
+                    debugTree,
                 }
             );
         } else {
             schedulerResult = await this._pool.processTreeJobsDynamic(
                 partitionPlan.jobs,
-                (partition) => this._materializeTreeJobPartition(partition)
+                (partition) => this._materializeTreeJobPartition(partition),
+                {debugTree}
             );
         }
         const parallelWaitTime = performance.now() - t;
@@ -728,14 +732,15 @@ class WorkerMTBackendImpl {
 
         const treeStats = this._mergeParallelTreeStats(treeJobs.stats, workerResults);
         const treeProfile = this._mergeParallelTreeProfile(treeJobs.profile, workerResults, workerTiming, treeJobs, dispatchTime, profile.mt);
-        return this._buildParallelResult(timestamp, buffer, treeTime, dynamicPhysicsTime, treeStats, treeProfile, profile);
+        const treeDebug = debugTree ? this._mergeParallelTreeDebug(treeJobs.debugData, workerResults) : [];
+        return this._buildParallelResult(timestamp, buffer, treeTime, dynamicPhysicsTime, treeStats, treeProfile, profile, treeDebug);
     }
 
-    _buildParallelResult(timestamp, buffer, treeTime, physicsTime, treeStats, treeProfile, profile) {
+    _buildParallelResult(timestamp, buffer, treeTime, physicsTime, treeStats, treeProfile, profile, treeDebug = []) {
         return {
             timestamp,
             buffer,
-            treeDebug: [],
+            treeDebug,
             forceDebug: this._getCalculatedForces(),
             stats: {
                 physicsTime,
@@ -747,6 +752,16 @@ class WorkerMTBackendImpl {
                 segmentAutoTune: this._segmentTuner?.getStats(this._actualSegmentSize) ?? null
             }
         };
+    }
+
+    _mergeParallelTreeDebug(topDebugData, workerResults) {
+        const result = Array.isArray(topDebugData) ? topDebugData.slice() : [];
+        for (const item of workerResults) {
+            if (Array.isArray(item.treeDebug) && item.treeDebug.length > 0) {
+                result.push(...item.treeDebug);
+            }
+        }
+        return result;
     }
 
     _mergeParallelTreeStats(topStats, workerResults) {
@@ -805,6 +820,7 @@ class WorkerMTBackendImpl {
             fastBucketPath: true,
         };
         const stats = {flops: 0, depth: 1, segmentCount: 1};
+        const debugData = this.settings.common.debugTree ? [] : null;
 
         let t = performance.now();
         source.set(identity.subarray(0, count), 0);
@@ -853,6 +869,9 @@ class WorkerMTBackendImpl {
                     continue;
                 }
 
+                if (debugData) {
+                    debugData.push(this._createTreeDebugEntry(node));
+                }
                 didSplit = true;
                 stats.flops += Math.pow(children.length, 2) * TREE_FLOPS_PER_OP;
                 stats.segmentCount += children.length;
@@ -871,7 +890,7 @@ class WorkerMTBackendImpl {
         // it actually materialized while partitioning the tree.
         stats.segmentCount = Math.max(0, stats.segmentCount - nodes.length);
 
-        return {jobs: nodes, profile, stats, targetJobs, splitLevels};
+        return {jobs: nodes, profile, stats, targetJobs, splitLevels, debugData};
     }
 
     _buildRecursiveTreeSeedJobs() {
@@ -886,6 +905,7 @@ class WorkerMTBackendImpl {
             fastBucketPath: true,
         };
         const stats = {flops: 0, depth: 1, segmentCount: 1};
+        const debugData = this.settings.common.debugTree ? [] : null;
 
         let t = performance.now();
         source.set(identity.subarray(0, count), 0);
@@ -924,6 +944,9 @@ class WorkerMTBackendImpl {
                     next.push(node);
                     continue;
                 }
+                if (debugData) {
+                    debugData.push(this._createTreeDebugEntry(node));
+                }
                 didSplit = true;
                 stats.flops += Math.pow(children.length, 2) * TREE_FLOPS_PER_OP;
                 stats.segmentCount += children.length;
@@ -939,7 +962,7 @@ class WorkerMTBackendImpl {
         profile.populateTime = performance.now() - t;
         stats.segmentCount = Math.max(0, stats.segmentCount - nodes.length);
 
-        return {jobs: nodes, profile, stats, targetJobs, splitLevels};
+        return {jobs: nodes, profile, stats, targetJobs, splitLevels, debugData};
     }
 
     _buildHybridTreeSeedJobs() {
@@ -954,6 +977,7 @@ class WorkerMTBackendImpl {
             fastBucketPath: true,
         };
         const stats = {flops: 0, depth: 1, segmentCount: 1};
+        const debugData = this.settings.common.debugTree ? [] : null;
 
         let t = performance.now();
         source.set(identity.subarray(0, count), 0);
@@ -1003,6 +1027,9 @@ class WorkerMTBackendImpl {
                     continue;
                 }
 
+                if (debugData) {
+                    debugData.push(this._createTreeDebugEntry(node));
+                }
                 didSplit = true;
                 stats.flops += Math.pow(children.length, 2) * TREE_FLOPS_PER_OP;
                 stats.segmentCount += children.length;
@@ -1018,7 +1045,7 @@ class WorkerMTBackendImpl {
         profile.populateTime = performance.now() - t;
         stats.segmentCount = Math.max(0, stats.segmentCount - nodes.length);
 
-        return {jobs: nodes, profile, stats, targetJobs, splitLevels};
+        return {jobs: nodes, profile, stats, targetJobs, splitLevels, debugData};
     }
 
     _getWorkerMtTreeStrategy() {
@@ -1057,6 +1084,17 @@ class WorkerMTBackendImpl {
 
     _getWorkerMtHybridProfileConfig() {
         return HYBRID_TREE_PROFILES[this._getWorkerMtHybridProfileName()];
+    }
+
+    _createTreeDebugEntry(node) {
+        return {
+            x: node.left,
+            y: node.top,
+            width: node.right - node.left,
+            height: node.bottom - node.top,
+            count: node.count,
+            depth: node.depth,
+        };
     }
 
     _splitParallelNode(node, targetBufferId) {

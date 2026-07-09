@@ -81,10 +81,10 @@ export class SimulationSettings extends SettingsBase {
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)
             .setVisibleWhen(isHybridWorkerMt),
-        workerMtHybridJobSorting: Property.bool("worker_mt_hybrid_job_sorting", false)
+        workerMtHybridJobSorting: Property.bool("worker_mt_hybrid_job_sorting", true)
             .setName("Hybrid job sorting").setDescription([
                 "Worker MT hybrid strategy only. When enabled, the coordinator sorts hybrid jobs with a tail-oriented estimate that includes a rough solve-cost component.",
-                "When disabled, hybrid uses the same tree-build estimate as dynamic/recursive. This is the previous baseline behavior."
+                "When disabled, hybrid uses the same tree-build estimate as dynamic/recursive. Enable this for the current recommended hybrid/coarse behavior."
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)
             .setVisibleWhen(isHybridWorkerMt),

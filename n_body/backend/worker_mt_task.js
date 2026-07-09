@@ -440,6 +440,17 @@ function readTreeJobs(data) {
     return jobs;
 }
 
+function createDebugEntryFromJob(job) {
+    return {
+        x: job.left,
+        y: job.top,
+        width: job.right - job.left,
+        height: job.bottom - job.top,
+        count: job.count,
+        depth: job.depth,
+    };
+}
+
 function createEmptyTreeProfile() {
     return {
         resetTime: 0,
@@ -450,10 +461,11 @@ function createEmptyTreeProfile() {
     };
 }
 
-function buildAndProcessTreeJobs(jobs, requestId, extra = {}) {
+function buildAndProcessTreeJobs(jobs, requestId, extra = {}, options = {}) {
     const tasks = [];
     const treeProfile = createEmptyTreeProfile();
     const treeStats = {flops: 0, depth: 0, segmentCount: 0};
+    const treeDebug = options.debugTree ? (Array.isArray(options.treeDebug) ? options.treeDebug.slice() : []) : null;
 
     if (!treeWorkspace) {
         treeWorkspace = {
@@ -492,6 +504,9 @@ function buildAndProcessTreeJobs(jobs, requestId, extra = {}) {
         );
 
         addTreeProfile(treeProfile, tree.profile);
+        if (treeDebug) {
+            treeDebug.push(...tree.getDebugData());
+        }
         const stats = buildTreeStats(tree);
         treeStats.flops += stats.flops;
         treeStats.depth = Math.max(treeStats.depth, stats.depth);
@@ -513,6 +528,7 @@ function buildAndProcessTreeJobs(jobs, requestId, extra = {}) {
         leafCount: tasks.length,
         particleCount: processed.particleCount,
         jobCount: jobs.length,
+        treeDebug: treeDebug || undefined,
         ...extra,
     });
 }
@@ -524,6 +540,7 @@ function processRecursiveTreeJobs(data) {
     const stack = jobs.slice();
     const localJobs = [];
     const spawnedJobs = [];
+    const treeDebug = data.debugTree === true ? [] : null;
     let splitCount = 0;
     const splitStart = performance.now();
 
@@ -532,6 +549,9 @@ function processRecursiveTreeJobs(data) {
         if (shouldSplitRecursiveNode(job, splitBudget - splitCount, minJobParticles)) {
             const children = splitRecursiveNode(job);
             if (children.length > 1) {
+                if (treeDebug) {
+                    treeDebug.push(createDebugEntryFromJob(job));
+                }
                 splitCount += 1;
                 for (const child of children) {
                     if (splitCount < splitBudget && child.count > minJobParticles * 2) {
@@ -572,6 +592,7 @@ function processRecursiveTreeJobs(data) {
             leafCount: 0,
             particleCount: 0,
             jobCount: 0,
+            treeDebug: treeDebug || undefined,
             spawnedJobs,
             recursiveSplitCount: splitCount,
         });
@@ -582,11 +603,11 @@ function processRecursiveTreeJobs(data) {
         spawnedJobs,
         recursiveSplitCount: splitCount,
         recursiveSplitTime: splitTime,
-    });
+    }, {debugTree: data.debugTree === true, treeDebug});
 }
 
 
-function postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, rejectedSplits, hybridEarlySplit = false) {
+function postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, rejectedSplits, hybridEarlySplit = false, treeDebug = null) {
     postMessage({
         type: "done",
         requestId: data.requestId,
@@ -604,6 +625,7 @@ function postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, rej
         leafCount: 0,
         particleCount: 0,
         jobCount: 0,
+        treeDebug: treeDebug || undefined,
         spawnedJobs,
         recursiveSplitCount: splitCount,
         recursiveSplitTime: splitTime,
@@ -622,6 +644,7 @@ function processHybridTreeJobs(data) {
     const stack = jobs.slice();
     const localJobs = [];
     const spawnedJobs = [];
+    const treeDebug = data.debugTree === true ? [] : null;
     let splitCount = 0;
     let rejectedSplits = 0;
     const splitStart = performance.now();
@@ -632,6 +655,9 @@ function processHybridTreeJobs(data) {
             const children = splitRecursiveNode(job);
             const acceptSplit = children.length > 1 && (!splitGainFilter || isUsefulHybridSplit(job, children));
             if (acceptSplit) {
+                if (treeDebug) {
+                    treeDebug.push(createDebugEntryFromJob(job));
+                }
                 splitCount += 1;
                 children.sort((a, b) => b.count - a.count);
                 for (const child of children) {
@@ -665,12 +691,12 @@ function processHybridTreeJobs(data) {
     if (splitFirst && spawnedJobs.length > 0) {
         spawnedJobs.push(...localJobs);
         spawnedJobs.sort((a, b) => b.count - a.count);
-        postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, rejectedSplits, true);
+        postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, rejectedSplits, true, treeDebug);
         return;
     }
 
     if (localJobs.length === 0) {
-        postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, rejectedSplits, false);
+        postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, rejectedSplits, false, treeDebug);
         return;
     }
 
@@ -681,91 +707,12 @@ function processHybridTreeJobs(data) {
         hybridEarlySplit: false,
         hybridEarlySplitJobs: 0,
         hybridRejectedSplits: rejectedSplits,
-    });
+    }, {debugTree: data.debugTree === true, treeDebug});
 }
 
 function processTreeJobs(data) {
-    const jobStarts = new Uint32Array(data.jobStartsBuffer);
-    const jobCounts = new Uint32Array(data.jobCountsBuffer);
-    const jobIndexBuffers = new Uint8Array(data.jobIndexBuffersBuffer);
-    const jobDepths = new Uint16Array(data.jobDepthsBuffer);
-    const jobLeft = new Float64Array(data.jobLeftBuffer);
-    const jobTop = new Float64Array(data.jobTopBuffer);
-    const jobRight = new Float64Array(data.jobRightBuffer);
-    const jobBottom = new Float64Array(data.jobBottomBuffer);
-    const jobParentForceX = new Float32Array(data.jobParentForceXBuffer);
-    const jobParentForceY = new Float32Array(data.jobParentForceYBuffer);
-
-    const tasks = [];
-    const treeProfile = {
-        resetTime: 0,
-        rootBoundsTime: 0,
-        populateTime: 0,
-        aggregateTime: 0,
-        fastBucketPath: true,
-    };
-    const treeStats = {flops: 0, depth: 0, segmentCount: 0};
-
-    if (!treeWorkspace) {
-        treeWorkspace = {
-            indices: indexBuffers[0],
-            scratchIndices: indexBuffers[1],
-        };
-    }
-
-    const treeStart = performance.now();
-    for (let i = 0; i < jobStarts.length; i++) {
-        const count = jobCounts[i];
-        if (count === 0) {
-            continue;
-        }
-
-        const tree = new FlatSpatialTree(
-            particles,
-            settings.simulation.segmentMaxCount,
-            settings.simulation.segmentDivider,
-            settings.simulation.segmentRandomness,
-            treeWorkspace,
-            {
-                count,
-                indexCapacity: Math.floor(particles.length / ITEM_SIZE),
-                skipIndexReset: true,
-                root: {
-                    start: jobStarts[i],
-                    count,
-                    indexBuffer: jobIndexBuffers[i],
-                    depth: jobDepths[i],
-                    left: jobLeft[i],
-                    top: jobTop[i],
-                    right: jobRight[i],
-                    bottom: jobBottom[i],
-                }
-            }
-        );
-
-        addTreeProfile(treeProfile, tree.profile);
-        const stats = buildTreeStats(tree);
-        treeStats.flops += stats.flops;
-        treeStats.depth = Math.max(treeStats.depth, stats.depth);
-        treeStats.segmentCount += stats.segmentCount;
-        collectLeafTasks(tree, tree.root, jobParentForceX[i], jobParentForceY[i], tasks);
-    }
-    const treeTime = performance.now() - treeStart;
-
-    const processed = processLeafTasks(tasks);
-
-    postMessage({
-        type: "done",
-        requestId: data.requestId,
-        treeTime,
-        treeProfile,
-        treeStats,
-        forceTime: processed.forceTime,
-        integrateTime: processed.integrateTime,
-        leafCount: tasks.length,
-        particleCount: processed.particleCount,
-        jobCount: jobStarts.length,
-    });
+    const jobs = readTreeJobs(data);
+    buildAndProcessTreeJobs(jobs, data.requestId, {}, {debugTree: data.debugTree === true});
 }
 
 function processTasks(data) {
