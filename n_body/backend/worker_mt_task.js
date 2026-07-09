@@ -555,6 +555,83 @@ function processRecursiveTreeJobs(data) {
     });
 }
 
+
+function processHybridTreeJobs(data) {
+    const jobs = readTreeJobs(data);
+    const splitBudget = Number.isFinite(data.splitBudget) ? data.splitBudget : 2;
+    const minJobParticles = Number.isFinite(data.minJobParticles) ? data.minJobParticles : 16384;
+    const stack = jobs.slice();
+    const localJobs = [];
+    const spawnedJobs = [];
+    let splitCount = 0;
+    const splitStart = performance.now();
+
+    while (stack.length > 0) {
+        const job = stack.pop();
+        if (shouldSplitRecursiveNode(job, splitBudget - splitCount, minJobParticles)) {
+            const children = splitRecursiveNode(job);
+            if (children.length > 1) {
+                splitCount += 1;
+                children.sort((a, b) => b.count - a.count);
+                for (const child of children) {
+                    if (splitCount < splitBudget && child.count > minJobParticles * 2) {
+                        stack.push(child);
+                    } else {
+                        spawnedJobs.push(child);
+                    }
+                }
+                continue;
+            }
+        }
+
+        localJobs.push(job);
+    }
+
+    const splitTime = performance.now() - splitStart;
+
+    // Hybrid is intentionally split-first: once this request produced child
+    // jobs, return them to the coordinator immediately instead of also doing
+    // local force/integrate work. This keeps the global queue visible and avoids
+    // the old wave-shaped recursive pipeline where spawned jobs arrived only
+    // after a worker had already finished its local subtree solve.
+    if (spawnedJobs.length > 0) {
+        spawnedJobs.push(...localJobs);
+        spawnedJobs.sort((a, b) => b.count - a.count);
+        postMessage({
+            type: "done",
+            requestId: data.requestId,
+            treeTime: splitTime,
+            treeProfile: {
+                resetTime: 0,
+                rootBoundsTime: 0,
+                populateTime: splitTime,
+                aggregateTime: 0,
+                fastBucketPath: true,
+            },
+            treeStats: {flops: 0, depth: 0, segmentCount: 0},
+            forceTime: 0,
+            integrateTime: 0,
+            leafCount: 0,
+            particleCount: 0,
+            jobCount: 0,
+            spawnedJobs,
+            recursiveSplitCount: splitCount,
+            recursiveSplitTime: splitTime,
+            hybridEarlySplit: true,
+            hybridEarlySplitJobs: spawnedJobs.length,
+        });
+        return;
+    }
+
+    buildAndProcessTreeJobs(localJobs, data.requestId, {
+        spawnedJobs: [],
+        recursiveSplitCount: splitCount,
+        recursiveSplitTime: splitTime,
+        hybridEarlySplit: false,
+        hybridEarlySplitJobs: 0,
+    });
+}
+
 function processTreeJobs(data) {
     const jobStarts = new Uint32Array(data.jobStartsBuffer);
     const jobCounts = new Uint32Array(data.jobCountsBuffer);
@@ -692,6 +769,9 @@ onmessage = (event) => {
             break;
         case "process-tree-recursive":
             processRecursiveTreeJobs(data);
+            break;
+        case "process-tree-hybrid":
+            processHybridTreeJobs(data);
             break;
         case "dispose":
             close();

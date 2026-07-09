@@ -21,11 +21,11 @@ const WORKER_TREE_STRATEGY_STATIC = "static";
 const WORKER_TREE_STRATEGY_DYNAMIC = "dynamic";
 const WORKER_TREE_STRATEGY_RECURSIVE = "recursive";
 const WORKER_TREE_STRATEGY_HYBRID = "hybrid";
-const HYBRID_TREE_SEED_SPLIT_LEVELS = PARALLEL_TREE_MAX_SPLIT_LEVELS;
-const HYBRID_TREE_SEED_JOBS_PER_THREAD = AUTO_TREE_JOBS_PER_THREAD;
-const HYBRID_TREE_SEED_JOBS_MIN = AUTO_TREE_JOBS_MIN;
-const HYBRID_TREE_SEED_JOBS_MAX = AUTO_TREE_JOBS_MAX;
-const HYBRID_TREE_SPLIT_BUDGET = 3;
+const HYBRID_TREE_SEED_SPLIT_LEVELS = 2;
+const HYBRID_TREE_SEED_JOBS_PER_THREAD = 2;
+const HYBRID_TREE_SEED_JOBS_MIN = 4;
+const HYBRID_TREE_SEED_JOBS_MAX = 16;
+const HYBRID_TREE_SPLIT_BUDGET = 2;
 const HYBRID_TREE_MIN_JOB_PARTICLES = 16384;
 const TREE_FLOPS_PER_OP = 14;
 const EPSILON = 0.1e-6;
@@ -237,6 +237,7 @@ class SubworkerPool {
             return {results: [], dispatchTime: 0, spawnedJobCount: 0};
         }
 
+        const taskType = options.taskType || "process-tree-recursive";
         const queue = initialJobs.slice().sort((a, b) => estimateTreeJobWork(b) - estimateTreeJobWork(a));
         const idleWorkers = this.workers.slice();
         const results = [];
@@ -261,7 +262,7 @@ class SubworkerPool {
                         continue;
                     }
 
-                    this._processTreePartition(worker, partition, "process-tree-recursive", options)
+                    this._processTreePartition(worker, partition, taskType, options)
                         .then((result) => {
                             result.descriptorBytes = partition.descriptorBytes || 0;
                             result.indexCopyBytes = partition.indexCopyBytes || 0;
@@ -565,7 +566,9 @@ class WorkerMTBackendImpl {
         let t = performance.now();
         const treeJobs = strategy === WORKER_TREE_STRATEGY_RECURSIVE
             ? this._buildRecursiveTreeSeedJobs()
-            : this._buildParallelTreeJobs();
+            : strategy === WORKER_TREE_STRATEGY_HYBRID
+                ? this._buildHybridTreeSeedJobs()
+                : this._buildParallelTreeJobs();
         const topTreeTime = performance.now() - t;
 
         t = performance.now();
@@ -593,6 +596,7 @@ class WorkerMTBackendImpl {
                 {
                     splitBudget: this._getTreeRecursiveSplitBudget(strategy),
                     minJobParticles: this._getTreeRecursiveMinJobParticles(strategy),
+                    taskType: strategy === WORKER_TREE_STRATEGY_HYBRID ? "process-tree-hybrid" : "process-tree-recursive",
                 }
             );
         } else {
@@ -633,6 +637,10 @@ class WorkerMTBackendImpl {
             treeRecursiveScheduling: strategy === WORKER_TREE_STRATEGY_RECURSIVE || strategy === WORKER_TREE_STRATEGY_HYBRID,
             treeHybridScheduling: strategy === WORKER_TREE_STRATEGY_HYBRID,
             treeSpawnedJobs: schedulerResult.spawnedJobCount || 0,
+            treeEarlySplitResults: workerResults.reduce((sum, item) => sum + (item.hybridEarlySplit ? 1 : 0), 0),
+            treeEarlySplitJobs: workerResults.reduce((sum, item) => sum + (item.hybridEarlySplitJobs || 0), 0),
+            recursiveSplitCount: workerResults.reduce((sum, item) => sum + (item.recursiveSplitCount || 0), 0),
+            recursiveSplitTime: workerResults.reduce((sum, item) => sum + (item.recursiveSplitTime || 0), 0),
             recursiveSplitBudget: (strategy === WORKER_TREE_STRATEGY_RECURSIVE || strategy === WORKER_TREE_STRATEGY_HYBRID) ? this._getTreeRecursiveSplitBudget(strategy) : null,
             recursiveMinJobParticles: (strategy === WORKER_TREE_STRATEGY_RECURSIVE || strategy === WORKER_TREE_STRATEGY_HYBRID) ? this._getTreeRecursiveMinJobParticles(strategy) : null,
             topTreeTime,
@@ -708,6 +716,10 @@ class WorkerMTBackendImpl {
             recursiveScheduling: !!mtProfile.treeRecursiveScheduling,
             hybridScheduling: !!mtProfile.treeHybridScheduling,
             spawnedJobs: mtProfile.treeSpawnedJobs || 0,
+            earlySplitResults: mtProfile.treeEarlySplitResults || 0,
+            earlySplitJobs: mtProfile.treeEarlySplitJobs || 0,
+            recursiveSplitCount: mtProfile.recursiveSplitCount || 0,
+            recursiveSplitTime: mtProfile.recursiveSplitTime || 0,
             recursiveSplitBudget: mtProfile.recursiveSplitBudget ?? null,
             recursiveMinJobParticles: mtProfile.recursiveMinJobParticles ?? null,
             targetJobs: treeJobs.targetJobs,
