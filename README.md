@@ -19,7 +19,7 @@ _Visualization of Spatial tree used to optimize 100,000 particles interaction_
 
 <img width="720" alt="image" src="https://user-images.githubusercontent.com/1194059/192269736-64fe4b19-d0bb-4cbc-b0df-591e17191355.png">
 
-You can see Spatial Tree segmentation in real-time: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body?debug=1&segment_random=0)
+You can see Spatial Tree segmentation in real-time with the default CPU backend: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body?particle_count=50000&debug=1&debug_tree=1&segment_random=0)
 
 In practical terms, this means that we can simulate _100,000_ particles using approximately _500,000_ operations. Without optimization, simulating _100,000_ particles would require _10,000,000,000_ operations, which is _20,000_ times more computationally intensive.
 
@@ -29,16 +29,16 @@ _Visualization of 1,000,000 particles (click image to open YouTube video)_
 
 ### Demo Links
 
-- Accurate simulation, galaxy-like pattern may born (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?segment_max_count=32&particle_count=131072)
-- Accurate simulation, galaxy-like pattern may born (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?segment_max_count=32&particle_count=100000&particle_init=bang)
-- Fast simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=rotation&g=1000)
-- Fast simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=collision&g=1000)
-- Big CPU multithreaded simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&particle_count=200000&segment_auto=1)
-- Big CPU multithreaded simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=6&particle_count=300000&segment_auto=1)
+- Accurate CPU simulation, galaxy-like pattern may born (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=300000&segment_max_count=32&segment_auto=0)
+- Accurate CPU simulation, galaxy-like pattern may born (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=250000&segment_max_count=32&segment_auto=0&particle_init=bang)
+- Fast CPU simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=60000&particle_init=rotation&g=1000)
+- Fast CPU simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=60000&particle_init=collision&g=1000)
+- Big CPU multithreaded simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&particle_count=500000&segment_auto=1)
+- Big CPU multithreaded simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=6&worker_mt_tree_strategy=hybrid&particle_count=750000&segment_auto=1)
 - Big GPGPU simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=16384&segment_max_count=128&particle_init=uniform&particle_mass=10&g=10)
 - Big GPGPU simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=16384&segment_max_count=128&particle_mass=10&g=100)
-- Particle collisions CPU (accurate): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?collision=1)
-- Particle collisions CPU (fast): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?collision=1&g=10)
+- Particle collisions CPU (accurate): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&collision=1)
+- Particle collisions CPU (fast): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&collision=1&g=10)
 - Particle collisions GPGPU (accurate): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?collision=1&backend=gpgpu&particle_count=16384&segment_max_count=128)
 - Particle collisions GPGPU (fast): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?collision=1&backend=gpgpu&particle_count=16384&segment_max_count=128&g=100)
 
@@ -59,36 +59,36 @@ _Demo links_:
 
 ### Real-Time Simulation
 You can combine different [parameters](https://github.com/DrA1ex/JS_ParticleSystem#parameters), [renderer](https://github.com/DrA1ex/JS_ParticleSystem#renderer) and [backend](https://github.com/DrA1ex/JS_ParticleSystem#backend).
-To change parameter just add it to url as query parameter, e.g.: [`/?particle_count=10000&particle_init=bang`](https://dra1ex.github.io/JS_ParticleSystem/n_body?particle_count=10000&particle_init=bang)
+To change parameter just add it to url as query parameter, e.g.: [`/?particle_count=50000&particle_init=bang`](https://dra1ex.github.io/JS_ParticleSystem/n_body?particle_count=50000&particle_init=bang)
 
 _Collision:_
-- Enabled collisions: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?collision=1)
+- Enabled collisions with the default CPU backend: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&collision=1)
 - Enabled collisions with gpgpu simulation: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?collision=1&backend=gpgpu&particle_count=16384&segment_max_count=128)
 - Enabled collisions with gpgpu simulation and `min_distance=3`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?collision=1&backend=gpgpu&particle_count=16384&segment_max_count=128&min_distance=3)
 
 _Different initializers:_
-- circle initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=circle)
-- uniform initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=uniform)
-- bang initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=bang)
-- rotation initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=rotation)
-- collision initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=collision)
-- swirl initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=swirl)
+- circle initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&particle_init=circle)
+- uniform initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&particle_init=uniform)
+- bang initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&particle_init=bang)
+- rotation initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&particle_init=rotation)
+- collision initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&particle_init=collision)
+- swirl initializer: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&particle_init=swirl)
 
 _Different gravity forces:_
-- rotation initializer with `x1000` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=rotation&g=1000)
-- collision initializer with `x1000` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=collision&g=1000)
+- rotation initializer with `x1000` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=60000&particle_init=rotation&g=1000)
+- collision initializer with `x1000` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=60000&particle_init=collision&g=1000)
 
 _Different resistance:_
-- bang initializer with `0.99` resistance and `x100` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=bang&resistance=0.99&g=100)
-- collision initializer with `0.995` resistance and `x100` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_init=collision&resistance=0.995&g=100)
+- bang initializer with `0.99` resistance and `x100` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&particle_init=bang&resistance=0.99&g=100)
+- collision initializer with `0.995` resistance and `x100` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&particle_init=collision&resistance=0.995&g=100)
 
 _Particle mass variation:_
-- Mass variation `3` and `x0.5` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_mass=3&g=0.5)
+- Mass variation `3` and `x0.5` gravity: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&particle_mass=3&g=0.5)
 - Mass variation `5` with accurate gpgpu simulation: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_mass=5&backend=gpgpu&segment_max_count=64&particle_count=4096)
 - Mass vartiation `10` with accurate big gpgpu simulation: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=16384&segment_max_count=128&particle_init=uniform&particle_mass=10&g=10)
 
 _Debug mode:_
-- Spatial tree: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?debug=1&debug_tree=1&g=10&dfri=0)
+- Spatial tree with CPU multithreading: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&debug=1&debug_tree=1&g=10&dfri=0)
 - Speed and momentum vectors: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=5&particle_init=rotation&segment_max_count=5&g=200&debug=1&debug_tree=0&debug_velocity=1)
 
 
@@ -102,8 +102,8 @@ Furthermore, canvas renderer does not support dynamic particle size, making part
 
 _Demo links_:
 
-- With _enabled_ device pixel rate: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?render=canvas&dpr=1)
-- With _disabled_ device pixel rate: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?render=canvas&dpr=0)
+- With _enabled_ device pixel rate: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&render=canvas&dpr=1)
+- With _disabled_ device pixel rate: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&render=canvas&dpr=0)
 
 
 ##### `webgl2`
@@ -112,19 +112,49 @@ The render works well on screens with high pixel density and maintains dynamic p
 
 _Demo links_:
 
-- With _enabled_ device pixel rate: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?render=webgl2&dpr=1)
-- With _disabled_ device pixel rate: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?render=webgl2&dpr=0)
+- With _enabled_ device pixel rate: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=100000&render=webgl2&dpr=1)
+- With _disabled_ device pixel rate: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=100000&render=webgl2&dpr=0)
  
 ### Backend
 Supported backends:
 
+##### `worker-mt`
+`worker-mt` is a multithreaded CPU backend. It keeps the same spatial-tree approximation as `worker`, but distributes leaf force solving and particle integration across several subworkers. This backend is useful when the simulation is CPU-bound and the machine has several available cores.
+
+The number of subworkers can be selected with the `worker_threads` parameter. Supported values are `auto`, `2`, `4`, `6`, and `8`. The `auto` mode uses browser hardware concurrency information when available and otherwise falls back to a safe default. In practice, `4` threads is usually a good starting point; higher values can help on some desktops, but may also add scheduling overhead.
+
+The parallel tree scheduler can be tuned with `worker_mt_tree_jobs`. Supported values are `auto`, `16`, `32`, `64`, and `128`. The default `auto` mode is intentionally conservative: it avoids spending too much coordinator time preparing work before subworkers can start.
+
+The tree split strategy can be selected with `worker_mt_tree_strategy`. Supported values are `static`, `dynamic`, `recursive`, and `hybrid`. `dynamic` is the conservative queue-based baseline. `static` is useful as a simple baseline. `recursive` is a legacy experiment that starts from coarse regions and lets subworkers split heavy jobs further, but it can produce a weaker downstream calc/force pipeline. `hybrid` is the recommended high-performance CPU profile: by default it uses the `coarse` hybrid profile, split-first recursive job release, and hybrid job sorting.
+
+Hybrid-specific tuning is available through `worker_mt_hybrid_profile`, `worker_mt_hybrid_split_first`, `worker_mt_hybrid_job_sorting`, and `worker_mt_hybrid_split_gain`. The recommended setting is the default hybrid combination: `coarse`, split-first enabled, job sorting enabled, and split-gain filtering disabled.
+
+This backend is the default CPU backend for `n_body`. It requires `SharedArrayBuffer` and cross-origin isolation for real multithreading. On static hosting, the app can install a local COOP/COEP service worker and automatically reload once so the page becomes cross-origin isolated. If isolation cannot be enabled, the backend falls back to the single-worker path and shows the fallback reason in stats.
+
+_Demos with different worker thread counts_:
+- Auto threads, 500k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=auto&worker_mt_tree_strategy=hybrid&particle_count=500000&segment_auto=1)
+- 2 threads, 400k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=2&worker_mt_tree_strategy=hybrid&particle_count=400000&segment_auto=1)
+- 4 threads, 500k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&particle_count=500000&segment_auto=1)
+- 6 threads, 750k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=6&worker_mt_tree_strategy=hybrid&particle_count=750000&segment_auto=1)
+- 4 threads with 16 tree jobs, 500k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&worker_mt_tree_jobs=16&particle_count=500000&segment_auto=1)
+- 4 threads with recursive tree splitting, 500k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=recursive&particle_count=500000&segment_auto=1)
+- 4 threads with hybrid tree splitting, 500k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&particle_count=500000&segment_auto=1)
+
+_Heavier multithreaded demos_:
+- 750k particles with 4 threads and hybrid tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&worker_mt_tree_jobs=auto&particle_count=750000&segment_auto=1)
+- 1M particles with 4 threads and hybrid tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&worker_mt_tree_jobs=auto&particle_count=1000000&segment_auto=0&segment_max_count=40)
+- 1M particles with 4 threads and dynamic tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=dynamic&worker_mt_tree_jobs=auto&particle_count=1000000&segment_auto=0&segment_max_count=40)
+- 1M particles with 4 threads and recursive tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=recursive&worker_mt_tree_jobs=auto&particle_count=1000000&segment_auto=0&segment_max_count=40)
+
+
 ##### `worker`
-A web worker is utilized for physics calculations. All computations are performed separately from the main thread, ensuring a smooth rendering experience even with complex simulation configurations. This calculation approach is particularly suitable for mobile platforms and systems with basic integrated graphics.
-Please note that since the computations are entirely handled by the CPU, it may not deliver high performance for tasks such as N-Body simulation. You should manage your expectations accordingly.
+`worker` is the legacy single-threaded CPU backend. It is still useful as a compatibility fallback and as a baseline when comparing the multithreaded scheduler, but it is no longer the recommended CPU path for large real-time demos. Prefer `worker-mt` for normal desktop CPU simulations.
+
+The single-threaded worker keeps physics calculations away from the main rendering thread, so the UI can remain responsive, but all physics work still runs in one worker. For larger N-Body demos this usually becomes the bottleneck much earlier than `worker-mt`.
 
 You can fine-tune the performance by adjusting the `segmentation_max_count` parameter. Decreasing its value reduces the computational complexity but sacrifices the accuracy of the simulation.
 
-_Demos with different segment max sizes_:
+_Legacy single-threaded demos with different segment max sizes_:
 - Max segment size `8`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&segment_max_count=8)
 - Max segment size `32`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&segment_max_count=32)
 - Max segment size `128`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&segment_max_count=128)
@@ -132,38 +162,10 @@ _Demos with different segment max sizes_:
 
 Increasing `segmentation_max_count` significantly degrades performance, but improves calculation accuracy.
 
-_Simulation demo links with maximum accuracy_:
+_Legacy maximum-accuracy single-threaded demos_:
 - Max segment size `1024`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&particle_count=1024&segment_max_count=1024)
 - Max segment size `2048`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&particle_count=2048&segment_max_count=2048)
 - Max segment size `4096`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker&particle_count=4096&segment_max_count=4096)
-
-
-##### `worker-mt`
-`worker-mt` is a multithreaded CPU backend. It keeps the same spatial-tree approximation as `worker`, but distributes leaf force solving and particle integration across several subworkers. This backend is useful when the simulation is CPU-bound and the machine has several available cores.
-
-The number of subworkers can be selected with the `worker_threads` parameter. Supported values are `auto`, `2`, `4`, `6`, and `8`. The `auto` mode uses browser hardware concurrency information when available and otherwise falls back to a safe default. In practice, `4` threads is usually a good starting point; higher values can help on some desktops, but may also add scheduling overhead.
-
-The parallel tree scheduler can be tuned with `worker_mt_tree_jobs`. Supported values are `auto`, `16`, `32`, `64`, and `128`. The default `auto` mode is intentionally conservative: it targets roughly 4 subtree jobs per worker so the coordinator does not spend too much time preparing work before subworkers can start.
-
-The tree split strategy can be selected with `worker_mt_tree_strategy`. Supported values are `static`, `dynamic`, `recursive`, and `hybrid`. `dynamic` is the default conservative queue-based scheduler. `static` is useful as a baseline. `recursive` is experimental: it starts from coarse regions and lets subworkers split heavy jobs further, returning spawned jobs back to the coordinator queue. `hybrid` starts from the conservative dynamic split, then lets subworkers recursively split only heavy jobs. This is intentionally closer to the stable dynamic mode because the more aggressive coarse-seed experiment reduced top-tree time but made downstream calc/force balancing worse.
-
-This backend is the default for `n_body`. It requires `SharedArrayBuffer` and cross-origin isolation for real multithreading. On static hosting, the app can install a local COOP/COEP service worker and automatically reload once so the page becomes cross-origin isolated. If isolation cannot be enabled, the backend falls back to the single-worker path and shows the fallback reason in stats.
-
-_Demos with different worker thread counts_:
-- Auto threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=auto&particle_count=200000&segment_auto=1)
-- 2 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=2&particle_count=200000&segment_auto=1)
-- 4 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&particle_count=200000&segment_auto=1)
-- 6 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=6&particle_count=200000&segment_auto=1)
-- 4 threads with 16 tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_jobs=16&particle_count=200000&segment_auto=1)
-- 4 threads with recursive tree splitting: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=recursive&particle_count=200000&segment_auto=1)
-- 4 threads with hybrid tree splitting: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&particle_count=200000&segment_auto=1)
-
-_Heavier multithreaded demos_:
-- 300k particles with 4 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&particle_count=300000&segment_auto=1)
-- 300k particles with 6 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=6&particle_count=300000&segment_auto=1)
-- 500k particles with 4 threads and dynamic tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=dynamic&worker_mt_tree_jobs=auto&particle_count=500000&segment_auto=1)
-- 500k particles with 4 threads and recursive tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=recursive&worker_mt_tree_jobs=auto&particle_count=500000&segment_auto=1)
-- 500k particles with 4 threads and hybrid tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&worker_mt_tree_jobs=auto&particle_count=500000&segment_auto=1)
 
 
 ##### `gpgpu`
@@ -199,18 +201,26 @@ Application originally developed and optimized for Chrome browser. In other brow
 
 ### Worker MT hybrid tree strategy
 
-`n_body` also includes an experimental hybrid tree scheduler for `worker-mt`:
+`hybrid` is the recommended high-performance tree scheduler for `worker-mt`:
 
 ```text
 /n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid
 ```
 
-Hybrid mode currently starts from the same conservative shallow dynamic split as `dynamic`, then allows subworkers to recursively split only heavy jobs and return spawned jobs to the coordinator queue. This intentionally rolls back the more aggressive coarse-seed tuning: that version reduced `topTreeTime`, but made the downstream `calc` / `force` pipeline less balanced.
+The current recommended hybrid profile is `coarse` with split-first job release and hybrid job sorting enabled. This keeps coordinator-side tree preparation low, returns recursively spawned jobs to the coordinator early, and sorts hybrid jobs with a tail-oriented estimate. The split-gain filter is kept as an experimental option and is disabled by default.
 
 Recommended comparison links:
 
 ```text
-/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=dynamic
-/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=recursive
-/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid
+/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&worker_mt_hybrid_profile=coarse&particle_count=1000000&segment_auto=0&segment_max_count=40
+/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=dynamic&particle_count=1000000&segment_auto=0&segment_max_count=40
+/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=recursive&particle_count=1000000&segment_auto=0&segment_max_count=40
+```
+
+Hybrid comparison toggles:
+
+```text
+worker_mt_hybrid_split_first=1
+worker_mt_hybrid_job_sorting=1
+worker_mt_hybrid_split_gain=0
 ```

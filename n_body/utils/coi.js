@@ -1,8 +1,10 @@
 import {BackendType} from "../settings/enum.js";
 
 const COI_RELOAD_ATTEMPT_KEY = "n-body-coi-reload-attempted";
+const COI_RELOAD_ATTEMPT_VERSION = "2";
 const COI_SERVICE_WORKER_FILE = "../coi-serviceworker.js";
 const COI_SERVICE_WORKER_SCOPE = "../";
+const COI_SERVICE_WORKER_TIMEOUT_MS = 5000;
 
 export function isWorkerMTBackend(settings) {
     return settings?.simulation?.backend === BackendType.workerMt;
@@ -98,14 +100,35 @@ export async function ensureCrossOriginIsolationForWorkerMT(settings, options = 
 async function registerCrossOriginIsolationServiceWorker() {
     const scriptUrl = new URL(COI_SERVICE_WORKER_FILE, import.meta.url);
     const scopeUrl = new URL(COI_SERVICE_WORKER_SCOPE, import.meta.url);
-    const registration = await navigator.serviceWorker.register(scriptUrl, {scope: scopeUrl});
-    await navigator.serviceWorker.ready;
+    const registration = await withTimeout(
+        navigator.serviceWorker.register(scriptUrl, {scope: scopeUrl, updateViaCache: "none"}),
+        COI_SERVICE_WORKER_TIMEOUT_MS,
+        "COI service worker registration timed out"
+    );
+
+    await withTimeout(
+        navigator.serviceWorker.ready,
+        COI_SERVICE_WORKER_TIMEOUT_MS,
+        "COI service worker readiness timed out"
+    );
+
     return registration;
+}
+
+function withTimeout(promise, timeoutMs, message) {
+    let timeoutId = null;
+    const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+    });
+
+    return Promise.race([promise, timeout]).finally(() => {
+        clearTimeout(timeoutId);
+    });
 }
 
 function hasReloadAttempt() {
     try {
-        return sessionStorage.getItem(COI_RELOAD_ATTEMPT_KEY) === "1";
+        return sessionStorage.getItem(COI_RELOAD_ATTEMPT_KEY) === COI_RELOAD_ATTEMPT_VERSION;
     } catch (_) {
         return false;
     }
@@ -113,7 +136,7 @@ function hasReloadAttempt() {
 
 function markReloadAttempt() {
     try {
-        sessionStorage.setItem(COI_RELOAD_ATTEMPT_KEY, "1");
+        sessionStorage.setItem(COI_RELOAD_ATTEMPT_KEY, COI_RELOAD_ATTEMPT_VERSION);
     } catch (_) {
         // Ignore storage errors in private/restricted modes.
     }
