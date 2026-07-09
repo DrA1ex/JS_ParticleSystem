@@ -73,6 +73,28 @@ export class SimulationSettings extends SettingsBase {
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)
             .setVisibleWhen(isHybridWorkerMt),
+        workerMtHybridSplitFirst: Property.bool("worker_mt_hybrid_split_first", true)
+            .setName("Hybrid split-first").setDescription([
+                "Worker MT hybrid strategy only. When enabled, a worker that splits a heavy tree job returns the resulting child jobs to the coordinator immediately instead of mixing that split with local force/integrate work.",
+                "This preserves the previous winning hybrid/coarse behavior and keeps the global queue visible early.",
+                "Disable it to compare against a more recursive local-processing pipeline."
+            ].join("\n"))
+            .setBreaks(ComponentType.backend, ComponentType.debug)
+            .setVisibleWhen(isHybridWorkerMt),
+        workerMtHybridJobSorting: Property.bool("worker_mt_hybrid_job_sorting", false)
+            .setName("Hybrid job sorting").setDescription([
+                "Worker MT hybrid strategy only. When enabled, the coordinator sorts hybrid jobs with a tail-oriented estimate that includes a rough solve-cost component.",
+                "When disabled, hybrid uses the same tree-build estimate as dynamic/recursive. This is the previous baseline behavior."
+            ].join("\n"))
+            .setBreaks(ComponentType.backend, ComponentType.debug)
+            .setVisibleWhen(isHybridWorkerMt),
+        workerMtHybridSplitGainFilter: Property.bool("worker_mt_hybrid_split_gain", false)
+            .setName("Hybrid split-gain filter").setDescription([
+                "Worker MT hybrid strategy only. When enabled, a recursive split is accepted only if it appears to reduce the critical child tail enough.",
+                "This lets us test whether avoiding low-value splits helps without also changing split-first or queue sorting behavior."
+            ].join("\n"))
+            .setBreaks(ComponentType.backend, ComponentType.debug)
+            .setVisibleWhen(isHybridWorkerMt),
         segmentRandomness: Property.float("segment_random", 0.25)
             .setName("Segmentation randomness").setDescription("Spatial subdivision randomness factor")
             .setAffects(ComponentType.backend)
@@ -106,6 +128,9 @@ export class SimulationSettings extends SettingsBase {
     get workerMtTreeJobs() {return this.config.workerMtTreeJobs;}
     get workerMtTreeStrategy() {return this.config.workerMtTreeStrategy;}
     get workerMtHybridProfile() {return this.config.workerMtHybridProfile;}
+    get workerMtHybridSplitFirst() {return this.config.workerMtHybridSplitFirst;}
+    get workerMtHybridJobSorting() {return this.config.workerMtHybridJobSorting;}
+    get workerMtHybridSplitGainFilter() {return this.config.workerMtHybridSplitGainFilter;}
     get segmentMaxCount() {return this.config.segmentMaxCount;}
     get bufferCount() {return this.config.bufferCount;}
 

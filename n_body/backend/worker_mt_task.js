@@ -387,7 +387,7 @@ function estimateHybridNodeWorkByCount(count, depth = 1) {
     return (treeCost + solveTailCost * 0.02) * depthBias;
 }
 
-function isUsefulHybridSplit(job, children, options) {
+function isUsefulHybridSplit(job, children) {
     if (children.length <= 1) {
         return false;
     }
@@ -402,10 +402,8 @@ function isUsefulHybridSplit(job, children, options) {
     const largestRatio = largest / Math.max(1, job.count);
     const parentWork = estimateHybridNodeWorkByCount(job.count, job.depth);
     const criticalGain = parentWork > 0 ? (parentWork - criticalChildWork) / parentWork : 0;
-    const maxLargestChildRatio = Number.isFinite(options.maxLargestChildRatio) ? options.maxLargestChildRatio : 0.9;
-    const minCriticalGain = Number.isFinite(options.minCriticalGain) ? options.minCriticalGain : 0.1;
 
-    return largestRatio <= maxLargestChildRatio || criticalGain >= minCriticalGain;
+    return largestRatio <= 0.9 || criticalGain >= 0.1;
 }
 
 function readTreeJobs(data) {
@@ -588,48 +586,60 @@ function processRecursiveTreeJobs(data) {
 }
 
 
+function postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, rejectedSplits, hybridEarlySplit = false) {
+    postMessage({
+        type: "done",
+        requestId: data.requestId,
+        treeTime: splitTime,
+        treeProfile: {
+            resetTime: 0,
+            rootBoundsTime: 0,
+            populateTime: splitTime,
+            aggregateTime: 0,
+            fastBucketPath: true,
+        },
+        treeStats: {flops: 0, depth: 0, segmentCount: 0},
+        forceTime: 0,
+        integrateTime: 0,
+        leafCount: 0,
+        particleCount: 0,
+        jobCount: 0,
+        spawnedJobs,
+        recursiveSplitCount: splitCount,
+        recursiveSplitTime: splitTime,
+        hybridEarlySplit,
+        hybridEarlySplitJobs: hybridEarlySplit ? spawnedJobs.length : 0,
+        hybridRejectedSplits: rejectedSplits,
+    });
+}
+
 function processHybridTreeJobs(data) {
     const jobs = readTreeJobs(data);
     const splitBudget = Number.isFinite(data.splitBudget) ? data.splitBudget : 2;
     const minJobParticles = Number.isFinite(data.minJobParticles) ? data.minJobParticles : 16384;
-    const earlySplit = data.hybridEarlySplit !== false;
-    const localJobsPerRequest = Math.max(1, Number.isFinite(data.hybridLocalJobsPerRequest) ? data.hybridLocalJobsPerRequest : 1);
-    const splitOptions = {
-        maxLargestChildRatio: data.hybridSplitMaxLargestChildRatio,
-        minCriticalGain: data.hybridSplitMinCriticalGain,
-    };
+    const splitFirst = data.hybridSplitFirst !== false;
+    const splitGainFilter = data.hybridSplitGainFilter === true;
     const stack = jobs.slice();
     const localJobs = [];
     const spawnedJobs = [];
     let splitCount = 0;
     let rejectedSplits = 0;
-    let localSplitChildren = 0;
     const splitStart = performance.now();
 
     while (stack.length > 0) {
         const job = stack.pop();
         if (shouldSplitRecursiveNode(job, splitBudget - splitCount, minJobParticles)) {
             const children = splitRecursiveNode(job);
-            if (children.length > 1 && isUsefulHybridSplit(job, children, splitOptions)) {
+            const acceptSplit = children.length > 1 && (!splitGainFilter || isUsefulHybridSplit(job, children));
+            if (acceptSplit) {
                 splitCount += 1;
                 children.sort((a, b) => b.count - a.count);
-                let localChildren = 0;
                 for (const child of children) {
                     const canSplitChild = splitCount < splitBudget && child.count > minJobParticles * 2;
-                    if (earlySplit) {
-                        if (canSplitChild) {
-                            stack.push(child);
-                        } else {
-                            spawnedJobs.push(child);
-                        }
-                    } else if (localChildren < localJobsPerRequest) {
-                        localChildren += 1;
-                        localSplitChildren += 1;
-                        if (canSplitChild) {
-                            stack.push(child);
-                        } else {
-                            localJobs.push(child);
-                        }
+                    if (canSplitChild) {
+                        stack.push(child);
+                    } else if (splitFirst) {
+                        spawnedJobs.push(child);
                     } else if (child.count > minJobParticles) {
                         spawnedJobs.push(child);
                     } else {
@@ -648,39 +658,19 @@ function processHybridTreeJobs(data) {
 
     const splitTime = performance.now() - splitStart;
 
-    // Hybrid now uses split-first only while the coordinator queue is still
-    // underfed. Once backlog is healthy, the worker keeps a local branch and
-    // returns siblings after useful local work, reducing extra descriptors and
-    // round-trips without recreating the old recursive tail.
-    if (earlySplit && spawnedJobs.length > 0) {
+    // Default hybrid behavior remains split-first: when a request produced child
+    // jobs, return them to the coordinator immediately. The setting lets us
+    // compare that against a more recursive local-processing path without
+    // adding another public tree strategy.
+    if (splitFirst && spawnedJobs.length > 0) {
         spawnedJobs.push(...localJobs);
         spawnedJobs.sort((a, b) => b.count - a.count);
-        postMessage({
-            type: "done",
-            requestId: data.requestId,
-            treeTime: splitTime,
-            treeProfile: {
-                resetTime: 0,
-                rootBoundsTime: 0,
-                populateTime: splitTime,
-                aggregateTime: 0,
-                fastBucketPath: true,
-            },
-            treeStats: {flops: 0, depth: 0, segmentCount: 0},
-            forceTime: 0,
-            integrateTime: 0,
-            leafCount: 0,
-            particleCount: 0,
-            jobCount: 0,
-            spawnedJobs,
-            recursiveSplitCount: splitCount,
-            recursiveSplitTime: splitTime,
-            hybridEarlySplit: true,
-            hybridEarlySplitJobs: spawnedJobs.length,
-            hybridLocalJobs: 0,
-            hybridRejectedSplits: rejectedSplits,
-            hybridLocalSplitChildren: localSplitChildren,
-        });
+        postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, rejectedSplits, true);
+        return;
+    }
+
+    if (localJobs.length === 0) {
+        postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, rejectedSplits, false);
         return;
     }
 
@@ -690,12 +680,9 @@ function processHybridTreeJobs(data) {
         recursiveSplitTime: splitTime,
         hybridEarlySplit: false,
         hybridEarlySplitJobs: 0,
-        hybridLocalJobs: localJobs.length,
         hybridRejectedSplits: rejectedSplits,
-        hybridLocalSplitChildren: localSplitChildren,
     });
 }
-
 
 function processTreeJobs(data) {
     const jobStarts = new Uint32Array(data.jobStartsBuffer);
