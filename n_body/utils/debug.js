@@ -300,8 +300,11 @@ export class Debug {
         const treeModeBase = state.treeStrategy || (state.treeDynamicScheduling ? "dynamic" : "static");
         const treeMode = state.treeHybridProfile ? `${treeModeBase}/${state.treeHybridProfile}` : treeModeBase;
         const spawned = Number.isFinite(state.treeSpawnedJobs) ? `, spawned ${state.treeSpawnedJobs}` : "";
+        const adaptiveHybrid = state.treeHybridScheduling
+            ? `, early ${state.treeHybridEarlyDispatches ?? "n/a"}, mixed ${state.treeHybridMixedDispatches ?? "n/a"}, rejected ${state.treeHybridRejectedSplits ?? "n/a"}`
+            : "";
         const tree = state.treeParallel
-            ? `tree ${treeMode}, top ${this._formatMs(state.topTreeTime)}, tree max ${this._formatMs(state.treeTimeMax)}, jobs ${state.treeJobCount ?? "n/a"}/${state.treeTargetJobs ?? "n/a"}${spawned}, levels ${state.treeSplitLevels ?? "n/a"}, `
+            ? `tree ${treeMode}, top ${this._formatMs(state.topTreeTime)}, tree max ${this._formatMs(state.treeTimeMax)}, jobs ${state.treeJobCount ?? "n/a"}/${state.treeTargetJobs ?? "n/a"}${spawned}${adaptiveHybrid}, levels ${state.treeSplitLevels ?? "n/a"}, `
             : "tree off, ";
         return `${state.actualThreads} threads, ${active} active, ${tree}tasks ${tasks}, wait ${wait}, ` +
             `build ${taskBuild}, partition ${partition}, dispatch ${dispatch}, descriptors ${descriptorBytes}, ` +

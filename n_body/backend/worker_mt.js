@@ -33,6 +33,11 @@ const HYBRID_TREE_PROFILES = {
         splitBudget: 1,
         minJobParticles: 32768,
         segmentMultiplier: 256,
+        earlySplitBacklogPerThread: 2.5,
+        splitMaxLargestChildRatio: 0.86,
+        splitMinCriticalGain: 0.12,
+        batchMaxJobs: 3,
+        batchSmallJobRatio: 0.35,
     },
     [WORKER_TREE_HYBRID_PROFILE_BALANCED]: {
         seedSplitLevels: 1,
@@ -42,6 +47,11 @@ const HYBRID_TREE_PROFILES = {
         splitBudget: 2,
         minJobParticles: 32768,
         segmentMultiplier: 128,
+        earlySplitBacklogPerThread: 3,
+        splitMaxLargestChildRatio: 0.9,
+        splitMinCriticalGain: 0.1,
+        batchMaxJobs: 3,
+        batchSmallJobRatio: 0.4,
     },
     [WORKER_TREE_HYBRID_PROFILE_WIDE]: {
         seedSplitLevels: 2,
@@ -51,6 +61,11 @@ const HYBRID_TREE_PROFILES = {
         splitBudget: 2,
         minJobParticles: 16384,
         segmentMultiplier: 128,
+        earlySplitBacklogPerThread: 3.5,
+        splitMaxLargestChildRatio: 0.92,
+        splitMinCriticalGain: 0.08,
+        batchMaxJobs: 4,
+        batchSmallJobRatio: 0.45,
     },
 };
 const TREE_FLOPS_PER_OP = 14;
@@ -59,6 +74,18 @@ const EPSILON = 0.1e-6;
 function estimateTreeJobWork(job) {
     const count = job?.count || 0;
     return count * Math.max(1, Math.log2(Math.max(2, count)));
+}
+
+function estimateHybridJobWork(job) {
+    const count = job?.count || 0;
+    if (count <= 0) {
+        return 0;
+    }
+
+    const treeCost = estimateTreeJobWork(job);
+    const solveTailCost = count * Math.sqrt(Math.max(1, count));
+    const depthBias = 1 + Math.min(0.5, Math.max(0, (job.depth || 0) - 1) * 0.025);
+    return (treeCost + solveTailCost * 0.02) * depthBias;
 }
 
 class SegmentSizeAutoTuner {
@@ -260,26 +287,48 @@ class SubworkerPool {
 
     async processTreeJobsRecursive(initialJobs, materializePartition, options = {}) {
         if (this.workers.length === 0 || initialJobs.length === 0) {
-            return {results: [], dispatchTime: 0, spawnedJobCount: 0};
+            return {
+                results: [],
+                dispatchTime: 0,
+                spawnedJobCount: 0,
+                hybridEarlyDispatches: 0,
+                hybridMixedDispatches: 0,
+                hybridBatchedJobs: 0,
+                hybridMaxBacklog: 0,
+            };
         }
 
         const taskType = options.taskType || "process-tree-recursive";
-        const queue = initialJobs.slice().sort((a, b) => estimateTreeJobWork(b) - estimateTreeJobWork(a));
+        const isHybrid = taskType === "process-tree-hybrid";
+        const queue = initialJobs.slice().sort((a, b) => this._estimateQueuedJobWork(b, isHybrid) - this._estimateQueuedJobWork(a, isHybrid));
         const idleWorkers = this.workers.slice();
         const results = [];
         let activeCount = 0;
         let dispatchTime = 0;
         let spawnedJobCount = 0;
+        let hybridEarlyDispatches = 0;
+        let hybridMixedDispatches = 0;
+        let hybridBatchedJobs = 0;
+        let hybridMaxBacklog = queue.length;
 
         return await new Promise((resolve, reject) => {
             const pump = () => {
                 while (idleWorkers.length > 0 && queue.length > 0) {
                     const worker = idleWorkers.shift();
-                    const job = queue.shift();
+                    const backlog = queue.length + activeCount;
+                    hybridMaxBacklog = Math.max(hybridMaxBacklog, backlog);
+                    const hybridEarlySplit = isHybrid && this._shouldUseHybridEarlySplit(backlog, options);
+                    const jobs = isHybrid
+                        ? this._takeHybridJobsForDispatch(queue, hybridEarlySplit, options)
+                        : [queue.shift()];
+                    if (jobs.length === 0) {
+                        idleWorkers.push(worker);
+                        continue;
+                    }
                     activeCount += 1;
 
                     const t = performance.now();
-                    const partition = materializePartition({jobs: [job]});
+                    const partition = materializePartition({jobs});
                     dispatchTime += performance.now() - t;
 
                     if (!partition || partition.jobCount === 0) {
@@ -288,10 +337,26 @@ class SubworkerPool {
                         continue;
                     }
 
-                    this._processTreePartition(worker, partition, taskType, options)
+                    if (isHybrid) {
+                        if (hybridEarlySplit) {
+                            hybridEarlyDispatches += 1;
+                        } else {
+                            hybridMixedDispatches += 1;
+                        }
+                        if (jobs.length > 1) {
+                            hybridBatchedJobs += jobs.length - 1;
+                        }
+                    }
+
+                    this._processTreePartition(worker, partition, taskType, {
+                        ...options,
+                        hybridEarlySplit,
+                    })
                         .then((result) => {
                             result.descriptorBytes = partition.descriptorBytes || 0;
                             result.indexCopyBytes = partition.indexCopyBytes || 0;
+                            result.hybridEarlyDispatch = !!hybridEarlySplit;
+                            result.hybridBatchedInputJobs = Math.max(0, jobs.length - 1);
                             results.push(result);
 
                             if (Array.isArray(result.spawnedJobs) && result.spawnedJobs.length > 0) {
@@ -299,7 +364,7 @@ class SubworkerPool {
                                 for (const spawnedJob of result.spawnedJobs) {
                                     queue.push(spawnedJob);
                                 }
-                                queue.sort((a, b) => estimateTreeJobWork(b) - estimateTreeJobWork(a));
+                                queue.sort((a, b) => this._estimateQueuedJobWork(b, isHybrid) - this._estimateQueuedJobWork(a, isHybrid));
                             }
                         })
                         .then(() => {
@@ -311,13 +376,58 @@ class SubworkerPool {
                 }
 
                 if (activeCount === 0 && queue.length === 0) {
-                    resolve({results, dispatchTime, spawnedJobCount});
+                    resolve({
+                        results,
+                        dispatchTime,
+                        spawnedJobCount,
+                        hybridEarlyDispatches,
+                        hybridMixedDispatches,
+                        hybridBatchedJobs,
+                        hybridMaxBacklog,
+                    });
                 }
             };
 
             pump();
         });
     }
+
+    _estimateQueuedJobWork(job, isHybrid) {
+        return isHybrid ? estimateHybridJobWork(job) : estimateTreeJobWork(job);
+    }
+
+    _shouldUseHybridEarlySplit(backlog, options = {}) {
+        const threshold = Math.max(this.workers.length, Math.ceil(this.workers.length * (options.earlySplitBacklogPerThread || 3)));
+        return backlog < threshold;
+    }
+
+    _takeHybridJobsForDispatch(queue, earlySplit, options = {}) {
+        if (queue.length === 0) {
+            return [];
+        }
+
+        const jobs = [queue.shift()];
+        if (earlySplit || queue.length === 0) {
+            return jobs;
+        }
+
+        const maxJobs = Math.max(1, options.batchMaxJobs || 1);
+        if (maxJobs <= 1) {
+            return jobs;
+        }
+
+        const firstWork = estimateHybridJobWork(jobs[0]);
+        const smallJobLimit = firstWork * (options.batchSmallJobRatio || 0.35);
+        while (jobs.length < maxJobs && queue.length > 0) {
+            const candidate = queue[queue.length - 1];
+            if (estimateHybridJobWork(candidate) > smallJobLimit) {
+                break;
+            }
+            jobs.push(queue.pop());
+        }
+        return jobs;
+    }
+
 
 
     _sendInit(worker, type, settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB) {
@@ -374,6 +484,10 @@ class SubworkerPool {
                 requestId,
                 splitBudget: options.splitBudget,
                 minJobParticles: options.minJobParticles,
+                hybridEarlySplit: options.hybridEarlySplit,
+                hybridSplitMaxLargestChildRatio: options.splitMaxLargestChildRatio,
+                hybridSplitMinCriticalGain: options.splitMinCriticalGain,
+                hybridLocalJobsPerRequest: options.localJobsPerRequest,
                 jobStartsBuffer: partition.jobStarts.buffer,
                 jobCountsBuffer: partition.jobCounts.buffer,
                 jobIndexBuffersBuffer: partition.jobIndexBuffers.buffer,
@@ -616,6 +730,7 @@ class WorkerMTBackendImpl {
                 results[i].indexCopyBytes = partitions[i]?.indexCopyBytes || 0;
             }
         } else if (strategy === WORKER_TREE_STRATEGY_RECURSIVE || strategy === WORKER_TREE_STRATEGY_HYBRID) {
+            const hybridProfile = strategy === WORKER_TREE_STRATEGY_HYBRID ? this._getWorkerMtHybridProfileConfig() : null;
             schedulerResult = await this._pool.processTreeJobsRecursive(
                 partitionPlan.jobs,
                 (partition) => this._materializeTreeJobPartition(partition),
@@ -623,6 +738,12 @@ class WorkerMTBackendImpl {
                     splitBudget: this._getTreeRecursiveSplitBudget(strategy),
                     minJobParticles: this._getTreeRecursiveMinJobParticles(strategy),
                     taskType: strategy === WORKER_TREE_STRATEGY_HYBRID ? "process-tree-hybrid" : "process-tree-recursive",
+                    earlySplitBacklogPerThread: hybridProfile?.earlySplitBacklogPerThread,
+                    splitMaxLargestChildRatio: hybridProfile?.splitMaxLargestChildRatio,
+                    splitMinCriticalGain: hybridProfile?.splitMinCriticalGain,
+                    batchMaxJobs: hybridProfile?.batchMaxJobs,
+                    batchSmallJobRatio: hybridProfile?.batchSmallJobRatio,
+                    localJobsPerRequest: 1,
                 }
             );
         } else {
@@ -666,6 +787,12 @@ class WorkerMTBackendImpl {
             treeSpawnedJobs: schedulerResult.spawnedJobCount || 0,
             treeEarlySplitResults: workerResults.reduce((sum, item) => sum + (item.hybridEarlySplit ? 1 : 0), 0),
             treeEarlySplitJobs: workerResults.reduce((sum, item) => sum + (item.hybridEarlySplitJobs || 0), 0),
+            treeHybridEarlyDispatches: schedulerResult.hybridEarlyDispatches || 0,
+            treeHybridMixedDispatches: schedulerResult.hybridMixedDispatches || 0,
+            treeHybridBatchedJobs: schedulerResult.hybridBatchedJobs || 0,
+            treeHybridMaxBacklog: schedulerResult.hybridMaxBacklog || 0,
+            treeHybridLocalJobs: workerResults.reduce((sum, item) => sum + (item.hybridLocalJobs || 0), 0),
+            treeHybridRejectedSplits: workerResults.reduce((sum, item) => sum + (item.hybridRejectedSplits || 0), 0),
             recursiveSplitCount: workerResults.reduce((sum, item) => sum + (item.recursiveSplitCount || 0), 0),
             recursiveSplitTime: workerResults.reduce((sum, item) => sum + (item.recursiveSplitTime || 0), 0),
             recursiveSplitBudget: (strategy === WORKER_TREE_STRATEGY_RECURSIVE || strategy === WORKER_TREE_STRATEGY_HYBRID) ? this._getTreeRecursiveSplitBudget(strategy) : null,
@@ -746,6 +873,12 @@ class WorkerMTBackendImpl {
             spawnedJobs: mtProfile.treeSpawnedJobs || 0,
             earlySplitResults: mtProfile.treeEarlySplitResults || 0,
             earlySplitJobs: mtProfile.treeEarlySplitJobs || 0,
+            hybridEarlyDispatches: mtProfile.treeHybridEarlyDispatches || 0,
+            hybridMixedDispatches: mtProfile.treeHybridMixedDispatches || 0,
+            hybridBatchedJobs: mtProfile.treeHybridBatchedJobs || 0,
+            hybridMaxBacklog: mtProfile.treeHybridMaxBacklog || 0,
+            hybridLocalJobs: mtProfile.treeHybridLocalJobs || 0,
+            hybridRejectedSplits: mtProfile.treeHybridRejectedSplits || 0,
             recursiveSplitCount: mtProfile.recursiveSplitCount || 0,
             recursiveSplitTime: mtProfile.recursiveSplitTime || 0,
             recursiveSplitBudget: mtProfile.recursiveSplitBudget ?? null,

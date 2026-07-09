@@ -376,6 +376,38 @@ function shouldSplitRecursiveNode(node, splitBudget, minJobParticles) {
         node.bottom - node.top > EPSILON;
 }
 
+function estimateHybridNodeWorkByCount(count, depth = 1) {
+    if (!Number.isFinite(count) || count <= 0) {
+        return 0;
+    }
+
+    const treeCost = count * Math.max(1, Math.log2(Math.max(2, count)));
+    const solveTailCost = count * Math.sqrt(Math.max(1, count));
+    const depthBias = 1 + Math.min(0.5, Math.max(0, depth - 1) * 0.025);
+    return (treeCost + solveTailCost * 0.02) * depthBias;
+}
+
+function isUsefulHybridSplit(job, children, options) {
+    if (children.length <= 1) {
+        return false;
+    }
+
+    let largest = 0;
+    let criticalChildWork = 0;
+    for (const child of children) {
+        largest = Math.max(largest, child.count);
+        criticalChildWork = Math.max(criticalChildWork, estimateHybridNodeWorkByCount(child.count, child.depth));
+    }
+
+    const largestRatio = largest / Math.max(1, job.count);
+    const parentWork = estimateHybridNodeWorkByCount(job.count, job.depth);
+    const criticalGain = parentWork > 0 ? (parentWork - criticalChildWork) / parentWork : 0;
+    const maxLargestChildRatio = Number.isFinite(options.maxLargestChildRatio) ? options.maxLargestChildRatio : 0.9;
+    const minCriticalGain = Number.isFinite(options.minCriticalGain) ? options.minCriticalGain : 0.1;
+
+    return largestRatio <= maxLargestChildRatio || criticalGain >= minCriticalGain;
+}
+
 function readTreeJobs(data) {
     const jobStarts = new Uint32Array(data.jobStartsBuffer);
     const jobCounts = new Uint32Array(data.jobCountsBuffer);
@@ -560,27 +592,54 @@ function processHybridTreeJobs(data) {
     const jobs = readTreeJobs(data);
     const splitBudget = Number.isFinite(data.splitBudget) ? data.splitBudget : 2;
     const minJobParticles = Number.isFinite(data.minJobParticles) ? data.minJobParticles : 16384;
+    const earlySplit = data.hybridEarlySplit !== false;
+    const localJobsPerRequest = Math.max(1, Number.isFinite(data.hybridLocalJobsPerRequest) ? data.hybridLocalJobsPerRequest : 1);
+    const splitOptions = {
+        maxLargestChildRatio: data.hybridSplitMaxLargestChildRatio,
+        minCriticalGain: data.hybridSplitMinCriticalGain,
+    };
     const stack = jobs.slice();
     const localJobs = [];
     const spawnedJobs = [];
     let splitCount = 0;
+    let rejectedSplits = 0;
+    let localSplitChildren = 0;
     const splitStart = performance.now();
 
     while (stack.length > 0) {
         const job = stack.pop();
         if (shouldSplitRecursiveNode(job, splitBudget - splitCount, minJobParticles)) {
             const children = splitRecursiveNode(job);
-            if (children.length > 1) {
+            if (children.length > 1 && isUsefulHybridSplit(job, children, splitOptions)) {
                 splitCount += 1;
                 children.sort((a, b) => b.count - a.count);
+                let localChildren = 0;
                 for (const child of children) {
-                    if (splitCount < splitBudget && child.count > minJobParticles * 2) {
-                        stack.push(child);
-                    } else {
+                    const canSplitChild = splitCount < splitBudget && child.count > minJobParticles * 2;
+                    if (earlySplit) {
+                        if (canSplitChild) {
+                            stack.push(child);
+                        } else {
+                            spawnedJobs.push(child);
+                        }
+                    } else if (localChildren < localJobsPerRequest) {
+                        localChildren += 1;
+                        localSplitChildren += 1;
+                        if (canSplitChild) {
+                            stack.push(child);
+                        } else {
+                            localJobs.push(child);
+                        }
+                    } else if (child.count > minJobParticles) {
                         spawnedJobs.push(child);
+                    } else {
+                        localJobs.push(child);
                     }
                 }
                 continue;
+            }
+            if (children.length > 1) {
+                rejectedSplits += 1;
             }
         }
 
@@ -589,12 +648,11 @@ function processHybridTreeJobs(data) {
 
     const splitTime = performance.now() - splitStart;
 
-    // Hybrid is intentionally split-first: once this request produced child
-    // jobs, return them to the coordinator immediately instead of also doing
-    // local force/integrate work. This keeps the global queue visible and avoids
-    // the old wave-shaped recursive pipeline where spawned jobs arrived only
-    // after a worker had already finished its local subtree solve.
-    if (spawnedJobs.length > 0) {
+    // Hybrid now uses split-first only while the coordinator queue is still
+    // underfed. Once backlog is healthy, the worker keeps a local branch and
+    // returns siblings after useful local work, reducing extra descriptors and
+    // round-trips without recreating the old recursive tail.
+    if (earlySplit && spawnedJobs.length > 0) {
         spawnedJobs.push(...localJobs);
         spawnedJobs.sort((a, b) => b.count - a.count);
         postMessage({
@@ -619,18 +677,25 @@ function processHybridTreeJobs(data) {
             recursiveSplitTime: splitTime,
             hybridEarlySplit: true,
             hybridEarlySplitJobs: spawnedJobs.length,
+            hybridLocalJobs: 0,
+            hybridRejectedSplits: rejectedSplits,
+            hybridLocalSplitChildren: localSplitChildren,
         });
         return;
     }
 
     buildAndProcessTreeJobs(localJobs, data.requestId, {
-        spawnedJobs: [],
+        spawnedJobs,
         recursiveSplitCount: splitCount,
         recursiveSplitTime: splitTime,
         hybridEarlySplit: false,
         hybridEarlySplitJobs: 0,
+        hybridLocalJobs: localJobs.length,
+        hybridRejectedSplits: rejectedSplits,
+        hybridLocalSplitChildren: localSplitChildren,
     });
 }
+
 
 function processTreeJobs(data) {
     const jobStarts = new Uint32Array(data.jobStartsBuffer);
