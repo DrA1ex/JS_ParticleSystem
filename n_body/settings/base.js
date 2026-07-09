@@ -136,6 +136,7 @@ export class Property {
         this._description = "";
         this.min = null;
         this.max = null;
+        this.visibleWhen = null;
 
         if (this.type === PropertyType.enum) {
             if (!this.enumType) {
@@ -245,6 +246,30 @@ export class Property {
     setRequiresReload() {
         this.requiresReload = true;
         return this;
+    }
+
+    /**
+     * Show this setting only when the current app configuration makes it relevant.
+     * The value is still parsed and preserved; this only affects settings UI rows.
+     *
+     * @param {(settings: AppSettingsBase, groupSettings: SettingsBase) => boolean} predicate
+     * @return {Property<T>}
+     */
+    setVisibleWhen(predicate) {
+        this.visibleWhen = predicate;
+        return this;
+    }
+
+    /**
+     * @param {AppSettingsBase} settings
+     * @param {SettingsBase} groupSettings
+     * @return {boolean}
+     */
+    isVisible(settings, groupSettings) {
+        if (!this.visibleWhen) {
+            return true;
+        }
+        return !!this.visibleWhen(settings, groupSettings);
     }
 
     /**

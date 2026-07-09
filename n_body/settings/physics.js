@@ -1,6 +1,7 @@
 import {ComponentType, Property, ReadOnlyProperty, SettingsBase} from "./base.js";
 import {ParticleInitType} from "./enum.js";
 
+const collisionEnabled = settings => !!settings.physics.enableCollision;
 
 export class PhysicsSettings extends SettingsBase {
     static Properties = {
@@ -35,11 +36,13 @@ export class PhysicsSettings extends SettingsBase {
             .setExportable(true)
             .setName("Particle collision size").setDescription("Sets particle collider size in pixels")
             .setAffects(ComponentType.backend)
+            .setVisibleWhen(collisionEnabled)
             .setConstraints(1e-6, 1e3),
         collisionRestitution: Property.float("collision_r", 1)
             .setExportable(true)
             .setName("Collision restitution").setDescription("Sets collision restitution, 1 - means no energy loss during collision")
             .setAffects(ComponentType.backend)
+            .setVisibleWhen(collisionEnabled)
             .setConstraints(0, 2),
         minInteractionDistance: Property.float("min_distance", 0.01)
             .setExportable(true)

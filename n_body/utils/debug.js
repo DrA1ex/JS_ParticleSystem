@@ -297,7 +297,8 @@ export class Debug {
         const active = Number.isFinite(state.activeWorkers) ? state.activeWorkers : "n/a";
         const sharedIndices = state.sharedIndexBuffers ? "shared indices" : "copied indices";
         const dispatch = this._formatMs(state.dispatchTime);
-        const treeMode = state.treeStrategy || (state.treeDynamicScheduling ? "dynamic" : "static");
+        const treeModeBase = state.treeStrategy || (state.treeDynamicScheduling ? "dynamic" : "static");
+        const treeMode = state.treeHybridProfile ? `${treeModeBase}/${state.treeHybridProfile}` : treeModeBase;
         const spawned = Number.isFinite(state.treeSpawnedJobs) ? `, spawned ${state.treeSpawnedJobs}` : "";
         const tree = state.treeParallel
             ? `tree ${treeMode}, top ${this._formatMs(state.topTreeTime)}, tree max ${this._formatMs(state.treeTimeMax)}, jobs ${state.treeJobCount ?? "n/a"}/${state.treeTargetJobs ?? "n/a"}${spawned}, levels ${state.treeSplitLevels ?? "n/a"}, `

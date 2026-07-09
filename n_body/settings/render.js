@@ -1,6 +1,11 @@
 import {ComponentType, Property, SettingsBase} from "./base.js";
 import {BufferUploadMode, MaxSpeedUpdateMode, RenderColorMode, RenderType} from "./enum.js";
 
+const isWebglRenderer = settings => settings.render.render === RenderType.webgl2;
+const useDprEnabled = settings => !!settings.render.useDpr;
+const dfriEnabled = settings => !!settings.render.enableDFRI;
+const velocityWebglColor = settings => isWebglRenderer(settings) &&
+    settings.render.colorMode === RenderColorMode.velocity;
 
 export class RenderSettings extends SettingsBase {
     static Properties = {
@@ -13,6 +18,7 @@ export class RenderSettings extends SettingsBase {
         dprRate: Property.float("dpr_rate", 0)
             .setName("Custom DPR value").setDescription("Override default Device Pixel Ratio")
             .setAffects(ComponentType.renderer, ComponentType.debug)
+            .setVisibleWhen(useDprEnabled)
             .setConstraints(0, 10),
         fixedParticleSize: Property.bool("fixed_size", true)
             .setName("Fixed particle size").setDescription("Don't change particle size when scale")
@@ -36,7 +42,8 @@ export class RenderSettings extends SettingsBase {
                 "mass: color depends only on mass; skips velocity upload and is usually faster for large particle counts.",
                 "fixed: uses one fixed color; uploads only positions and is the fastest mode."
             ].join("\n"))
-            .setAffects(ComponentType.renderer),
+            .setAffects(ComponentType.renderer)
+            .setVisibleWhen(isWebglRenderer),
         bufferUploadMode: Property.enum("upload_mode", BufferUploadMode, BufferUploadMode.stream)
             .setName("Buffer upload mode").setDescription([
                 "Controls how dynamic WebGL buffers are updated after a new physics frame arrives.",
@@ -45,7 +52,8 @@ export class RenderSettings extends SettingsBase {
                 "stream: orphans the previous GPU storage before upload, then writes with bufferSubData. This can avoid stalls when the driver still uses the old buffer for a previous frame.",
                 "This affects CPU/GPU upload cost, not the physics calculation itself."
             ].join("\n"))
-            .setAffects(ComponentType.renderer),
+            .setAffects(ComponentType.renderer)
+            .setVisibleWhen(isWebglRenderer),
         webglLowLatency: Property.bool("webgl_low_latency", true)
             .setName("Low latency WebGL context").setDescription([
                 "Requests a WebGL2 context optimized for interactive rendering.",
@@ -53,7 +61,8 @@ export class RenderSettings extends SettingsBase {
                 "Browser and GPU drivers may ignore some of these hints.",
                 "This option is read only while creating the WebGL context. Changing it updates the URL/state and requires a page reload; it is not applied live."
             ].join("\n"))
-            .setRequiresReload(),
+            .setRequiresReload()
+            .setVisibleWhen(isWebglRenderer),
         maxSpeedUpdateMode: Property.enum("max_speed_mode", MaxSpeedUpdateMode, MaxSpeedUpdateMode.throttle)
             .setName("Max speed update").setDescription([
                 "Controls how often the renderer scans all velocities to update the color normalization value.",
@@ -61,7 +70,8 @@ export class RenderSettings extends SettingsBase {
                 "throttle: scan periodically; keeps velocity colors adaptive with lower CPU cost.",
                 "off: do not scan in the renderer; uses the configured/base max speed and avoids this CPU cost."
             ].join("\n"))
-            .setAffects(ComponentType.renderer),
+            .setAffects(ComponentType.renderer)
+            .setVisibleWhen(velocityWebglColor),
         enableDFRI: Property.bool("dfri", true)
             .setName("Enable DFRI").setDescription([
                 "Enables dynamic frame rate interpolation between physics frames.",
@@ -78,6 +88,7 @@ export class RenderSettings extends SettingsBase {
                 "Lower values reduce interpolation delay and make slow physics updates more visible."
             ].join("\n"))
             .setAffects(ComponentType.dfri)
+            .setVisibleWhen(dfriEnabled)
             .setConstraints(1, 240),
         slowMotionRate: Property.float("slow_motion", 1)
             .setName("Slow motion rate").setDescription([
@@ -85,6 +96,7 @@ export class RenderSettings extends SettingsBase {
                 "1 means normal speed. Lower values intentionally slow down visual playback."
             ].join("\n"))
             .setAffects(ComponentType.dfri)
+            .setVisibleWhen(dfriEnabled)
             .setConstraints(1e-2, 1)
     };
 

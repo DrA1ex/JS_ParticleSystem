@@ -16,8 +16,10 @@ export class SettingsController extends ControllerBase {
     settings;
     /** @type {{[string]: {[string]: InputControl}}} */
     config;
-    /** @type {Map<Property, {key: string, groupKey: string, group: SettingsGroup, control: InputControl|Label}>} */
+    /** @type {Map<Property, {key: string, groupKey: string, group: SettingsGroup, control: InputControl|Label, caption: HTMLElement, block: HTMLElement}>} */
     propData;
+    /** @type {Map<string, HTMLElement>} */
+    groupBlocks;
 
     constructor(root, parentCtrl) {
         const viewControl = new View(root, view)
@@ -43,6 +45,7 @@ export class SettingsController extends ControllerBase {
         this.settings = settings;
         this.config = {};
         this.propData = new Map();
+        this.groupBlocks = new Map();
 
         while (this.content.firstChild) {
             this.content.removeChild(this.content.lastChild);
@@ -67,6 +70,8 @@ export class SettingsController extends ControllerBase {
                 }
             }
         }
+
+        this._updateConditionalVisibility(this.settings);
     }
 
     onParameterChanged(prop, suppressEvent = false) {
@@ -92,6 +97,8 @@ export class SettingsController extends ControllerBase {
                     }
                 }
             }
+
+            this._updateConditionalVisibility(config);
         }
     }
 
@@ -122,6 +129,7 @@ export class SettingsController extends ControllerBase {
 
         const block = document.createElement("div");
         block.classList.add("settings-block");
+        this.groupBlocks.set(groupKey, block);
         this._createBlockEntries(config, groupKey, group, block, value);
         this.content.appendChild(block);
     }
@@ -156,7 +164,9 @@ export class SettingsController extends ControllerBase {
                 key,
                 groupKey,
                 group,
-                control
+                control,
+                caption,
+                block: parent,
             });
 
             parent.appendChild(control.element);
@@ -185,13 +195,44 @@ export class SettingsController extends ControllerBase {
                 key,
                 groupKey,
                 group,
-                control: label
+                control: label,
+                caption,
+                block: parent,
             });
 
             count += 1;
         }
 
         parent.style.gridTemplateRows = `repeat(${count}, 2em)`;
+    }
+
+
+    /**
+     * @param {AppSimulationSettings} settings
+     * @private
+     */
+    _updateConditionalVisibility(settings) {
+        const visibleRowsByBlock = new Map();
+
+        for (const [prop, data] of this.propData.entries()) {
+            const {caption, control, groupKey, block} = data;
+            const groupSettings = settings[groupKey];
+            const visible = prop.isVisible(settings, groupSettings);
+
+            caption.style.display = visible ? null : "none";
+            control.setVisibility(visible);
+            caption.setAttribute("aria-hidden", visible ? "false" : "true");
+            control.element.setAttribute("aria-hidden", visible ? "false" : "true");
+
+            if (visible) {
+                visibleRowsByBlock.set(block, (visibleRowsByBlock.get(block) || 0) + 1);
+            }
+        }
+
+        for (const [_, block] of this.groupBlocks.entries()) {
+            const visibleRows = visibleRowsByBlock.get(block) || 0;
+            block.style.gridTemplateRows = visibleRows > 0 ? `repeat(${visibleRows}, 2em)` : "none";
+        }
     }
 
 

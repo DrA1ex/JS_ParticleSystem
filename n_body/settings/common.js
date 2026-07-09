@@ -1,5 +1,7 @@
 import {ComponentType, Property, SettingsBase} from "./base.js";
 
+const debugEnabled = settings => !!settings.common.debug;
+const statsEnabled = settings => !!settings.common.stats;
 
 export class CommonSettings extends SettingsBase {
     static Properties = {
@@ -9,13 +11,16 @@ export class CommonSettings extends SettingsBase {
             .setAffects(ComponentType.renderer, ComponentType.backend),
         debugTree: Property.bool("debug_tree", null)
             .setName("Debug tree").setDescription("Show Spatial Tree segments")
-            .setAffects(ComponentType.debug, ComponentType.backend),
+            .setAffects(ComponentType.debug, ComponentType.backend)
+            .setVisibleWhen(debugEnabled),
         debugVelocity: Property.bool("debug_velocity", false)
             .setName("Debug velocity").setDescription("Show velocity vectors")
-            .setAffects(ComponentType.debug),
+            .setAffects(ComponentType.debug)
+            .setVisibleWhen(debugEnabled),
         debugForce: Property.bool("debug_force", null)
             .setName("Debug momentum").setDescription("Show momentum vectors")
-            .setAffects(ComponentType.debug, ComponentType.backend),
+            .setAffects(ComponentType.debug, ComponentType.backend)
+            .setVisibleWhen(debugEnabled),
         stats: Property.bool("stats", true)
             .setName("Show statistics")
             .setDescription("Show compact runtime statistics overlay with FPS, physics, render and backend summary.")
@@ -27,7 +32,8 @@ export class CommonSettings extends SettingsBase {
                 "Disabled by default to keep the overlay stable and readable during normal use.",
                 "Enable it when profiling frame pacing, main-thread work, WebGL upload, GPU timing, auto-tune state or other performance details."
             ].join("\n"))
-            .setBreaks(ComponentType.debug),
+            .setBreaks(ComponentType.debug)
+            .setVisibleWhen(statsEnabled),
     }
 
     static PropertiesDependencies = new Map([

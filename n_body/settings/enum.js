@@ -63,6 +63,15 @@ export const WorkerTreeStrategy = {
 /**
  * @enum(string)
  */
+export const WorkerHybridProfile = {
+    coarse: "coarse",
+    balanced: "balanced",
+    wide: "wide"
+}
+
+/**
+ * @enum(string)
+ */
 export const MaxSpeedUpdateMode = {
     current: "current",
     throttle: "throttle",
