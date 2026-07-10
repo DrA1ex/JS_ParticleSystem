@@ -127,7 +127,7 @@ The static and dynamic tree schedulers can be tuned with `worker_mt_tree_jobs`. 
 
 The tree split strategy can be selected with `worker_mt_tree_strategy`. Supported values are `static`, `dynamic`, `recursive`, and `hybrid`. `hybrid` is the default. `dynamic` is the conservative queue-based baseline. `static` is useful as a simple baseline. `recursive` is a legacy experiment that starts from coarse regions and lets subworkers split heavy jobs further, but it can produce a weaker downstream calc/force pipeline. `hybrid` is the recommended high-performance CPU profile: by default it uses the `coarse` hybrid profile, split-first recursive job release, and hybrid job sorting.
 
-Hybrid-specific tuning is available through `worker_mt_hybrid_profile`, `worker_mt_hybrid_seed_jobs`, `worker_mt_hybrid_split_first`, `worker_mt_hybrid_job_sorting`, and `worker_mt_hybrid_split_gain`. The recommended setting is the default hybrid combination: `coarse`, seed jobs on `auto`, split-first enabled, job sorting enabled, and split-gain filtering disabled. `auto` targets roughly one initial seed job per active subworker without limiting later recursive splitting.
+Hybrid-specific tuning is available through `worker_mt_hybrid_profile`, `worker_mt_hybrid_seed_jobs`, `worker_mt_hybrid_seed_parallel`, `worker_mt_hybrid_split_first`, `worker_mt_hybrid_job_sorting`, and `worker_mt_hybrid_split_gain`. Hybrid seed-job values are `4`, `8`, `16`, `32`, and `64`; `4` is the default. The recommended baseline is the default hybrid combination: `coarse`, 4 seed jobs, serial seed bootstrap, split-first enabled, job sorting enabled, and split-gain filtering disabled. Four seed jobs keep coordinator preparation shallow while later recursive splitting remains unrestricted. Enable `worker_mt_hybrid_seed_parallel=1` to compare the experimental parallel root bootstrap against the unchanged serial baseline.
 
 This backend is the default CPU backend for `n_body`. It requires `SharedArrayBuffer` and cross-origin isolation for real multithreading. On static hosting, the app can install a local COOP/COEP service worker and automatically reload once so the page becomes cross-origin isolated. If isolation cannot be enabled, the backend falls back to the single-worker path and shows the fallback reason in stats.
 
@@ -144,8 +144,8 @@ _Demos with different worker thread counts_:
 - 4 threads with hybrid tree splitting, 500k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&particle_count=500000&segment_auto=1)
 
 _Heavier multithreaded demos_:
-- 750k particles with 4 threads and hybrid tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&worker_mt_hybrid_seed_jobs=auto&particle_count=750000&segment_auto=1)
-- 1M particles with 4 threads and hybrid tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&worker_mt_hybrid_seed_jobs=auto&particle_count=1000000&segment_auto=0&segment_max_count=40)
+- 750k particles with 4 threads and hybrid tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&worker_mt_hybrid_seed_jobs=4&particle_count=750000&segment_auto=1)
+- 1M particles with 4 threads and hybrid tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&worker_mt_hybrid_seed_jobs=4&particle_count=1000000&segment_auto=0&segment_max_count=40)
 - 1M particles with 4 threads and dynamic tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=dynamic&worker_mt_tree_jobs=auto&particle_count=1000000&segment_auto=0&segment_max_count=40)
 - 1M particles with 4 threads and recursive tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=recursive&particle_count=1000000&segment_auto=0&segment_max_count=40)
 
@@ -210,7 +210,7 @@ Application originally developed and optimized for Chrome browser. In other brow
 /n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid
 ```
 
-The current recommended hybrid profile is `coarse` with `worker_mt_hybrid_seed_jobs=auto`, split-first job release, and hybrid job sorting enabled. Auto seed width targets roughly one initial job per active subworker. This keeps the initial queue proportional to available parallelism while still allowing unexpectedly heavy deep branches to split recursively. The split-gain filter is kept as an experimental option and is disabled by default.
+The current recommended hybrid baseline is `coarse` with `worker_mt_hybrid_seed_jobs=4`, serial seed bootstrap, split-first job release, and hybrid job sorting enabled. Four seed jobs avoid an expensive extra coordinator split level while unexpectedly heavy deep branches can still split recursively. The parallel seed bootstrap is an experimental switch that parallelizes root bounds, bucket counting, and shared-buffer scatter without changing the later hybrid scheduler. The split-gain filter remains disabled by default.
 
 Recommended comparison links:
 
@@ -223,7 +223,8 @@ Recommended comparison links:
 Hybrid comparison toggles:
 
 ```text
-worker_mt_hybrid_seed_jobs=auto
+worker_mt_hybrid_seed_jobs=4
+worker_mt_hybrid_seed_parallel=0
 worker_mt_hybrid_split_first=1
 worker_mt_hybrid_job_sorting=1
 worker_mt_hybrid_split_gain=0

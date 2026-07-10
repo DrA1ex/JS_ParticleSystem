@@ -21,6 +21,82 @@ function init(data) {
     indexBuffers = [new Int32Array(data.indexBufferA), new Int32Array(data.indexBufferB)];
 }
 
+function processHybridSeedBounds(data) {
+    const start = Math.max(0, data.startParticle | 0);
+    const end = Math.max(start, data.endParticle | 0);
+    const sourceIndices = indexBuffers[0];
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (let particleIndex = start; particleIndex < end; particleIndex++) {
+        sourceIndices[particleIndex] = particleIndex;
+        const offset = particleIndex * ITEM_SIZE;
+        const x = particles[offset];
+        const y = particles[offset + 1];
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+    }
+
+    postMessage({
+        type: "done",
+        requestId: data.requestId,
+        minX: Number.isFinite(minX) ? minX : null,
+        minY: Number.isFinite(minY) ? minY : null,
+        maxX: Number.isFinite(maxX) ? maxX : null,
+        maxY: Number.isFinite(maxY) ? maxY : null,
+        particleCount: end - start,
+    });
+}
+
+function processHybridSeedCount(data) {
+    const start = Math.max(0, data.startParticle | 0);
+    const end = Math.max(start, data.endParticle | 0);
+    const xMid = data.xMid;
+    const yMid = data.yMid;
+    const bucketCounts = [0, 0, 0, 0];
+    const bucketMass = [0, 0, 0, 0];
+
+    for (let particleIndex = start; particleIndex < end; particleIndex++) {
+        const offset = particleIndex * ITEM_SIZE;
+        const bucketIndex = (particles[offset] < xMid ? 0 : 2) + (particles[offset + 1] < yMid ? 0 : 1);
+        bucketCounts[bucketIndex] += 1;
+        bucketMass[bucketIndex] += particles[offset + 4];
+    }
+
+    postMessage({
+        type: "done",
+        requestId: data.requestId,
+        bucketCounts,
+        bucketMass,
+        particleCount: end - start,
+    });
+}
+
+function processHybridSeedScatter(data) {
+    const start = Math.max(0, data.startParticle | 0);
+    const end = Math.max(start, data.endParticle | 0);
+    const xMid = data.xMid;
+    const yMid = data.yMid;
+    const targetIndices = indexBuffers[1];
+    const writes = Array.isArray(data.bucketOffsets) ? data.bucketOffsets.slice(0, 4) : [0, 0, 0, 0];
+
+    for (let particleIndex = start; particleIndex < end; particleIndex++) {
+        const offset = particleIndex * ITEM_SIZE;
+        const bucketIndex = (particles[offset] < xMid ? 0 : 2) + (particles[offset + 1] < yMid ? 0 : 1);
+        targetIndices[writes[bucketIndex]++] = particleIndex;
+    }
+
+    postMessage({
+        type: "done",
+        requestId: data.requestId,
+        particleCount: end - start,
+    });
+}
+
 function ensureCollisionBuffer(length) {
     if (collisionVelX.length < length) {
         collisionVelX = new Float32Array(length);
@@ -771,6 +847,15 @@ onmessage = (event) => {
             break;
         case "process-tree-hybrid":
             processHybridTreeJobs(data);
+            break;
+        case "hybrid-seed-bounds":
+            processHybridSeedBounds(data);
+            break;
+        case "hybrid-seed-count":
+            processHybridSeedCount(data);
+            break;
+        case "hybrid-seed-scatter":
+            processHybridSeedScatter(data);
             break;
         case "dispose":
             close();

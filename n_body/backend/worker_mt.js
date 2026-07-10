@@ -230,6 +230,18 @@ class SubworkerPool {
         return Promise.all(promises);
     }
 
+    processHybridSeedBounds(ranges) {
+        return this._processHybridSeedPhase("hybrid-seed-bounds", ranges);
+    }
+
+    processHybridSeedCounts(ranges, xMid, yMid) {
+        return this._processHybridSeedPhase("hybrid-seed-count", ranges, {xMid, yMid});
+    }
+
+    processHybridSeedScatter(ranges, xMid, yMid, bucketOffsets) {
+        return this._processHybridSeedPhase("hybrid-seed-scatter", ranges, {xMid, yMid}, bucketOffsets);
+    }
+
     async processTreeJobsDynamic(jobs, materializePartition, options = {}) {
         if (this.workers.length === 0 || jobs.length === 0) {
             return {results: [], dispatchTime: 0, spawnedJobCount: 0};
@@ -409,6 +421,32 @@ class SubworkerPool {
                 partition.jobParentForceX.buffer,
                 partition.jobParentForceY.buffer,
             ]);
+        });
+    }
+
+    _processHybridSeedPhase(type, ranges, sharedPayload = {}, bucketOffsets = null) {
+        const promises = [];
+        for (let i = 0; i < this.workers.length; i++) {
+            const range = ranges[i];
+            if (!range || range.end <= range.start) {
+                continue;
+            }
+            promises.push(this._processSimpleTask(this.workers[i], {
+                type,
+                startParticle: range.start,
+                endParticle: range.end,
+                ...sharedPayload,
+                bucketOffsets: bucketOffsets?.[i] || null,
+            }));
+        }
+        return Promise.all(promises);
+    }
+
+    _processSimpleTask(worker, payload) {
+        const requestId = ++this._requestId;
+        return new Promise((resolve, reject) => {
+            this._pending.set(requestId, {resolve, reject});
+            worker.postMessage({...payload, requestId});
         });
     }
 
@@ -606,7 +644,7 @@ class WorkerMTBackendImpl {
         const treeJobs = strategy === WORKER_TREE_STRATEGY_RECURSIVE
             ? this._buildRecursiveTreeSeedJobs()
             : strategy === WORKER_TREE_STRATEGY_HYBRID
-                ? this._buildHybridTreeSeedJobs()
+                ? await this._buildHybridTreeSeedJobs()
                 : this._buildParallelTreeJobs();
         const topTreeTime = performance.now() - t;
 
@@ -682,6 +720,10 @@ class WorkerMTBackendImpl {
             treeHybridScheduling: strategy === WORKER_TREE_STRATEGY_HYBRID,
             treeHybridProfile: strategy === WORKER_TREE_STRATEGY_HYBRID ? this._getWorkerMtHybridProfileName() : null,
             treeHybridSeedJobs: strategy === WORKER_TREE_STRATEGY_HYBRID ? this.settings.simulation.workerMtHybridSeedJobs : null,
+            treeHybridSeedParallel: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridSeedParallel : null,
+            treeHybridSeedBoundsTime: strategy === WORKER_TREE_STRATEGY_HYBRID ? treeJobs.profile.seedBoundsTime || 0 : null,
+            treeHybridSeedCountTime: strategy === WORKER_TREE_STRATEGY_HYBRID ? treeJobs.profile.seedCountTime || 0 : null,
+            treeHybridSeedScatterTime: strategy === WORKER_TREE_STRATEGY_HYBRID ? treeJobs.profile.seedScatterTime || 0 : null,
             treeHybridSplitFirst: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridSplitFirst : null,
             treeHybridJobSorting: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridJobSorting : null,
             treeHybridSplitGainFilter: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridSplitGainFilter : null,
@@ -777,6 +819,10 @@ class WorkerMTBackendImpl {
             recursiveScheduling: !!mtProfile.treeRecursiveScheduling,
             hybridScheduling: !!mtProfile.treeHybridScheduling,
             hybridProfile: mtProfile.treeHybridProfile || null,
+            hybridSeedParallel: mtProfile.treeHybridSeedParallel ?? null,
+            seedBoundsTime: topProfile.seedBoundsTime || 0,
+            seedCountTime: topProfile.seedCountTime || 0,
+            seedScatterTime: topProfile.seedScatterTime || 0,
             hybridSplitFirst: mtProfile.treeHybridSplitFirst ?? null,
             hybridJobSorting: mtProfile.treeHybridJobSorting ?? null,
             hybridSplitGainFilter: mtProfile.treeHybridSplitGainFilter ?? null,
@@ -957,7 +1003,14 @@ class WorkerMTBackendImpl {
         return {jobs: nodes, profile, stats, targetJobs, splitLevels, debugData};
     }
 
-    _buildHybridTreeSeedJobs() {
+    async _buildHybridTreeSeedJobs() {
+        if (this.settings.simulation.workerMtHybridSeedParallel) {
+            return await this._buildHybridTreeSeedJobsParallel();
+        }
+        return this._buildHybridTreeSeedJobsSerial();
+    }
+
+    _buildHybridTreeSeedJobsSerial() {
         const count = this.settings.physics.particleCount;
         const source = this._treeWorkspace.indices;
         const identity = this._treeWorkspace.identityIndices;
@@ -967,6 +1020,10 @@ class WorkerMTBackendImpl {
             populateTime: 0,
             aggregateTime: 0,
             fastBucketPath: true,
+            parallelSeedBootstrap: false,
+            seedBoundsTime: 0,
+            seedCountTime: 0,
+            seedScatterTime: 0,
         };
         const stats = {flops: 0, depth: 1, segmentCount: 1};
         const debugData = this.settings.common.debugTree ? [] : null;
@@ -979,7 +1036,7 @@ class WorkerMTBackendImpl {
         const rootBounds = this._calculateBounds(source, 0, count);
         profile.rootBoundsTime = performance.now() - t;
 
-        let nodes = [{
+        const root = {
             start: 0,
             count,
             indexBuffer: BUFFER_A,
@@ -990,14 +1047,122 @@ class WorkerMTBackendImpl {
             bottom: rootBounds.bottom,
             parentForceX: 0,
             parentForceY: 0,
-        }];
+        };
 
-        const hybridProfile = this._getWorkerMtHybridProfileConfig();
         const targetJobs = this._getWorkerMtHybridSeedTargetJobs(count);
         const maxSplitLevels = this._getWorkerMtHybridSeedSplitLevels(targetJobs);
-        let splitLevels = 0;
         t = performance.now();
-        for (let level = 0; level < maxSplitLevels; level++) {
+        const expanded = this._expandHybridSeedNodes([root], targetJobs, maxSplitLevels, 0, stats, debugData);
+        profile.populateTime = performance.now() - t;
+        stats.segmentCount = Math.max(0, stats.segmentCount - expanded.nodes.length);
+
+        return {jobs: expanded.nodes, profile, stats, targetJobs, splitLevels: expanded.splitLevels, debugData};
+    }
+
+    async _buildHybridTreeSeedJobsParallel() {
+        const count = this.settings.physics.particleCount;
+        const profile = {
+            resetTime: 0,
+            rootBoundsTime: 0,
+            populateTime: 0,
+            aggregateTime: 0,
+            fastBucketPath: true,
+            parallelSeedBootstrap: true,
+            seedBoundsTime: 0,
+            seedCountTime: 0,
+            seedScatterTime: 0,
+        };
+        const stats = {flops: 0, depth: 1, segmentCount: 1};
+        const debugData = this.settings.common.debugTree ? [] : null;
+        const targetJobs = this._getWorkerMtHybridSeedTargetJobs(count);
+        const maxSplitLevels = this._getWorkerMtHybridSeedSplitLevels(targetJobs);
+        const ranges = this._buildHybridSeedRanges(count);
+
+        let t = performance.now();
+        const boundsResults = await this._pool.processHybridSeedBounds(ranges);
+        profile.seedBoundsTime = performance.now() - t;
+        profile.rootBoundsTime = profile.seedBoundsTime;
+
+        const rootBounds = this._mergeHybridSeedBounds(boundsResults);
+        const root = {
+            start: 0,
+            count,
+            indexBuffer: BUFFER_A,
+            depth: 1,
+            left: rootBounds.left,
+            top: rootBounds.top,
+            right: rootBounds.right,
+            bottom: rootBounds.bottom,
+            parentForceX: 0,
+            parentForceY: 0,
+        };
+
+        if (count <= this.settings.simulation.segmentMaxCount || this._isParallelNodeTooSmall(root)) {
+            return {jobs: [root], profile, stats: {...stats, segmentCount: 0}, targetJobs, splitLevels: 0, debugData};
+        }
+
+        const xMid = this._buildParallelMid(root.left, root.right - root.left);
+        const yMid = this._buildParallelMid(root.top, root.bottom - root.top);
+
+        t = performance.now();
+        const countResults = await this._pool.processHybridSeedCounts(ranges, xMid, yMid);
+        profile.seedCountTime = performance.now() - t;
+
+        const bucketData = this._mergeHybridSeedBucketData(countResults);
+        const usedBuckets = bucketData.counts.reduce((sum, value) => sum + (value > 0 ? 1 : 0), 0);
+        if (usedBuckets <= 1) {
+            profile.populateTime = profile.seedCountTime;
+            return {jobs: [root], profile, stats: {...stats, segmentCount: 0}, targetJobs, splitLevels: 0, debugData};
+        }
+
+        const bucketOffsets = this._buildHybridSeedWorkerOffsets(bucketData.countsByWorker, bucketData.counts);
+        t = performance.now();
+        await this._pool.processHybridSeedScatter(ranges, xMid, yMid, bucketOffsets);
+        profile.seedScatterTime = performance.now() - t;
+
+        let nodes = this._createParallelChildrenFromBuckets(
+            root,
+            BUFFER_B,
+            xMid,
+            yMid,
+            bucketData.counts,
+            bucketData.mass,
+        );
+        let splitLevels = nodes.length > 1 ? 1 : 0;
+        if (nodes.length > 1) {
+            if (debugData) {
+                debugData.push(this._createTreeDebugEntry(root));
+            }
+            stats.flops += Math.pow(nodes.length, 2) * TREE_FLOPS_PER_OP;
+            stats.segmentCount += nodes.length;
+            stats.depth = Math.max(stats.depth, ...nodes.map(item => item.depth));
+        }
+
+        let serialExpandTime = 0;
+        if (nodes.length > 1 && nodes.length < targetJobs && splitLevels < maxSplitLevels) {
+            t = performance.now();
+            const expanded = this._expandHybridSeedNodes(
+                nodes,
+                targetJobs,
+                maxSplitLevels,
+                splitLevels,
+                stats,
+                debugData,
+            );
+            serialExpandTime = performance.now() - t;
+            nodes = expanded.nodes;
+            splitLevels = expanded.splitLevels;
+        }
+
+        profile.populateTime = profile.seedCountTime + profile.seedScatterTime + serialExpandTime;
+        stats.segmentCount = Math.max(0, stats.segmentCount - nodes.length);
+        return {jobs: nodes, profile, stats, targetJobs, splitLevels, debugData};
+    }
+
+    _expandHybridSeedNodes(initialNodes, targetJobs, maxSplitLevels, startLevel, stats, debugData) {
+        let nodes = initialNodes;
+        let splitLevels = startLevel;
+        for (let level = startLevel; level < maxSplitLevels; level++) {
             if (nodes.length >= targetJobs) {
                 break;
             }
@@ -1035,10 +1200,71 @@ class WorkerMTBackendImpl {
                 break;
             }
         }
-        profile.populateTime = performance.now() - t;
-        stats.segmentCount = Math.max(0, stats.segmentCount - nodes.length);
+        return {nodes, splitLevels};
+    }
 
-        return {jobs: nodes, profile, stats, targetJobs, splitLevels, debugData};
+    _buildHybridSeedRanges(count) {
+        const ranges = new Array(this._threadCount);
+        for (let i = 0; i < this._threadCount; i++) {
+            const start = Math.floor(count * i / this._threadCount);
+            const end = Math.floor(count * (i + 1) / this._threadCount);
+            ranges[i] = {start, end};
+        }
+        return ranges;
+    }
+
+    _mergeHybridSeedBounds(results) {
+        let left = Infinity;
+        let top = Infinity;
+        let right = -Infinity;
+        let bottom = -Infinity;
+        for (const result of results) {
+            if (Number.isFinite(result.minX)) left = Math.min(left, result.minX);
+            if (Number.isFinite(result.minY)) top = Math.min(top, result.minY);
+            if (Number.isFinite(result.maxX)) right = Math.max(right, result.maxX);
+            if (Number.isFinite(result.maxY)) bottom = Math.max(bottom, result.maxY);
+        }
+        if (!Number.isFinite(left)) {
+            return {left: 0, top: 0, right: 0, bottom: 0};
+        }
+        return {left, top, right, bottom};
+    }
+
+    _mergeHybridSeedBucketData(results) {
+        const counts = new Int32Array(4);
+        const mass = new Float64Array(4);
+        const countsByWorker = new Array(this._threadCount).fill(null).map(() => new Int32Array(4));
+        for (const result of results) {
+            const workerIndex = Number.isFinite(result.workerIndex) ? result.workerIndex : 0;
+            const workerCounts = countsByWorker[workerIndex];
+            for (let bucket = 0; bucket < 4; bucket++) {
+                const count = result.bucketCounts?.[bucket] || 0;
+                const bucketMass = result.bucketMass?.[bucket] || 0;
+                workerCounts[bucket] = count;
+                counts[bucket] += count;
+                mass[bucket] += bucketMass;
+            }
+        }
+        return {counts, mass, countsByWorker};
+    }
+
+    _buildHybridSeedWorkerOffsets(countsByWorker, counts) {
+        const bucketStarts = new Int32Array(4);
+        let start = 0;
+        for (let bucket = 0; bucket < 4; bucket++) {
+            bucketStarts[bucket] = start;
+            start += counts[bucket];
+        }
+
+        const nextOffsets = Array.from(bucketStarts);
+        const offsets = new Array(this._threadCount);
+        for (let workerIndex = 0; workerIndex < this._threadCount; workerIndex++) {
+            offsets[workerIndex] = nextOffsets.slice();
+            for (let bucket = 0; bucket < 4; bucket++) {
+                nextOffsets[bucket] += countsByWorker[workerIndex][bucket];
+            }
+        }
+        return offsets;
     }
 
     _getWorkerMtTreeStrategy() {
@@ -1140,6 +1366,24 @@ class WorkerMTBackendImpl {
             targetIndices[bucketWrites[bucketIndex]++] = sourceIndices[i];
         }
 
+        return this._createParallelChildrenFromBuckets(
+            node,
+            targetBufferId,
+            xMid,
+            yMid,
+            bucketCounts,
+            bucketMass,
+        );
+    }
+
+    _createParallelChildrenFromBuckets(node, targetBufferId, xMid, yMid, bucketCounts, bucketMass) {
+        const bucketStarts = new Int32Array(4);
+        let writeStart = node.start;
+        for (let i = 0; i < 4; i++) {
+            bucketStarts[i] = writeStart;
+            writeStart += bucketCounts[i];
+        }
+
         const children = [];
         for (let bucketIndex = 0; bucketIndex < 4; bucketIndex++) {
             const bucketCount = bucketCounts[bucketIndex];
@@ -1148,10 +1392,10 @@ class WorkerMTBackendImpl {
             }
             const x = bucketIndex >> 1;
             const y = bucketIndex & 1;
-            const childLeft = x === 0 ? left : xMid;
-            const childRight = x === 0 ? xMid : right + EPSILON;
-            const childTop = y === 0 ? top : yMid;
-            const childBottom = y === 0 ? yMid : bottom + EPSILON;
+            const childLeft = x === 0 ? node.left : xMid;
+            const childRight = x === 0 ? xMid : node.right + EPSILON;
+            const childTop = y === 0 ? node.top : yMid;
+            const childBottom = y === 0 ? yMid : node.bottom + EPSILON;
             children.push({
                 start: bucketStarts[bucketIndex],
                 count: bucketCount,
@@ -1279,15 +1523,13 @@ class WorkerMTBackendImpl {
 
     _getWorkerMtHybridSeedTargetJobs(particleCount) {
         const configured = this.settings.simulation.workerMtHybridSeedJobs;
-        if (configured && configured !== "auto") {
+        if (configured) {
             const parsed = Number.parseInt(configured, 10);
             if (Number.isFinite(parsed)) {
                 return Math.max(HYBRID_SEED_JOBS_MIN, Math.min(HYBRID_SEED_JOBS_MAX, parsed, particleCount));
             }
         }
-
-        const autoTarget = this._threadCount;
-        return Math.max(HYBRID_SEED_JOBS_MIN, Math.min(HYBRID_SEED_JOBS_MAX, autoTarget, particleCount));
+        return Math.max(1, Math.min(HYBRID_SEED_JOBS_MIN, particleCount));
     }
 
     _getWorkerMtHybridSeedSplitLevels(targetJobs) {

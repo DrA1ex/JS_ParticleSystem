@@ -74,12 +74,20 @@ export class SimulationSettings extends SettingsBase {
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)
             .setVisibleWhen(isHybridWorkerMt),
-        workerMtHybridSeedJobs: Property.enum("worker_mt_hybrid_seed_jobs", WorkerHybridSeedJobCount, WorkerHybridSeedJobCount.auto)
+        workerMtHybridSeedJobs: Property.enum("worker_mt_hybrid_seed_jobs", WorkerHybridSeedJobCount, WorkerHybridSeedJobCount["4"])
             .setName("Hybrid seed jobs").setDescription([
                 "Worker MT hybrid strategy only. Target width of the initial coordinator-built seed queue before recursive worker splitting starts.",
-                "auto targets roughly one seed job per active subworker: 4 workers -> 4, 8 -> 8, 16 -> 16, and 20 -> 20.",
+                "The default is 4 because a single root split proved faster than preparing wider seed queues, even with 16 subworkers.",
                 "Higher values move more tree preparation to the coordinator and may reduce late recursive fan-out; lower values start workers earlier and leave more splitting to them.",
                 "This does not limit deeper recursive splitting, so unexpectedly heavy branches can still be subdivided later."
+            ].join("\n"))
+            .setBreaks(ComponentType.backend, ComponentType.debug)
+            .setVisibleWhen(isHybridWorkerMt),
+        workerMtHybridSeedParallel: Property.bool("worker_mt_hybrid_seed_parallel", false)
+            .setName("Parallel hybrid seed bootstrap").setDescription([
+                "Worker MT hybrid strategy only. Builds the first root split with the subworker pool instead of scanning and partitioning all particles on the coordinator.",
+                "The serial path remains the default baseline. Enable this option to compare the experimental parallel bounds, bucket-count and shared-buffer scatter phases.",
+                "Only the initial seed bootstrap changes; the existing hybrid split-first scheduler handles all later recursive work unchanged."
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)
             .setVisibleWhen(isHybridWorkerMt),
@@ -139,6 +147,7 @@ export class SimulationSettings extends SettingsBase {
     get workerMtTreeStrategy() {return this.config.workerMtTreeStrategy;}
     get workerMtHybridProfile() {return this.config.workerMtHybridProfile;}
     get workerMtHybridSeedJobs() {return this.config.workerMtHybridSeedJobs;}
+    get workerMtHybridSeedParallel() {return this.config.workerMtHybridSeedParallel;}
     get workerMtHybridSplitFirst() {return this.config.workerMtHybridSplitFirst;}
     get workerMtHybridJobSorting() {return this.config.workerMtHybridJobSorting;}
     get workerMtHybridSplitGainFilter() {return this.config.workerMtHybridSplitGainFilter;}

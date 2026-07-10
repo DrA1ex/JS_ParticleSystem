@@ -190,7 +190,8 @@ export class Debug {
             `  - aggregate: ${this._formatMs(this.treeProfile?.aggregateTime)}`,
             `  - fast buckets: ${this.treeProfile?.fastBucketPath ? "on" : "off"}`,
             `  - parallel: ${this.treeProfile?.parallel ? "on" : "off"}${this.treeProfile?.dynamicScheduling ? ", dynamic" : ""}`,
-            `  - target jobs: ${this.treeProfile?.targetJobs ?? "n/a"}, actual jobs: ${this.treeProfile?.parallelTreeJobs ?? "n/a"}, split levels: ${this.treeProfile?.splitLevels ?? "n/a"}`,
+            `  - target jobs: ${this.treeProfile?.targetJobs ?? "n/a"}, actual jobs: ${this.treeProfile?.parallelTreeJobs ?? "n/a"}, seed split levels: ${this.treeProfile?.splitLevels ?? "n/a"}`,
+            `  - seed bootstrap: ${this.treeProfile?.hybridSeedParallel ? "parallel" : "serial"}, bounds ${this._formatMs(this.treeProfile?.seedBoundsTime)}, count ${this._formatMs(this.treeProfile?.seedCountTime)}, scatter ${this._formatMs(this.treeProfile?.seedScatterTime)}`,
             `  - top populate: ${this._formatMs(this.treeProfile?.topPopulateTime)}`,
             `  - parallel wait: ${this._formatMs(this.treeProfile?.parallelTreeWaitTime)}`,
             `  - dispatch: ${this._formatMs(this.treeProfile?.dispatchTime)}`,
@@ -301,11 +302,11 @@ export class Debug {
         const treeModeBase = state.treeStrategy || (state.treeDynamicScheduling ? "dynamic" : "static");
         const treeMode = state.treeHybridProfile ? `${treeModeBase}/${state.treeHybridProfile}` : treeModeBase;
         const hybridOptions = state.treeHybridScheduling
-            ? `, seed ${state.treeHybridSeedJobs ?? "auto"}, split-first ${state.treeHybridSplitFirst ? "on" : "off"}, sorting ${state.treeHybridJobSorting ? "on" : "off"}, split-gain ${state.treeHybridSplitGainFilter ? "on" : "off"}`
+            ? `, seed ${state.treeHybridSeedJobs ?? 4}, seed-bootstrap ${state.treeHybridSeedParallel ? "parallel" : "serial"}, split-first ${state.treeHybridSplitFirst ? "on" : "off"}, sorting ${state.treeHybridJobSorting ? "on" : "off"}, split-gain ${state.treeHybridSplitGainFilter ? "on" : "off"}`
             : "";
         const spawned = Number.isFinite(state.treeSpawnedJobs) ? `, spawned ${state.treeSpawnedJobs}` : "";
         const tree = state.treeParallel
-            ? `tree ${treeMode}${hybridOptions}, top ${this._formatMs(state.topTreeTime)}, tree max ${this._formatMs(state.treeTimeMax)}, jobs ${state.treeJobCount ?? "n/a"}/${state.treeTargetJobs ?? "n/a"}${spawned}, levels ${state.treeSplitLevels ?? "n/a"}, `
+            ? `tree ${treeMode}${hybridOptions}, top ${this._formatMs(state.topTreeTime)}, tree max ${this._formatMs(state.treeTimeMax)}, jobs ${state.treeJobCount ?? "n/a"}/${state.treeTargetJobs ?? "n/a"}${spawned}, seed levels ${state.treeSplitLevels ?? "n/a"}, `
             : "tree off, ";
         return `${state.actualThreads} threads, ${active} active, ${tree}tasks ${tasks}, wait ${wait}, ` +
             `build ${taskBuild}, partition ${partition}, dispatch ${dispatch}, descriptors ${descriptorBytes}, ` +
