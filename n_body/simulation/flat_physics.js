@@ -155,6 +155,10 @@ export class FlatPhysicsEngine {
 
             particles[attractorOffset + 2] += pForceX;
             particles[attractorOffset + 3] += pForceY;
+            if (accumulateForce) {
+                forceXBuffer[attractorIndex] += pForceX;
+                forceYBuffer[attractorIndex] += pForceY;
+            }
 
             for (let j = start; j < end; j++) {
                 if (i === j) continue;

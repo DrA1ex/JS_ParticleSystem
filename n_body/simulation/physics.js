@@ -118,6 +118,10 @@ export class PhysicsEngine {
             const attractor = leaf.data[i];
             attractor.velX += pForce[0];
             attractor.velY += pForce[1];
+            if (accumulateForce) {
+                attractor.forceX += pForce[0];
+                attractor.forceY += pForce[1];
+            }
 
             for (let j = 0; j < leaf.length; j++) {
                 if (i === j) continue;

@@ -18,6 +18,30 @@ export class BackendBase {
      */
     constructor(workerPath) {
         this._worker = new Worker(withBuildId(workerPath), {type: "module"});
+        this._controlRequestId = 0;
+        this._pendingReconfigures = new Map();
+        this._pendingInitialization = null;
+        this._disposed = false;
+
+        this._worker.onerror = (event) => {
+            event.preventDefault?.();
+            const error = new Error(event.message || `${this.displayName} worker failed`);
+            const handledByControlPromise = !!this._pendingInitialization || this._pendingReconfigures.size > 0;
+            this._rejectInitialization(error);
+            this._rejectPendingReconfigures(error);
+            if (!handledByControlPromise) {
+                setTimeout(() => { throw error; });
+            }
+        };
+        this._worker.onmessageerror = () => {
+            const error = new Error(`${this.displayName} worker returned an unreadable message`);
+            const handledByControlPromise = !!this._pendingInitialization || this._pendingReconfigures.size > 0;
+            this._rejectInitialization(error);
+            this._rejectPendingReconfigures(error);
+            if (!handledByControlPromise) {
+                setTimeout(() => { throw error; });
+            }
+        };
     }
 
     /**
@@ -27,15 +51,30 @@ export class BackendBase {
      * @param {Particle[]|Float32Array|Array[]} [particles=null]
      * @return {void}
      */
-    async init(onDataFn, onReadyFn, settings, particles = null) {
+    init(onDataFn, onReadyFn, settings, particles = null) {
+        if (this._disposed) {
+            return Promise.reject(new Error(`${this.displayName} is already disposed`));
+        }
+        if (this._pendingInitialization) {
+            return Promise.reject(new Error(`${this.displayName} initialization is already pending`));
+        }
+
         this.subscribe(onDataFn, onReadyFn);
-        this._worker.postMessage({
-            type: "init",
-            settings: settings.serialize(),
-            state: particles,
-            expectedBuildId: BUILD_ID,
-            expectedProtocolVersion: WORKER_PROTOCOL_VERSION,
+        const promise = new Promise((resolve, reject) => {
+            this._pendingInitialization = {resolve, reject};
         });
+        try {
+            this._worker.postMessage({
+                type: "init",
+                settings: settings.serialize(),
+                state: particles,
+                expectedBuildId: BUILD_ID,
+                expectedProtocolVersion: WORKER_PROTOCOL_VERSION,
+            });
+        } catch (error) {
+            this._rejectInitialization(error);
+        }
+        return promise;
     }
 
     /**
@@ -43,23 +82,87 @@ export class BackendBase {
      * @param {Particle[]|Float32Array|Array[]} [particles=null]
      */
     reconfigure(settings, particles = null) {
-        this._worker.postMessage({type: "reconfigure", settings: settings.serialize(), state: particles});
+        if (this._disposed) {
+            return Promise.reject(new Error(`${this.displayName} is already disposed`));
+        }
+
+        const requestId = ++this._controlRequestId;
+        return new Promise((resolve, reject) => {
+            this._pendingReconfigures.set(requestId, {resolve, reject});
+            try {
+                this._worker.postMessage({
+                    type: "reconfigure",
+                    requestId,
+                    settings: settings.serialize(),
+                    state: particles,
+                });
+            } catch (error) {
+                this._pendingReconfigures.delete(requestId);
+                reject(error);
+            }
+        });
     }
 
     subscribe(dataFn, readyFn) {
         this._worker.onmessage = (e) => {
+            if (this._handleControlMessage(e.data)) {
+                return;
+            }
             switch (e.data.type) {
                 case "data":
                     dataFn(e.data);
                     break;
                 case "ready":
+                    this._resolveInitialization(e.data);
                     readyFn(e.data);
                     break;
                 case "ready-error":
-                    setTimeout(() => { throw new Error(e.data.message || "Worker initialization failed"); });
+                    this._rejectInitialization(new Error(e.data.message || "Worker initialization failed"));
                     break;
             }
         }
+    }
+
+
+
+    _resolveInitialization(data) {
+        const pending = this._pendingInitialization;
+        if (!pending) return;
+        this._pendingInitialization = null;
+        pending.resolve(data);
+    }
+
+    _rejectInitialization(error) {
+        const pending = this._pendingInitialization;
+        if (!pending) return;
+        this._pendingInitialization = null;
+        pending.reject(error);
+    }
+
+    _handleControlMessage(data) {
+        if (data?.type !== "reconfigured" && data?.type !== "reconfigure-error") {
+            return false;
+        }
+
+        const pending = this._pendingReconfigures.get(data.requestId);
+        if (!pending) {
+            return true;
+        }
+        this._pendingReconfigures.delete(data.requestId);
+
+        if (data.type === "reconfigured") {
+            pending.resolve(data);
+        } else {
+            pending.reject(new Error(data.message || `${this.displayName} reconfiguration failed`));
+        }
+        return true;
+    }
+
+    _rejectPendingReconfigures(error) {
+        for (const {reject} of this._pendingReconfigures.values()) {
+            reject(error);
+        }
+        this._pendingReconfigures.clear();
     }
 
     /**
@@ -67,6 +170,7 @@ export class BackendBase {
      * @return {void}
      */
     freeBuffer(buffer) {
+        if (this._disposed || !buffer) return;
         this._worker.postMessage({type: "ack", buffer}, [buffer.buffer]);
     }
 
@@ -74,13 +178,23 @@ export class BackendBase {
      * @return {void}
      */
     requestNextStep() {
+        if (this._disposed) return;
         this._worker.postMessage({type: "step", timestamp: performance.now()});
     }
 
     dispose() {
+        if (this._disposed) {
+            return;
+        }
+        this._disposed = true;
+        const disposeError = new Error(`${this.displayName} was disposed`);
+        this._rejectInitialization(disposeError);
+        this._rejectPendingReconfigures(disposeError);
         this._worker.postMessage({type: "dispose"});
 
         this._worker.onmessage = null;
+        this._worker.onerror = null;
+        this._worker.onmessageerror = null;
         this._worker.terminate();
     }
 }
@@ -259,8 +373,22 @@ export class WorkerHandler {
                 break;
 
             case "reconfigure": {
-                const {settings, state} = e.data;
-                this.backend.reconfigure(settings, state);
+                const {settings, state, requestId} = e.data;
+                try {
+                    await this.backend.reconfigure(settings, state);
+                    postMessage({
+                        type: "reconfigured",
+                        requestId,
+                        ...(this.backend.getRuntimeMetadata?.() || {}),
+                    });
+                } catch (error) {
+                    postMessage({
+                        type: "reconfigure-error",
+                        requestId,
+                        message: error?.message || String(error),
+                        ...(this.backend.getRuntimeMetadata?.() || {}),
+                    });
+                }
             }
                 break;
 

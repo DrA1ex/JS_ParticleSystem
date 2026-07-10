@@ -44,6 +44,7 @@ export class Application {
     };
     _lastNoAheadWarningTime = 0;
     _lastReloadPromptSignature = null;
+    _backendReconfigureVersion = 0;
     physicsStepCount = 0;
 
     /**
@@ -59,11 +60,12 @@ export class Application {
     reloadFromState(state) {
         const importedSettings = {...(state.settings || {})};
         const importedParticleCount = getParticleCount(state.particles);
-        if (importedParticleCount > 0) {
-            // The particle buffer is authoritative. A stale particle_count in
-            // either the URL or an older state file must never prevent loading.
-            importedSettings.particleCount = importedParticleCount;
+        if (!Number.isInteger(importedParticleCount) || importedParticleCount < 2) {
+            throw new Error("State file does not contain a valid particle array");
         }
+        // The particle buffer is authoritative. A stale particle_count in
+        // either the URL or an older state file must never prevent loading.
+        importedSettings.particleCount = importedParticleCount;
 
         // Saved universe values override matching URL settings, while runtime
         // choices not stored in the file (backend, threads, tree tuning, debug,
@@ -131,6 +133,7 @@ export class Application {
         }
 
         if (diff.breaks.has(ComponentType.backend)) {
+            this._backendReconfigureVersion += 1;
             this.backend.dispose();
             this.backend = null;
         }
@@ -142,6 +145,10 @@ export class Application {
 
         if (!particles && !diff.breaks.has(ComponentType.particles)) {
             particles = exportParticleState(this.particles, newSettings.physics.particleCount);
+        }
+
+        if (diff.affects.has(ComponentType.backend) && !diff.breaks.has(ComponentType.backend)) {
+            this._discardAheadBuffersForReconfigure();
         }
 
         if (diff.breaks.has(ComponentType.renderer)) {
@@ -161,6 +168,18 @@ export class Application {
 
         this.settings = newSettings;
         this.init({particles, renderer}, diff);
+    }
+
+
+    _discardAheadBuffersForReconfigure() {
+        for (const entry of this.aheadBuffers) {
+            if (entry?.buffer) {
+                this.backend.freeBuffer(entry.buffer);
+            }
+        }
+        this.aheadBuffers = [];
+        this.dfriHelper?.reset?.();
+        this.renderer?.clearInterpolationFrame?.();
     }
 
 
@@ -280,12 +299,23 @@ export class Application {
             this.renderer.resetScale();
         }
 
+        let backendInitPromise = null;
+        let initializedBackend = null;
+        let backendReconfigurePromise = null;
+        let reconfiguredBackend = null;
         if (!diff || diff.breaks.has(ComponentType.backend)) {
             this.particles = new Float32Array(this.settings.physics.particleCount * ITEM_SIZE);
 
-            this.backend.init(this.onData.bind(this), this.requestNextStep.bind(this), this.settings, state?.particles);
+            initializedBackend = this.backend;
+            backendInitPromise = this.backend.init(
+                data => this.onData(data, initializedBackend),
+                () => this.requestNextStep(initializedBackend),
+                this.settings,
+                state?.particles,
+            );
         } else if (diff.affects.has(ComponentType.backend)) {
-            this.backend.reconfigure(this.settings, state?.particles);
+            reconfiguredBackend = this.backend;
+            backendReconfigurePromise = this.backend.reconfigure(this.settings, state?.particles);
         }
 
         if (this.settings.render.enableDFRI) {
@@ -304,6 +334,34 @@ export class Application {
 
         if (!diff || diff.breaks.has(ComponentType.backend)) {
             this.simulationCtrl.setState(SimulationStateEnum.loading);
+            backendInitPromise?.catch(error => {
+                if (this.backend !== initializedBackend) return;
+                this.pendingBufferCount = 0;
+                // Avoid an infinite loader after an initialization failure. The
+                // global error handler still surfaces the actual failure.
+                this.simulationCtrl.setState(SimulationStateEnum.active);
+                setTimeout(() => { throw error; });
+            });
+        } else if (backendReconfigurePromise) {
+            const version = ++this._backendReconfigureVersion;
+            backendReconfigurePromise.then(() => {
+                if (version !== this._backendReconfigureVersion || this.backend !== reconfiguredBackend) {
+                    return;
+                }
+                // All old data messages are ordered before the worker's
+                // reconfigured acknowledgement, so the old in-flight buffers
+                // have already been returned at this point.
+                this.pendingBufferCount = 0;
+                this.simulationCtrl.setState(SimulationStateEnum.active);
+                this.requestNextStepIfNeeded();
+            }).catch(error => {
+                if (version !== this._backendReconfigureVersion) {
+                    return;
+                }
+                this.pendingBufferCount = 0;
+                this.simulationCtrl.setState(SimulationStateEnum.active);
+                setTimeout(() => { throw error; });
+            });
         } else {
             this.simulationCtrl.setState(SimulationStateEnum.active);
         }
@@ -315,9 +373,25 @@ export class Application {
         requestAnimationFrame(this._renderFrame);
     }
 
-    onData(data) {
+    onData(data, sourceBackend = this.backend) {
+        // A terminated/replaced worker can still have an already queued message
+        // in the main-thread event loop. Never let that stale frame enter the
+        // new backend's queue or acknowledge its transferred buffer to the wrong
+        // worker instance.
+        if (sourceBackend !== this.backend) {
+            return;
+        }
+
         const onDataStart = performance.now();
         if (this.simulationCtrl.currentState === SimulationStateEnum.reconfigure) {
+            // A live backend reconfiguration is queued behind any already
+            // requested physics steps. Drop those stale frames, but always
+            // return their transferred buffers so the worker pool cannot run
+            // dry before processing the new configuration.
+            this.pendingBufferCount = Math.max(0, this.pendingBufferCount - 1);
+            if (data?.buffer) {
+                sourceBackend.freeBuffer(data.buffer);
+            }
             return;
         }
 
@@ -335,7 +409,7 @@ export class Application {
         }
 
         this.aheadBuffers.push({buffer: data.buffer, treeDebug: data.treeDebug, forceDebug: data.forceDebug});
-        this.pendingBufferCount -= 1;
+        this.pendingBufferCount = Math.max(0, this.pendingBufferCount - 1);
 
         // GPU DFRI needs an actual ahead frame. Some backends, especially the
         // GPGPU backend, can deliver that frame after the current frame was
@@ -355,7 +429,8 @@ export class Application {
     }
 
     prepareNextStep() {
-        if (this.simulationCtrl.currentState === SimulationStateEnum.paused) {
+        if (this.simulationCtrl.currentState === SimulationStateEnum.paused ||
+            this.simulationCtrl.currentState === SimulationStateEnum.reconfigure) {
             return;
         }
 
@@ -415,9 +490,12 @@ export class Application {
         this.mainStats.bufferSwitchTime = performance.now() - bufferSwitchStart;
     }
 
-    requestNextStep() {
+    requestNextStep(sourceBackend = this.backend) {
+        if (!sourceBackend || sourceBackend !== this.backend) {
+            return;
+        }
         this.pendingBufferCount += 1;
-        this.backend.requestNextStep();
+        sourceBackend.requestNextStep();
     }
 
     _warnNoAheadBufferIfNeeded() {

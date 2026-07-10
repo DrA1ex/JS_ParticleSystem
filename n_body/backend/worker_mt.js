@@ -5,9 +5,8 @@ import {ITEM_SIZE} from "../utils/particles.js";
 import {BUILD_ID, WORKER_PROTOCOL_VERSION, assertWorkerRuntime, withBuildId} from "../utils/build.js";
 import {Particle_initializer} from "../simulation/particle_initializer.js";
 import {AppSimulationSettings} from "../settings/app.js";
+import {SegmentSizeAutoTuner} from "./segment_size_tuner.js";
 
-const SEGMENT_TUNE_CANDIDATES = [8, 16, 24, 32, 40, 48, 64, 96];
-const SEGMENT_TUNE_SAMPLES_PER_CANDIDATE = 2;
 const THREAD_CHOICES = [2, 4, 6, 8, 12, 16, 20];
 const BUFFER_A = 0;
 const BUFFER_B = 1;
@@ -36,109 +35,6 @@ function estimateHybridJobWork(job) {
     return (treeCost + solveTailCost * 0.02) * depthBias;
 }
 
-class SegmentSizeAutoTuner {
-    constructor(settings) {
-        this.enabled = !!settings.simulation.autoTuneSegmentSize;
-        this.baseSize = settings.simulation.segmentMaxCount;
-        this.particleCount = settings.physics.particleCount;
-        this.candidates = this._buildCandidates(this.baseSize, this.particleCount);
-        this.samplesPerCandidate = SEGMENT_TUNE_SAMPLES_PER_CANDIDATE;
-        this.candidateIndex = 0;
-        this.sampleIndex = 0;
-        this.results = [];
-        this.finished = !this.enabled || this.candidates.length <= 1;
-        this.selectedSize = this.finished ? this.baseSize : this.candidates[0];
-        this.lastStepTime = null;
-        this.lastAverageTime = null;
-    }
-
-    get currentSize() {
-        return this.finished ? this.selectedSize : this.candidates[this.candidateIndex];
-    }
-
-    record(stepTime) {
-        if (!this.enabled || this.finished) {
-            this.lastStepTime = stepTime;
-            return;
-        }
-
-        const candidate = this.candidates[this.candidateIndex];
-        let result = this.results[this.candidateIndex];
-        if (!result) {
-            result = {size: candidate, totalTime: 0, samples: 0, averageTime: null};
-            this.results[this.candidateIndex] = result;
-        }
-
-        result.totalTime += stepTime;
-        result.samples += 1;
-        result.averageTime = result.totalTime / result.samples;
-        this.lastStepTime = stepTime;
-        this.lastAverageTime = result.averageTime;
-        this.sampleIndex += 1;
-
-        if (this.sampleIndex < this.samplesPerCandidate) {
-            return;
-        }
-
-        this.sampleIndex = 0;
-        this.candidateIndex += 1;
-
-        if (this.candidateIndex >= this.candidates.length) {
-            this._selectBest();
-        }
-    }
-
-    _selectBest() {
-        let best = this.results[0];
-        for (let i = 1; i < this.results.length; i++) {
-            const result = this.results[i];
-            if (result && result.averageTime < best.averageTime) {
-                best = result;
-            }
-        }
-
-        this.selectedSize = best?.size ?? this.baseSize;
-        this.lastAverageTime = best?.averageTime ?? null;
-        this.finished = true;
-    }
-
-    _buildCandidates(baseSize, particleCount) {
-        const maxCandidate = Math.max(1, Math.min(128, particleCount));
-        const values = [...SEGMENT_TUNE_CANDIDATES, baseSize]
-            .filter(v => Number.isFinite(v) && v >= 1 && v <= maxCandidate);
-        return [...new Set(values)].sort((a, b) => a - b);
-    }
-
-    getStats(actualSize) {
-        if (!this.enabled) {
-            return {
-                enabled: false,
-                status: "off",
-                actualSize,
-                selectedSize: actualSize,
-                candidateSize: actualSize,
-                candidates: [],
-                sample: 0,
-                samplesPerCandidate: this.samplesPerCandidate,
-                lastStepTime: this.lastStepTime,
-                lastAverageTime: null,
-            };
-        }
-
-        return {
-            enabled: true,
-            status: this.finished ? "done" : "tuning",
-            actualSize,
-            selectedSize: this.selectedSize,
-            candidateSize: this.currentSize,
-            candidates: this.candidates,
-            sample: this.finished ? this.samplesPerCandidate : this.sampleIndex + 1,
-            samplesPerCandidate: this.samplesPerCandidate,
-            lastStepTime: this.lastStepTime,
-            lastAverageTime: this.lastAverageTime,
-        };
-    }
-}
 
 export class WorkerMTBackend extends BackendBase {
     constructor() {
@@ -150,16 +46,32 @@ export class WorkerMTBackend extends BackendBase {
 
     subscribe(dataFn, readyFn) {
         this._worker.onmessage = (event) => {
-            switch (event.data.type) {
+            let data = event.data;
+            if (data?.type === "reconfigured") {
+                try {
+                    assertWorkerRuntime(data, "worker-mt coordinator");
+                } catch (error) {
+                    data = {type: "reconfigure-error", requestId: data.requestId, message: error.message};
+                }
+            }
+            if (this._handleControlMessage(data)) {
+                return;
+            }
+            switch (data.type) {
                 case "data":
-                    dataFn(event.data);
+                    dataFn(data);
                     break;
                 case "ready":
-                    assertWorkerRuntime(event.data, "worker-mt coordinator");
-                    readyFn(event.data);
+                    try {
+                        assertWorkerRuntime(data, "worker-mt coordinator");
+                        this._resolveInitialization(data);
+                        readyFn(data);
+                    } catch (error) {
+                        this._rejectInitialization(error);
+                    }
                     break;
                 case "ready-error":
-                    setTimeout(() => { throw new Error(event.data.message || "worker-mt coordinator initialization failed"); });
+                    this._rejectInitialization(new Error(data.message || "worker-mt coordinator initialization failed"));
                     break;
             }
         };
@@ -183,7 +95,11 @@ class SubworkerPool {
             worker._mtIndex = i;
             worker.onmessage = (event) => this._handleMessage(worker, event.data);
             worker.onerror = (event) => {
-                console.error("Worker MT subworker error", event.message || event);
+                event.preventDefault?.();
+                this._handleWorkerFailure(worker, new Error(event.message || `worker-mt task #${i} failed`));
+            };
+            worker.onmessageerror = () => {
+                this._handleWorkerFailure(worker, new Error(`worker-mt task #${i} returned an unreadable message`));
             };
             this.workers.push(worker);
         }
@@ -223,6 +139,17 @@ class SubworkerPool {
     processHybridSeedScatter(ranges, xMid, yMid, bucketOffsets) {
         return this._processHybridSeedPhase("hybrid-seed-scatter", ranges, {xMid, yMid}, bucketOffsets);
     }
+
+    updateSegmentMaxCount(segmentMaxCount) {
+        if (this.workers.length === 0) {
+            return Promise.resolve([]);
+        }
+        return Promise.all(this.workers.map(worker => this._processSimpleTask(worker, {
+            type: "set-segment-max-count",
+            segmentMaxCount,
+        })));
+    }
+
     async processHybridTreeJobs(initialJobs, materializePartition, options = {}) {
         if (this.workers.length === 0 || initialJobs.length === 0) {
             return {results: [], dispatchTime: 0, spawnedJobCount: 0};
@@ -282,9 +209,19 @@ class SubworkerPool {
     _sendInit(worker, type, settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB) {
         return new Promise((resolve, reject) => {
             const previous = worker.onmessage;
+            const onError = (event) => {
+                cleanup();
+                reject(new Error(event.message || `worker-mt task #${worker._mtIndex} initialization failed`));
+            };
+            const cleanup = () => {
+                worker.removeEventListener("error", onError);
+                worker.onmessage = previous;
+            };
+
+            worker.addEventListener("error", onError, {once: true});
             worker.onmessage = (event) => {
                 if (event.data?.type === "ready") {
-                    worker.onmessage = previous;
+                    cleanup();
                     try {
                         assertWorkerRuntime(event.data, `worker-mt task #${worker._mtIndex}`);
                         resolve(event.data);
@@ -292,7 +229,7 @@ class SubworkerPool {
                         reject(error);
                     }
                 } else if (event.data?.type === "init-error") {
-                    worker.onmessage = previous;
+                    cleanup();
                     reject(new Error(event.data.message || `worker-mt task #${worker._mtIndex} initialization failed`));
                 } else {
                     previous?.(event);
@@ -303,6 +240,7 @@ class SubworkerPool {
                 settings: settings.serialize(),
                 expectedBuildId: BUILD_ID,
                 expectedProtocolVersion: WORKER_PROTOCOL_VERSION,
+                segmentMaxCount: settings.simulation.segmentMaxCount,
                 particlesBuffer,
                 forceXBuffer,
                 forceYBuffer,
@@ -313,59 +251,52 @@ class SubworkerPool {
     }
 
     _processPartition(worker, partition) {
-        const requestId = ++this._requestId;
-        return new Promise((resolve, reject) => {
-            this._pending.set(requestId, {resolve, reject});
-            worker.postMessage({
-                type: "process",
-                requestId,
-                leafStartsBuffer: partition.leafStarts.buffer,
-                leafCountsBuffer: partition.leafCounts.buffer,
-                leafIndexBuffersBuffer: partition.leafIndexBuffers.buffer,
-                parentForceXBuffer: partition.parentForceX.buffer,
-                parentForceYBuffer: partition.parentForceY.buffer,
-            }, [
-                partition.leafStarts.buffer,
-                partition.leafCounts.buffer,
-                partition.leafIndexBuffers.buffer,
-                partition.parentForceX.buffer,
-                partition.parentForceY.buffer,
-            ]);
-        });
+        const transfer = [
+            partition.leafStarts.buffer,
+            partition.leafCounts.buffer,
+            partition.leafIndexBuffers.buffer,
+            partition.parentForceX.buffer,
+            partition.parentForceY.buffer,
+        ];
+        return this._postRequest(worker, {
+            type: "process",
+            leafStartsBuffer: partition.leafStarts.buffer,
+            leafCountsBuffer: partition.leafCounts.buffer,
+            leafIndexBuffersBuffer: partition.leafIndexBuffers.buffer,
+            parentForceXBuffer: partition.parentForceX.buffer,
+            parentForceYBuffer: partition.parentForceY.buffer,
+        }, transfer);
     }
+
     _processTreePartition(worker, partition, options = {}) {
-        const requestId = ++this._requestId;
-        return new Promise((resolve, reject) => {
-            this._pending.set(requestId, {resolve, reject});
-            worker.postMessage({
-                type: "process-tree-hybrid",
-                requestId,
-                splitBudget: options.splitBudget,
-                minJobParticles: options.minJobParticles,
-                debugTree: options.debugTree === true,
-                jobStartsBuffer: partition.jobStarts.buffer,
-                jobCountsBuffer: partition.jobCounts.buffer,
-                jobIndexBuffersBuffer: partition.jobIndexBuffers.buffer,
-                jobDepthsBuffer: partition.jobDepths.buffer,
-                jobLeftBuffer: partition.jobLeft.buffer,
-                jobTopBuffer: partition.jobTop.buffer,
-                jobRightBuffer: partition.jobRight.buffer,
-                jobBottomBuffer: partition.jobBottom.buffer,
-                jobParentForceXBuffer: partition.jobParentForceX.buffer,
-                jobParentForceYBuffer: partition.jobParentForceY.buffer,
-            }, [
-                partition.jobStarts.buffer,
-                partition.jobCounts.buffer,
-                partition.jobIndexBuffers.buffer,
-                partition.jobDepths.buffer,
-                partition.jobLeft.buffer,
-                partition.jobTop.buffer,
-                partition.jobRight.buffer,
-                partition.jobBottom.buffer,
-                partition.jobParentForceX.buffer,
-                partition.jobParentForceY.buffer,
-            ]);
-        });
+        const transfer = [
+            partition.jobStarts.buffer,
+            partition.jobCounts.buffer,
+            partition.jobIndexBuffers.buffer,
+            partition.jobDepths.buffer,
+            partition.jobLeft.buffer,
+            partition.jobTop.buffer,
+            partition.jobRight.buffer,
+            partition.jobBottom.buffer,
+            partition.jobParentForceX.buffer,
+            partition.jobParentForceY.buffer,
+        ];
+        return this._postRequest(worker, {
+            type: "process-tree-hybrid",
+            splitBudget: options.splitBudget,
+            minJobParticles: options.minJobParticles,
+            debugTree: options.debugTree === true,
+            jobStartsBuffer: partition.jobStarts.buffer,
+            jobCountsBuffer: partition.jobCounts.buffer,
+            jobIndexBuffersBuffer: partition.jobIndexBuffers.buffer,
+            jobDepthsBuffer: partition.jobDepths.buffer,
+            jobLeftBuffer: partition.jobLeft.buffer,
+            jobTopBuffer: partition.jobTop.buffer,
+            jobRightBuffer: partition.jobRight.buffer,
+            jobBottomBuffer: partition.jobBottom.buffer,
+            jobParentForceXBuffer: partition.jobParentForceX.buffer,
+            jobParentForceYBuffer: partition.jobParentForceY.buffer,
+        }, transfer);
     }
 
 
@@ -388,11 +319,42 @@ class SubworkerPool {
     }
 
     _processSimpleTask(worker, payload) {
+        return this._postRequest(worker, payload);
+    }
+
+    _postRequest(worker, payload, transfer = []) {
         const requestId = ++this._requestId;
         return new Promise((resolve, reject) => {
-            this._pending.set(requestId, {resolve, reject});
-            worker.postMessage({...payload, requestId});
+            this._pending.set(requestId, {resolve, reject, worker});
+            try {
+                worker.postMessage({...payload, requestId}, transfer);
+            } catch (error) {
+                this._pending.delete(requestId);
+                reject(error);
+            }
         });
+    }
+
+    _handleWorkerFailure(_worker, error) {
+        // A pool with one dead worker can no longer satisfy the scheduler's
+        // assumptions. Fail the whole in-flight step instead of leaving future
+        // jobs queued forever on a dead worker.
+        this._rejectAllPending(error);
+        for (const worker of this.workers) {
+            worker.onmessage = null;
+            worker.onerror = null;
+            worker.onmessageerror = null;
+            worker.terminate();
+        }
+        this.workers = [];
+        this.runtimeMetadata = [];
+    }
+
+    _rejectAllPending(error) {
+        for (const pending of this._pending.values()) {
+            pending.reject(error);
+        }
+        this._pending.clear();
     }
 
     _handleMessage(_worker, data) {
@@ -407,16 +369,23 @@ class SubworkerPool {
         if (Number.isFinite(_worker?._mtIndex)) {
             data.workerIndex = _worker._mtIndex;
         }
-        pending.resolve(data);
+        if (data.error) {
+            pending.reject(new Error(data.error));
+        } else {
+            pending.resolve(data);
+        }
     }
 
     dispose() {
+        this._rejectAllPending(new Error("worker-mt task pool disposed while work was pending"));
         for (const worker of this.workers) {
             worker.postMessage({type: "dispose"});
+            worker.onmessage = null;
+            worker.onerror = null;
+            worker.onmessageerror = null;
             worker.terminate();
         }
         this.workers = [];
-        this._pending?.clear?.();
         this.runtimeMetadata = [];
     }
 }
@@ -476,6 +445,11 @@ class WorkerMTBackendImpl {
         if (particleCountChanged || !this.particles) {
             this._initParticles();
             this._initBuffers();
+        } else if (this.physicalEngine) {
+            // In the no-SharedArrayBuffer fallback, the physical engine keeps a
+            // settings reference of its own. Live gravity/collision/tree changes
+            // must be applied even when the particle count stays unchanged.
+            this.physicalEngine.reconfigure(this.settings);
         }
         this._ensureTreeWorkspace();
         this._applyParticlesState(state);
@@ -497,6 +471,8 @@ class WorkerMTBackendImpl {
             return null;
         }
 
+        await this._applyTunedSegmentSize();
+
         if (!this._canUseMT()) {
             return this._singleThreadStep(timestamp);
         }
@@ -505,7 +481,6 @@ class WorkerMTBackendImpl {
             return this._parallelTreeStep(timestamp);
         }
 
-        this._applyTunedSegmentSize();
         const stepStart = performance.now();
         const profile = {
             forceTime: 0,
@@ -604,7 +579,6 @@ class WorkerMTBackendImpl {
         return this._buildResult(timestamp, buffer, tree, treeTime, taskBuildTime + partitionTime + parallelTime, this._calcTreeStats(tree), profile);
     }
     async _parallelTreeStep(timestamp) {
-        this._applyTunedSegmentSize();
         const stepStart = performance.now();
         const profile = {forceTime: 0, integrateTime: 0, statsTime: 0, exportTime: 0, mt: null};
 
@@ -1019,7 +993,7 @@ class WorkerMTBackendImpl {
         const treeTimes = new Float64Array(workerCount);
         const forceTimes = new Float64Array(workerCount);
         const integrateTimes = new Float64Array(workerCount);
-        const jobCounts = new Uint32Array(workerCount);
+        const workCounts = new Uint32Array(workerCount);
 
         let treeTimeTotal = 0;
         let forceTimeTotal = 0;
@@ -1034,7 +1008,7 @@ class WorkerMTBackendImpl {
             treeTimes[workerIndex] += treeTime;
             forceTimes[workerIndex] += forceTime;
             integrateTimes[workerIndex] += integrateTime;
-            jobCounts[workerIndex] += item.jobCount || 0;
+            workCounts[workerIndex] += (item.jobCount || 0) + (item.recursiveSplitCount || 0);
             treeTimeTotal += treeTime;
             forceTimeTotal += forceTime;
             integrateTimeTotal += integrateTime;
@@ -1046,7 +1020,8 @@ class WorkerMTBackendImpl {
         let integrateTimeMax = 0;
         let workerMaxTime = 0;
         for (let i = 0; i < workerCount; i++) {
-            if (jobCounts[i] > 0) {
+            const workerTime = treeTimes[i] + forceTimes[i] + integrateTimes[i];
+            if (workCounts[i] > 0 || workerTime > 0) {
                 activeWorkers += 1;
             }
             treeTimeMax = Math.max(treeTimeMax, treeTimes[i]);
@@ -1149,6 +1124,8 @@ class WorkerMTBackendImpl {
 
     _initParticles() {
         const length = this.settings.physics.particleCount * ITEM_SIZE;
+        this.physicalEngine?.dispose();
+        this.physicalEngine = null;
         if (this._sharedMemoryAvailable) {
             this.particles = new Float32Array(new SharedArrayBuffer(length * Float32Array.BYTES_PER_ELEMENT));
         } else {
@@ -1213,15 +1190,20 @@ class WorkerMTBackendImpl {
         }
         this._fallbackReason = null;
         this._ensureTreeWorkspace();
-        await this._pool.reconfigure(
-            this.settings,
-            this.particles.buffer,
-            this.forceX?.buffer ?? null,
-            this.forceY?.buffer ?? null,
-            this._treeWorkspace.indices.buffer,
-            this._treeWorkspace.scratchIndices.buffer,
-            this._threadCount,
-        );
+        try {
+            await this._pool.reconfigure(
+                this.settings,
+                this.particles.buffer,
+                this.forceX?.buffer ?? null,
+                this.forceY?.buffer ?? null,
+                this._treeWorkspace.indices.buffer,
+                this._treeWorkspace.scratchIndices.buffer,
+                this._threadCount,
+            );
+        } catch (error) {
+            this._pool.dispose();
+            throw error;
+        }
     }
 
     _ensureTreeWorkspace() {
@@ -1329,16 +1311,21 @@ class WorkerMTBackendImpl {
         this._setSegmentMaxCount(this._actualSegmentSize);
     }
 
-    _applyTunedSegmentSize() {
+    async _applyTunedSegmentSize() {
         if (!this._segmentTuner) {
             this._actualSegmentSize = this.settings.simulation.segmentMaxCount;
             return;
         }
 
         const nextSize = this._segmentTuner.currentSize;
-        if (nextSize !== this._actualSegmentSize) {
-            this._actualSegmentSize = nextSize;
-            this._setSegmentMaxCount(nextSize);
+        if (nextSize === this._actualSegmentSize) {
+            return;
+        }
+
+        this._actualSegmentSize = nextSize;
+        this._setSegmentMaxCount(nextSize);
+        if (this._sharedMemoryAvailable && this._pool.workers.length > 0) {
+            await this._pool.updateSegmentMaxCount(nextSize);
         }
     }
 
@@ -1347,12 +1334,10 @@ class WorkerMTBackendImpl {
             return;
         }
 
+        // The next candidate (or the final winner) is synchronized with task
+        // workers at the beginning of the next physics step. Keeping the size
+        // used by this step intact also makes the reported actual size honest.
         this._segmentTuner.record(stepTime);
-        const selectedSize = this._segmentTuner.currentSize;
-        if (this._segmentTuner.finished && selectedSize !== this._actualSegmentSize) {
-            this._actualSegmentSize = selectedSize;
-            this._setSegmentMaxCount(selectedSize);
-        }
     }
 
     _setSegmentMaxCount(size) {
@@ -1477,7 +1462,6 @@ class WorkerMTBackendImpl {
             this.physicalEngine = new FlatPhysicsEngine(this.settings);
         }
 
-        this._applyTunedSegmentSize();
         const tuneStart = performance.now();
         const tree = this.physicalEngine.step(this.particles);
         const stepCalcTime = performance.now() - tuneStart;

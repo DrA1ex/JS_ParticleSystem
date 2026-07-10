@@ -10,16 +10,19 @@ export function openFile(contentType, multiple) {
         input.multiple = multiple;
         input.accept = contentType;
 
+        let settled = false;
+        const finish = (value) => {
+            if (settled) return;
+            settled = true;
+            input.remove();
+            resolve(value);
+        };
+
         input.onchange = () => {
             const files = Array.from(input.files || []);
-            if (multiple) {
-                resolve(files);
-            } else {
-                resolve(files[0]);
-            }
-
-            input.remove();
+            finish(multiple ? files : (files[0] || null));
         };
+        input.oncancel = () => finish(multiple ? [] : null);
 
         input.click();
     });

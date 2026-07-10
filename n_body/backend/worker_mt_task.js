@@ -56,6 +56,9 @@ function init(data) {
         throw new Error(`worker-mt task protocol mismatch: expected ${data.expectedProtocolVersion}, got ${WORKER_PROTOCOL_VERSION}`);
     }
     settings = AppSimulationSettings.deserialize(data.settings);
+    if (Number.isFinite(data.segmentMaxCount)) {
+        settings.simulation.config.segmentMaxCount = Math.max(1, Math.floor(data.segmentMaxCount));
+    }
     particles = new Float32Array(data.particlesBuffer);
     forceX = data.forceXBuffer ? new Float32Array(data.forceXBuffer) : null;
     forceY = data.forceYBuffer ? new Float32Array(data.forceYBuffer) : null;
@@ -66,6 +69,23 @@ function init(data) {
         indices: indexBuffers[0],
         scratchIndices: indexBuffers[1],
     };
+}
+
+
+function setSegmentMaxCount(data) {
+    if (!settings) {
+        throw new Error("worker-mt task is not initialized");
+    }
+    const segmentMaxCount = Number.parseInt(data.segmentMaxCount, 10);
+    if (!Number.isFinite(segmentMaxCount) || segmentMaxCount < 1) {
+        throw new Error(`Invalid segment max count: ${data.segmentMaxCount}`);
+    }
+    settings.simulation.config.segmentMaxCount = segmentMaxCount;
+    postMessage({
+        type: "done",
+        requestId: data.requestId,
+        segmentMaxCount,
+    });
 }
 
 function processHybridSeedBounds(data) {
@@ -168,6 +188,10 @@ function calculateLeaf(indices, start, count, pForceX, pForceY) {
         const offsetI = indexI * ITEM_SIZE;
         particles[offsetI + 2] += pForceX;
         particles[offsetI + 3] += pForceY;
+        if (accumulateForce) {
+            forceX[indexI] += pForceX;
+            forceY[indexI] += pForceY;
+        }
         const xI = particles[offsetI];
         const yI = particles[offsetI + 1];
         const massI = particles[offsetI + 4];
@@ -199,9 +223,14 @@ function calculateLeaf(indices, start, count, pForceX, pForceY) {
         }
     }
     if (count > 0) {
-        const lastOffset = indices[end - 1] * ITEM_SIZE;
+        const lastIndex = indices[end - 1];
+        const lastOffset = lastIndex * ITEM_SIZE;
         particles[lastOffset + 2] += pForceX;
         particles[lastOffset + 3] += pForceY;
+        if (accumulateForce) {
+            forceX[lastIndex] += pForceX;
+            forceY[lastIndex] += pForceY;
+        }
     }
 }
 
@@ -855,6 +884,17 @@ onmessage = (event) => {
             break;
         case "hybrid-seed-scatter":
             processHybridSeedScatter(data);
+            break;
+        case "set-segment-max-count":
+            try {
+                setSegmentMaxCount(data);
+            } catch (error) {
+                postMessage({
+                    type: "done",
+                    requestId: data.requestId,
+                    error: error?.message || String(error),
+                });
+            }
             break;
         case "dispose":
             close();
