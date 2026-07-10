@@ -7,7 +7,7 @@ import {AppSimulationSettings} from "../settings/app.js";
 
 const SEGMENT_TUNE_CANDIDATES = [8, 16, 24, 32, 40, 48, 64, 96];
 const SEGMENT_TUNE_SAMPLES_PER_CANDIDATE = 2;
-const THREAD_CHOICES = [2, 4, 6, 8];
+const THREAD_CHOICES = [2, 4, 6, 8, 12, 16, 20];
 const BUFFER_A = 0;
 const BUFFER_B = 1;
 const PARALLEL_TREE_MAX_SPLIT_LEVELS = 3;
@@ -780,7 +780,7 @@ class WorkerMTBackendImpl {
             aggregateTime: Math.max(0, ...workerResults.map(item => item.treeProfile?.aggregateTime || 0)),
             fastBucketPath: true,
             parallel: true,
-            strategy: mtProfile.treeStrategy || WORKER_TREE_STRATEGY_DYNAMIC,
+            strategy: mtProfile.treeStrategy || WORKER_TREE_STRATEGY_HYBRID,
             dynamicScheduling: !!mtProfile.treeDynamicScheduling,
             recursiveScheduling: !!mtProfile.treeRecursiveScheduling,
             hybridScheduling: !!mtProfile.treeHybridScheduling,
@@ -1051,11 +1051,12 @@ class WorkerMTBackendImpl {
     _getWorkerMtTreeStrategy() {
         const value = this.settings.simulation.workerMtTreeStrategy;
         if (value === WORKER_TREE_STRATEGY_STATIC ||
+            value === WORKER_TREE_STRATEGY_DYNAMIC ||
             value === WORKER_TREE_STRATEGY_RECURSIVE ||
             value === WORKER_TREE_STRATEGY_HYBRID) {
             return value;
         }
-        return WORKER_TREE_STRATEGY_DYNAMIC;
+        return WORKER_TREE_STRATEGY_HYBRID;
     }
 
     _getTreeRecursiveSplitBudget(strategy) {
@@ -1562,7 +1563,8 @@ class WorkerMTBackendImpl {
             return 4;
         }
 
-        const target = Math.max(2, Math.min(8, hardwareConcurrency - 1));
+        const maxThreadChoice = THREAD_CHOICES[THREAD_CHOICES.length - 1];
+        const target = Math.max(2, Math.min(maxThreadChoice, hardwareConcurrency - 1));
         let selected = THREAD_CHOICES[0];
         for (const value of THREAD_CHOICES) {
             if (value <= target) {

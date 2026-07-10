@@ -40,7 +40,7 @@ export class SimulationSettings extends SettingsBase {
         workerThreads: Property.enum("worker_threads", WorkerThreadCount, WorkerThreadCount.auto)
             .setName("Worker threads").setDescription([
                 "Worker MT backend only. Number of physics subworkers used for leaf force solving, integration and parallel subtree work.",
-                "auto uses navigator.hardwareConcurrency when available and otherwise falls back to 4.",
+                "auto uses navigator.hardwareConcurrency when available, keeps one logical processor for the coordinator/main thread, and otherwise falls back to 4.",
                 "This mode requires SharedArrayBuffer/cross-origin isolation for real multithreading; otherwise it falls back to the single worker path.",
                 "On static hosting such as GitHub Pages, n_body can install a local COOP/COEP service worker and reload once to enable SharedArrayBuffer."
             ].join("\n"))
@@ -54,13 +54,13 @@ export class SimulationSettings extends SettingsBase {
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)
             .setVisibleWhen(usesWorkerMtTreeJobs),
-        workerMtTreeStrategy: Property.enum("worker_mt_tree_strategy", WorkerTreeStrategy, WorkerTreeStrategy.dynamic)
+        workerMtTreeStrategy: Property.enum("worker_mt_tree_strategy", WorkerTreeStrategy, WorkerTreeStrategy.hybrid)
             .setName("Worker MT tree strategy").setDescription([
                 "Worker MT backend only. Strategy used to split parallel tree work between subworkers.",
                 "static uses the shallow coordinator split and assigns jobs once.",
                 "dynamic uses the current coordinator queue, but with a conservative shallow split to avoid expensive single-thread preparation.",
                 "recursive starts from coarse jobs and lets subworkers split heavy jobs further, returning spawned jobs to the coordinator queue.",
-                "hybrid uses a selectable split-first profile. Use Hybrid tree profile to test coarse, balanced and wide variants without changing strategy."
+                "hybrid is the default and uses a selectable split-first profile. Use Hybrid tree profile to test coarse, balanced and wide variants without changing strategy."
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)
             .setVisibleWhen(isWorkerMtBackend),

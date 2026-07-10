@@ -884,7 +884,8 @@ export function installPerformanceReportConsole(app) {
             "  1) Run the same URL with backend=worker",
             "  2) Run backend=worker-mt&worker_threads=2",
             "  3) Run backend=worker-mt&worker_threads=4",
-            "  4) Run backend=worker-mt&worker_threads=6",
+            "  4) Run backend=worker-mt&worker_threads=8",
+            "  5) On high-core-count systems also try worker_threads=12, 16, or 20",
             "  Use the same particles, segment size, render settings, and warmed-up auto-tune state.",
             "Options:",
             "  frames: RAF samples per block, default 240",
@@ -901,7 +902,7 @@ export function installPerformanceReportConsole(app) {
             "  summary.workerMT.treeStrategies / treeRecursiveScheduling / treeHybridScheduling / treeSpawnedJobs show recursive/hybrid tree scheduling",
             "  metrics.physics.mt.* inside each block",
             "Compare reports already loaded in this page:",
-            "  window.nBodyCompareReports(reportWorker, reportMt2, reportMt4, reportMt6)",
+            "  window.nBodyCompareReports(reportWorker, reportMt2, reportMt4, reportMt8, reportMt16)",
             "Last report is also available as window.nBodyLastReport and window.nBodyLastReportText."
         ].join("\n");
         console.info(message);
