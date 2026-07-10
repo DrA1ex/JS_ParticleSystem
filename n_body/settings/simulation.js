@@ -1,10 +1,11 @@
 import {ComponentType, Property, ReadOnlyProperty, SettingsBase} from "./base.js";
-import {BackendType, WorkerHybridProfile, WorkerThreadCount, WorkerTreeJobCount, WorkerTreeStrategy} from "./enum.js";
+import {BackendType, WorkerHybridProfile, WorkerHybridSeedJobCount, WorkerThreadCount, WorkerTreeJobCount, WorkerTreeStrategy} from "./enum.js";
 
 const isCpuBackend = settings => settings.simulation.backend !== BackendType.gpgpu;
 const isWorkerMtBackend = settings => settings.simulation.backend === BackendType.workerMt;
 const usesWorkerMtTreeJobs = settings => isWorkerMtBackend(settings) &&
-    settings.simulation.workerMtTreeStrategy !== WorkerTreeStrategy.recursive;
+    (settings.simulation.workerMtTreeStrategy === WorkerTreeStrategy.static ||
+        settings.simulation.workerMtTreeStrategy === WorkerTreeStrategy.dynamic);
 const isHybridWorkerMt = settings => isWorkerMtBackend(settings) &&
     settings.simulation.workerMtTreeStrategy === WorkerTreeStrategy.hybrid;
 
@@ -48,9 +49,9 @@ export class SimulationSettings extends SettingsBase {
             .setVisibleWhen(isWorkerMtBackend),
         workerMtTreeJobs: Property.enum("worker_mt_tree_jobs", WorkerTreeJobCount, WorkerTreeJobCount.auto)
             .setName("Worker MT tree jobs").setDescription([
-                "Worker MT backend only. Target number of subtree jobs used by static/dynamic/hybrid tree scheduling.",
+                "Worker MT backend only. Target number of subtree jobs used by static/dynamic tree scheduling.",
                 "More jobs can improve load balancing between workers, but too many jobs add coordinator/message overhead.",
-                "recursive ignores this value because it uses its own coarse root seed. hybrid uses this as a seed target unless the selected profile clamps it lower."
+                "recursive and hybrid use their own seed scheduling controls."
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)
             .setVisibleWhen(usesWorkerMtTreeJobs),
@@ -66,10 +67,19 @@ export class SimulationSettings extends SettingsBase {
             .setVisibleWhen(isWorkerMtBackend),
         workerMtHybridProfile: Property.enum("worker_mt_hybrid_profile", WorkerHybridProfile, WorkerHybridProfile.coarse)
             .setName("Hybrid tree profile").setDescription([
-                "Worker MT hybrid strategy only. Selects how aggressively hybrid creates seed jobs and recursively splits heavy tree jobs.",
-                "coarse: closest to recursive; low coordinator work, one split-first pass, fewer spawned jobs. This is the recommended next test.",
-                "balanced: middle ground; slightly wider seed and recursive budget while still avoiding the previous over-splitting profile.",
-                "wide: previous split-first hybrid behavior; useful as a comparison point, but it produced too many spawned jobs in the last report."
+                "Worker MT hybrid strategy only. Selects how aggressively workers recursively split heavy tree jobs after the initial seed queue is created.",
+                "coarse: lowest recursive split budget and the current recommended profile.",
+                "balanced: middle ground with a wider recursive budget.",
+                "wide: the most aggressive legacy profile; useful mainly as a comparison point."
+            ].join("\n"))
+            .setBreaks(ComponentType.backend, ComponentType.debug)
+            .setVisibleWhen(isHybridWorkerMt),
+        workerMtHybridSeedJobs: Property.enum("worker_mt_hybrid_seed_jobs", WorkerHybridSeedJobCount, WorkerHybridSeedJobCount.auto)
+            .setName("Hybrid seed jobs").setDescription([
+                "Worker MT hybrid strategy only. Target width of the initial coordinator-built seed queue before recursive worker splitting starts.",
+                "auto targets roughly one seed job per active subworker: 4 workers -> 4, 8 -> 8, 16 -> 16, and 20 -> 20.",
+                "Higher values move more tree preparation to the coordinator and may reduce late recursive fan-out; lower values start workers earlier and leave more splitting to them.",
+                "This does not limit deeper recursive splitting, so unexpectedly heavy branches can still be subdivided later."
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)
             .setVisibleWhen(isHybridWorkerMt),
@@ -128,6 +138,7 @@ export class SimulationSettings extends SettingsBase {
     get workerMtTreeJobs() {return this.config.workerMtTreeJobs;}
     get workerMtTreeStrategy() {return this.config.workerMtTreeStrategy;}
     get workerMtHybridProfile() {return this.config.workerMtHybridProfile;}
+    get workerMtHybridSeedJobs() {return this.config.workerMtHybridSeedJobs;}
     get workerMtHybridSplitFirst() {return this.config.workerMtHybridSplitFirst;}
     get workerMtHybridJobSorting() {return this.config.workerMtHybridJobSorting;}
     get workerMtHybridSplitGainFilter() {return this.config.workerMtHybridSplitGainFilter;}

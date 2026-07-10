@@ -301,7 +301,7 @@ export class Debug {
         const treeModeBase = state.treeStrategy || (state.treeDynamicScheduling ? "dynamic" : "static");
         const treeMode = state.treeHybridProfile ? `${treeModeBase}/${state.treeHybridProfile}` : treeModeBase;
         const hybridOptions = state.treeHybridScheduling
-            ? `, split-first ${state.treeHybridSplitFirst ? "on" : "off"}, sorting ${state.treeHybridJobSorting ? "on" : "off"}, split-gain ${state.treeHybridSplitGainFilter ? "on" : "off"}`
+            ? `, seed ${state.treeHybridSeedJobs ?? "auto"}, split-first ${state.treeHybridSplitFirst ? "on" : "off"}, sorting ${state.treeHybridJobSorting ? "on" : "off"}, split-gain ${state.treeHybridSplitGainFilter ? "on" : "off"}`
             : "";
         const spawned = Number.isFinite(state.treeSpawnedJobs) ? `, spawned ${state.treeSpawnedJobs}` : "";
         const tree = state.treeParallel

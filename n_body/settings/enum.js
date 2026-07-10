@@ -56,6 +56,18 @@ export const WorkerTreeJobCount = {
 /**
  * @enum(string)
  */
+export const WorkerHybridSeedJobCount = {
+    auto: "auto",
+    "4": "4",
+    "8": "8",
+    "16": "16",
+    "32": "32",
+    "64": "64"
+}
+
+/**
+ * @enum(string)
+ */
 export const WorkerTreeStrategy = {
     static: "static",
     dynamic: "dynamic",

@@ -14,6 +14,9 @@ const PARALLEL_TREE_MAX_SPLIT_LEVELS = 3;
 const AUTO_TREE_JOBS_PER_THREAD = 4;
 const AUTO_TREE_JOBS_MIN = 8;
 const AUTO_TREE_JOBS_MAX = 32;
+const HYBRID_SEED_JOBS_MIN = 4;
+const HYBRID_SEED_JOBS_MAX = 64;
+const HYBRID_SEED_MAX_SPLIT_LEVELS = 3;
 const RECURSIVE_TREE_SEED_SPLIT_LEVELS = 1;
 const RECURSIVE_TREE_SPLIT_BUDGET = 8;
 const RECURSIVE_TREE_MIN_JOB_PARTICLES = 8192;
@@ -26,28 +29,16 @@ const WORKER_TREE_HYBRID_PROFILE_BALANCED = "balanced";
 const WORKER_TREE_HYBRID_PROFILE_WIDE = "wide";
 const HYBRID_TREE_PROFILES = {
     [WORKER_TREE_HYBRID_PROFILE_COARSE]: {
-        seedSplitLevels: 1,
-        seedJobsPerThread: 1,
-        seedJobsMin: 4,
-        seedJobsMax: 8,
         splitBudget: 1,
         minJobParticles: 32768,
         segmentMultiplier: 256,
     },
     [WORKER_TREE_HYBRID_PROFILE_BALANCED]: {
-        seedSplitLevels: 1,
-        seedJobsPerThread: 2,
-        seedJobsMin: 4,
-        seedJobsMax: 12,
         splitBudget: 2,
         minJobParticles: 32768,
         segmentMultiplier: 128,
     },
     [WORKER_TREE_HYBRID_PROFILE_WIDE]: {
-        seedSplitLevels: 2,
-        seedJobsPerThread: 2,
-        seedJobsMin: 4,
-        seedJobsMax: 16,
         splitBudget: 2,
         minJobParticles: 16384,
         segmentMultiplier: 128,
@@ -690,6 +681,7 @@ class WorkerMTBackendImpl {
             treeRecursiveScheduling: strategy === WORKER_TREE_STRATEGY_RECURSIVE || strategy === WORKER_TREE_STRATEGY_HYBRID,
             treeHybridScheduling: strategy === WORKER_TREE_STRATEGY_HYBRID,
             treeHybridProfile: strategy === WORKER_TREE_STRATEGY_HYBRID ? this._getWorkerMtHybridProfileName() : null,
+            treeHybridSeedJobs: strategy === WORKER_TREE_STRATEGY_HYBRID ? this.settings.simulation.workerMtHybridSeedJobs : null,
             treeHybridSplitFirst: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridSplitFirst : null,
             treeHybridJobSorting: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridJobSorting : null,
             treeHybridSplitGainFilter: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridSplitGainFilter : null,
@@ -1001,10 +993,11 @@ class WorkerMTBackendImpl {
         }];
 
         const hybridProfile = this._getWorkerMtHybridProfileConfig();
-        const targetJobs = this._getWorkerMtHybridSeedTargetJobs(count, hybridProfile);
+        const targetJobs = this._getWorkerMtHybridSeedTargetJobs(count);
+        const maxSplitLevels = this._getWorkerMtHybridSeedSplitLevels(targetJobs);
         let splitLevels = 0;
         t = performance.now();
-        for (let level = 0; level < hybridProfile.seedSplitLevels; level++) {
+        for (let level = 0; level < maxSplitLevels; level++) {
             if (nodes.length >= targetJobs) {
                 break;
             }
@@ -1284,17 +1277,22 @@ class WorkerMTBackendImpl {
         return Math.max(AUTO_TREE_JOBS_MIN, Math.min(AUTO_TREE_JOBS_MAX, autoTarget, Math.max(this._threadCount, particleCount)));
     }
 
-    _getWorkerMtHybridSeedTargetJobs(particleCount, profile = this._getWorkerMtHybridProfileConfig()) {
-        const configured = this.settings.simulation.workerMtTreeJobs;
+    _getWorkerMtHybridSeedTargetJobs(particleCount) {
+        const configured = this.settings.simulation.workerMtHybridSeedJobs;
         if (configured && configured !== "auto") {
             const parsed = Number.parseInt(configured, 10);
             if (Number.isFinite(parsed)) {
-                return Math.max(this._threadCount, Math.min(profile.seedJobsMax, parsed, particleCount));
+                return Math.max(HYBRID_SEED_JOBS_MIN, Math.min(HYBRID_SEED_JOBS_MAX, parsed, particleCount));
             }
         }
 
-        const autoTarget = this._threadCount * profile.seedJobsPerThread;
-        return Math.max(profile.seedJobsMin, Math.min(profile.seedJobsMax, autoTarget, Math.max(this._threadCount, particleCount)));
+        const autoTarget = this._threadCount;
+        return Math.max(HYBRID_SEED_JOBS_MIN, Math.min(HYBRID_SEED_JOBS_MAX, autoTarget, particleCount));
+    }
+
+    _getWorkerMtHybridSeedSplitLevels(targetJobs) {
+        const requiredLevels = Math.ceil(Math.log(Math.max(1, targetJobs)) / Math.log(4));
+        return Math.max(1, Math.min(HYBRID_SEED_MAX_SPLIT_LEVELS, requiredLevels));
     }
 
     _buildTreeJobPartitions(jobs) {
