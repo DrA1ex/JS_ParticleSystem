@@ -8,6 +8,7 @@ const usesWorkerMtTreeJobs = settings => isWorkerMtBackend(settings) &&
         settings.simulation.workerMtTreeStrategy === WorkerTreeStrategy.dynamic);
 const isHybridWorkerMt = settings => isWorkerMtBackend(settings) &&
     settings.simulation.workerMtTreeStrategy === WorkerTreeStrategy.hybrid;
+const usesWorkerMtFastBuild = settings => isWorkerMtBackend(settings) && settings.simulation.workerMtTreeFastBuild === true;
 
 export class SimulationSettings extends SettingsBase {
     static Properties = {
@@ -113,6 +114,21 @@ export class SimulationSettings extends SettingsBase {
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)
             .setVisibleWhen(isHybridWorkerMt),
+        workerMtTreeFastBuild: Property.bool("worker_mt_tree_fast_build", false)
+            .setName("Worker MT fast tree build").setDescription([
+                "Worker MT backend only. Experimental allocation-light subtree builder for direct comparison with the current implementation.",
+                "It skips index-buffer scatter when a split produces only one non-empty bucket, reuses recursive split workspaces, and uses a reusable linear leaf-task collector.",
+                "The simulation math and later hybrid scheduling remain unchanged. Keep disabled as the control baseline until benchmark results confirm the optimization on different distributions."
+            ].join("\n"))
+            .setBreaks(ComponentType.backend, ComponentType.debug)
+            .setVisibleWhen(isWorkerMtBackend),
+        workerMtTreeFusedAggregate: Property.bool("worker_mt_tree_fused_aggregate", false)
+            .setName("Fuse tree mass aggregation").setDescription([
+                "Experimental fast-build option. Accumulates child masses during every partition pass and skips the later bottom-up aggregate pass.",
+                "This can help some tree shapes but adds a mass read at every level, so it is separate from the main fast-build switch and disabled by default."
+            ].join("\n"))
+            .setBreaks(ComponentType.backend, ComponentType.debug)
+            .setVisibleWhen(usesWorkerMtFastBuild),
         segmentRandomness: Property.float("segment_random", 0.25)
             .setName("Segmentation randomness").setDescription("Spatial subdivision randomness factor")
             .setAffects(ComponentType.backend)
@@ -151,6 +167,8 @@ export class SimulationSettings extends SettingsBase {
     get workerMtHybridSplitFirst() {return this.config.workerMtHybridSplitFirst;}
     get workerMtHybridJobSorting() {return this.config.workerMtHybridJobSorting;}
     get workerMtHybridSplitGainFilter() {return this.config.workerMtHybridSplitGainFilter;}
+    get workerMtTreeFastBuild() {return this.config.workerMtTreeFastBuild;}
+    get workerMtTreeFusedAggregate() {return this.config.workerMtTreeFusedAggregate;}
     get segmentMaxCount() {return this.config.segmentMaxCount;}
     get bufferCount() {return this.config.bufferCount;}
 

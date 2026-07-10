@@ -398,6 +398,8 @@ class SubworkerPool {
                 minJobParticles: options.minJobParticles,
                 hybridSplitFirst: options.hybridSplitFirst,
                 hybridSplitGainFilter: options.hybridSplitGainFilter,
+                treeFastBuild: options.treeFastBuild === true,
+                treeFusedAggregate: options.treeFusedAggregate === true,
                 debugTree: options.debugTree === true,
                 jobStartsBuffer: partition.jobStarts.buffer,
                 jobCountsBuffer: partition.jobCounts.buffer,
@@ -640,6 +642,8 @@ class WorkerMTBackendImpl {
         }
 
         const strategy = this._getWorkerMtTreeStrategy();
+        const treeFastBuild = this.settings.simulation.workerMtTreeFastBuild === true;
+        const treeFusedAggregate = treeFastBuild && this.settings.simulation.workerMtTreeFusedAggregate === true;
         let t = performance.now();
         const treeJobs = strategy === WORKER_TREE_STRATEGY_RECURSIVE
             ? this._buildRecursiveTreeSeedJobs()
@@ -657,7 +661,11 @@ class WorkerMTBackendImpl {
         const debugTree = this.settings.common.debugTree === true;
         if (strategy === WORKER_TREE_STRATEGY_STATIC) {
             const partitions = this._buildTreeJobPartitions(partitionPlan.jobs);
-            const results = await this._pool.processTreePartitions(partitions, {debugTree});
+            const results = await this._pool.processTreePartitions(partitions, {
+                debugTree,
+                treeFastBuild,
+                treeFusedAggregate,
+            });
             schedulerResult = {
                 results,
                 dispatchTime: 0,
@@ -677,6 +685,8 @@ class WorkerMTBackendImpl {
                     taskType: strategy === WORKER_TREE_STRATEGY_HYBRID ? "process-tree-hybrid" : "process-tree-recursive",
                     hybridSplitFirst: strategy === WORKER_TREE_STRATEGY_HYBRID ? this.settings.simulation.workerMtHybridSplitFirst : null,
                     hybridSplitGainFilter: strategy === WORKER_TREE_STRATEGY_HYBRID ? this.settings.simulation.workerMtHybridSplitGainFilter : null,
+                    treeFastBuild,
+                    treeFusedAggregate,
                     debugTree,
                 }
             );
@@ -684,7 +694,11 @@ class WorkerMTBackendImpl {
             schedulerResult = await this._pool.processTreeJobsDynamic(
                 partitionPlan.jobs,
                 (partition) => this._materializeTreeJobPartition(partition),
-                {debugTree}
+                {
+                    debugTree,
+                    treeFastBuild,
+                    treeFusedAggregate,
+                }
             );
         }
         const parallelWaitTime = performance.now() - t;
@@ -727,6 +741,19 @@ class WorkerMTBackendImpl {
             treeHybridSplitFirst: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridSplitFirst : null,
             treeHybridJobSorting: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridJobSorting : null,
             treeHybridSplitGainFilter: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridSplitGainFilter : null,
+            treeFastBuild,
+            treeFusedAggregate,
+            treePartitionCountParticlesMax: Math.max(0, ...workerResults.map(item => item.treeProfile?.partitionCountParticles || 0)),
+            treePartitionCountParticlesTotal: workerResults.reduce((sum, item) => sum + (item.treeProfile?.partitionCountParticles || 0), 0),
+            treePartitionScatterParticlesMax: Math.max(0, ...workerResults.map(item => item.treeProfile?.partitionScatterParticles || 0)),
+            treePartitionScatterParticlesTotal: workerResults.reduce((sum, item) => sum + (item.treeProfile?.partitionScatterParticles || 0), 0),
+            treeNodeInitCountMax: Math.max(0, ...workerResults.map(item => item.treeProfile?.nodeInitCount || 0)),
+            treeNodeInitCountTotal: workerResults.reduce((sum, item) => sum + (item.treeProfile?.nodeInitCount || 0), 0),
+            treeLeafCollectTimeMax: Math.max(0, ...workerResults.map(item => item.treeProfile?.leafCollectTime || 0)),
+            treeLeafCollectTimeTotal: workerResults.reduce((sum, item) => sum + (item.treeProfile?.leafCollectTime || 0), 0),
+            treeSingleBucketSplits: workerResults.reduce((sum, item) => sum + (item.treeProfile?.singleBucketSplits || 0) + (item.recursiveSingleBucketSplits || 0), 0),
+            treeSkippedScatterParticles: workerResults.reduce((sum, item) => sum + (item.treeProfile?.skippedScatterParticles || 0) + (item.recursiveSkippedScatterParticles || 0), 0),
+            treeFusedAggregateActive: workerResults.some(item => item.treeProfile?.fusedAggregate === true),
             treeSpawnedJobs: schedulerResult.spawnedJobCount || 0,
             treeEarlySplitResults: workerResults.reduce((sum, item) => sum + (item.hybridEarlySplit ? 1 : 0), 0),
             treeEarlySplitJobs: workerResults.reduce((sum, item) => sum + (item.hybridEarlySplitJobs || 0), 0),
@@ -826,6 +853,19 @@ class WorkerMTBackendImpl {
             hybridSplitFirst: mtProfile.treeHybridSplitFirst ?? null,
             hybridJobSorting: mtProfile.treeHybridJobSorting ?? null,
             hybridSplitGainFilter: mtProfile.treeHybridSplitGainFilter ?? null,
+            fastBuild: mtProfile.treeFastBuild ?? false,
+            fusedAggregateEnabled: mtProfile.treeFusedAggregate ?? false,
+            partitionCountParticles: mtProfile.treePartitionCountParticlesMax || 0,
+            partitionCountParticlesTotal: mtProfile.treePartitionCountParticlesTotal || 0,
+            partitionScatterParticles: mtProfile.treePartitionScatterParticlesMax || 0,
+            partitionScatterParticlesTotal: mtProfile.treePartitionScatterParticlesTotal || 0,
+            nodeInitCount: mtProfile.treeNodeInitCountMax || 0,
+            nodeInitCountTotal: mtProfile.treeNodeInitCountTotal || 0,
+            leafCollectTime: mtProfile.treeLeafCollectTimeMax || 0,
+            leafCollectTimeTotal: mtProfile.treeLeafCollectTimeTotal || 0,
+            singleBucketSplits: mtProfile.treeSingleBucketSplits || 0,
+            skippedScatterParticles: mtProfile.treeSkippedScatterParticles || 0,
+            fusedAggregate: mtProfile.treeFusedAggregateActive === true,
             spawnedJobs: mtProfile.treeSpawnedJobs || 0,
             earlySplitResults: mtProfile.treeEarlySplitResults || 0,
             earlySplitJobs: mtProfile.treeEarlySplitJobs || 0,

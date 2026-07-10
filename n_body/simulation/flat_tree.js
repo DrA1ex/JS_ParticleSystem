@@ -36,6 +36,8 @@ export class FlatSpatialTree {
         this._indexCapacity = options.indexCapacity ?? this.particleCount;
         this._rootOptions = options.root ?? null;
         this._skipIndexReset = !!options.skipIndexReset;
+        this.fastBuild = options.fastBuild === true;
+        this.fusedAggregate = this.fastBuild && options.fusedAggregate === true;
         this.maxCount = maxCount;
         this.divideFactor = divideFactor;
         this.randomness = randomness;
@@ -47,6 +49,12 @@ export class FlatSpatialTree {
             rootBoundsTime: 0,
             populateTime: 0,
             aggregateTime: 0,
+            partitionCountParticles: 0,
+            partitionScatterParticles: 0,
+            nodeInitCount: 0,
+            skippedScatterParticles: 0,
+            singleBucketSplits: 0,
+            fusedAggregate: false,
             fastBucketPath: false,
         };
 
@@ -67,6 +75,7 @@ export class FlatSpatialTree {
         this._bucketCounts = workspace.bucketCounts;
         this._bucketStarts = workspace.bucketStarts;
         this._bucketWrites = workspace.bucketWrites;
+        this._bucketMass = workspace.bucketMass;
         this._bucketIds = workspace.bucketIds;
         this._xEdges = workspace.xEdges;
         this._yEdges = workspace.yEdges;
@@ -85,6 +94,8 @@ export class FlatSpatialTree {
         this.nodeCenterX = workspace.nodeCenterX;
         this.nodeCenterY = workspace.nodeCenterY;
         this.nodeMass = workspace.nodeMass;
+        this.nodeForceX = this.fastBuild ? workspace.nodeForceX : null;
+        this.nodeForceY = this.fastBuild ? workspace.nodeForceY : null;
 
         if (this.count === 0) {
             this.root = this._createNode(0, 0, BUFFER_A, 1, 0, 0, 0, 0);
@@ -110,9 +121,14 @@ export class FlatSpatialTree {
         this._populate(this.root, initialTargetBuffer);
         this.profile.populateTime = performance.now() - profileStart;
 
-        profileStart = performance.now();
-        this._aggregateMassBottomUp();
-        this.profile.aggregateTime = performance.now() - profileStart;
+        if (this.fusedAggregate) {
+            this.profile.aggregateTime = 0;
+            this.profile.fusedAggregate = true;
+        } else {
+            profileStart = performance.now();
+            this._aggregateMassBottomUp();
+            this.profile.aggregateTime = performance.now() - profileStart;
+        }
         this.profile.fastBucketPath = this.divideFactor === 2;
     }
 
@@ -139,6 +155,11 @@ export class FlatSpatialTree {
             workspace.bucketCounts = new Int32Array(bucketsCount);
             workspace.bucketStarts = new Int32Array(bucketsCount);
             workspace.bucketWrites = new Int32Array(bucketsCount);
+            workspace.bucketMass = new Float64Array(bucketsCount);
+        }
+
+        if (!workspace.bucketMass || workspace.bucketMass.length < bucketsCount) {
+            workspace.bucketMass = new Float64Array(bucketsCount);
         }
 
         if (!workspace.xEdges || workspace.xEdges.length < this.divideFactor + 1) {
@@ -157,11 +178,14 @@ export class FlatSpatialTree {
     }
 
     _ensureNodeCapacity(workspace, required, usedCount = this.nodeCount) {
-        if (workspace.nodeCapacity >= required) {
+        const hasNodeCapacity = workspace.nodeCapacity >= required;
+        const hasForceCapacity = !this.fastBuild ||
+            (workspace.nodeForceX?.length >= required && workspace.nodeForceY?.length >= required);
+        if (hasNodeCapacity && hasForceCapacity) {
             return;
         }
 
-        const capacity = nextCapacity(required, workspace.nodeCapacity || 16);
+        const capacity = hasNodeCapacity ? workspace.nodeCapacity : nextCapacity(required, workspace.nodeCapacity || 16);
         workspace.nodeStart = growArray(Int32Array, workspace.nodeStart, capacity);
         workspace.nodeParticleCount = growArray(Int32Array, workspace.nodeParticleCount, capacity);
         workspace.nodeDepth = growArray(Int16Array, workspace.nodeDepth, capacity);
@@ -175,6 +199,10 @@ export class FlatSpatialTree {
         workspace.nodeCenterX = growArray(Float64Array, workspace.nodeCenterX, capacity);
         workspace.nodeCenterY = growArray(Float64Array, workspace.nodeCenterY, capacity);
         workspace.nodeMass = growArray(Float64Array, workspace.nodeMass, capacity);
+        if (this.fastBuild) {
+            workspace.nodeForceX = growArray(Float64Array, workspace.nodeForceX, capacity);
+            workspace.nodeForceY = growArray(Float64Array, workspace.nodeForceY, capacity);
+        }
         workspace.nodeCapacity = capacity;
 
         // If arrays are grown after the tree object has already cached them,
@@ -194,10 +222,14 @@ export class FlatSpatialTree {
             this.nodeCenterX = workspace.nodeCenterX;
             this.nodeCenterY = workspace.nodeCenterY;
             this.nodeMass = workspace.nodeMass;
+            if (this.fastBuild) {
+                this.nodeForceX = workspace.nodeForceX;
+                this.nodeForceY = workspace.nodeForceY;
+            }
         }
     }
 
-    _createNode(start, count, indexBufferId, depth, left, top, right, bottom) {
+    _createNode(start, count, indexBufferId, depth, left, top, right, bottom, mass = null) {
         this._ensureNodeCapacity(this._workspace, this.nodeCount + 1);
         const nodeId = this.nodeCount++;
 
@@ -213,7 +245,11 @@ export class FlatSpatialTree {
         this.nodeBottom[nodeId] = bottom;
         this.nodeCenterX[nodeId] = left + (right - left) / 2;
         this.nodeCenterY[nodeId] = top + (bottom - top) / 2;
-        this.nodeMass[nodeId] = 0;
+        this.nodeMass[nodeId] = mass == null ? (this.fusedAggregate ? Number.NaN : 0) : mass;
+        if (this.fastBuild) {
+            this.nodeForceX[nodeId] = 0;
+            this.nodeForceY[nodeId] = 0;
+        }
 
         return nodeId;
     }
@@ -262,84 +298,149 @@ export class FlatSpatialTree {
         const bucketCounts = this._bucketCounts;
         const bucketStarts = this._bucketStarts;
         const bucketWrites = this._bucketWrites;
+        const bucketMass = this._bucketMass;
         const bucketIds = this._bucketIds;
         const bucketsCount = this._bucketsCount;
         const particles = this.particles;
         const divideFactor = this.divideFactor;
         const start = this.nodeStart[nodeId];
         const end = start + count;
+        const fastBuild = this.fastBuild;
 
-        bucketCounts.fill(0);
+        bucketCounts.fill(0, 0, bucketsCount);
+        if (this.fusedAggregate) {
+            bucketMass.fill(0, 0, bucketsCount);
+        }
 
-        // Counting pass: compute the child bucket once and remember it. The
-        // scatter pass can then move only integer particle ids without reading
-        // x/y again or repeating edge lookup. The common 2x2 split has a
-        // specialized branch because it is by far the hottest tree-build path:
-        // avoid function calls and the generic edge loop for every particle at
-        // every tree level.
         let usedBuckets = 0;
+        let usedBucketIndex = -1;
+        let singlePoint = true;
+        let firstX = 0;
+        let firstY = 0;
+        if (fastBuild) {
+            const firstParticleOffset = sourceIndices[start] * ITEM_SIZE;
+            firstX = particles[firstParticleOffset];
+            firstY = particles[firstParticleOffset + 1];
+            this.profile.partitionCountParticles += count;
+        }
+
         if (divideFactor === 2) {
             const xMid = xEdges[1];
             const yMid = yEdges[1];
             for (let i = start; i < end; i++) {
                 const particleIndex = sourceIndices[i];
                 const offset = particleIndex * ITEM_SIZE;
-                const bucketIndex = (particles[offset] < xMid ? 0 : 2) + (particles[offset + 1] < yMid ? 0 : 1);
+                const x = particles[offset];
+                const y = particles[offset + 1];
+                const bucketIndex = (x < xMid ? 0 : 2) + (y < yMid ? 0 : 1);
 
                 bucketIds[i - start] = bucketIndex;
                 if (bucketCounts[bucketIndex] === 0) {
                     usedBuckets += 1;
+                    usedBucketIndex = bucketIndex;
                 }
                 bucketCounts[bucketIndex] += 1;
+                if (fastBuild && singlePoint && (Math.abs(x - firstX) > EPSILON || Math.abs(y - firstY) > EPSILON)) {
+                    singlePoint = false;
+                }
+                if (this.fusedAggregate) {
+                    bucketMass[bucketIndex] += particles[offset + 4];
+                }
             }
         } else {
             for (let i = start; i < end; i++) {
-                const offset = sourceIndices[i] * ITEM_SIZE;
-                const x = this._findEdgeIndex(particles[offset], xEdges);
-                const y = this._findEdgeIndex(particles[offset + 1], yEdges);
+                const particleIndex = sourceIndices[i];
+                const offset = particleIndex * ITEM_SIZE;
+                const xValue = particles[offset];
+                const yValue = particles[offset + 1];
+                const x = this._findEdgeIndex(xValue, xEdges);
+                const y = this._findEdgeIndex(yValue, yEdges);
                 const bucketIndex = x * divideFactor + y;
 
                 bucketIds[i - start] = bucketIndex;
                 if (bucketCounts[bucketIndex] === 0) {
                     usedBuckets += 1;
+                    usedBucketIndex = bucketIndex;
                 }
                 bucketCounts[bucketIndex] += 1;
+                if (fastBuild && singlePoint && (Math.abs(xValue - firstX) > EPSILON || Math.abs(yValue - firstY) > EPSILON)) {
+                    singlePoint = false;
+                }
+                if (this.fusedAggregate) {
+                    bucketMass[bucketIndex] += particles[offset + 4];
+                }
             }
         }
-
-        if (usedBuckets === 0 || (usedBuckets === 1 && this._hasSinglePoint(nodeId))) {
+        if (usedBuckets === 0 || (usedBuckets === 1 && (fastBuild ? singlePoint : this._hasSinglePoint(nodeId)))) {
+            if (this.fusedAggregate && usedBuckets === 1) {
+                this.nodeMass[nodeId] = bucketMass[usedBucketIndex];
+            }
             this._markLeaf(nodeId);
             return;
         }
 
+        if (fastBuild && usedBuckets === 1) {
+            const bucketIndex = usedBucketIndex;
+            const bucketNodeMass = this.fusedAggregate ? bucketMass[bucketIndex] : null;
+            if (this.fusedAggregate) {
+                this.nodeMass[nodeId] = bucketNodeMass;
+            }
+            const childDepth = this.nodeDepth[nodeId] + 1;
+            const childStart = this.nodeCount;
+            let childId;
+            if (divideFactor === 2) {
+                const x = bucketIndex >> 1;
+                const y = bucketIndex & 1;
+                childId = this._createNode(start, count, sourceBufferId, childDepth,
+                    xEdges[x], yEdges[y], xEdges[x + 1], yEdges[y + 1], bucketNodeMass);
+            } else {
+                const x = Math.floor(bucketIndex / divideFactor);
+                const y = bucketIndex % divideFactor;
+                childId = this._createNode(start, count, sourceBufferId, childDepth,
+                    xEdges[x], yEdges[y], xEdges[x + 1], yEdges[y + 1], bucketNodeMass);
+            }
+            this.profile.nodeInitCount += 1;
+            this.nodeFirstChild[nodeId] = childStart;
+            this.nodeChildCount[nodeId] = 1;
+            this.profile.singleBucketSplits += 1;
+            this.profile.skippedScatterParticles += count;
+            this._populate(childId, targetBufferId);
+            return;
+        }
+
         let writeStart = start;
+        let totalMass = 0;
         for (let i = 0; i < bucketsCount; i++) {
             bucketStarts[i] = writeStart;
             bucketWrites[i] = writeStart;
             writeStart += bucketCounts[i];
+            if (this.fusedAggregate) {
+                totalMass += bucketMass[i];
+            }
+        }
+        if (this.fusedAggregate) {
+            this.nodeMass[nodeId] = totalMass;
         }
 
         for (let i = start; i < end; i++) {
             const bucketIndex = bucketIds[i - start];
             targetIndices[bucketWrites[bucketIndex]++] = sourceIndices[i];
         }
+        if (fastBuild) {
+            this.profile.partitionScatterParticles += count;
+        }
 
-        // Children are allocated back-to-back before recursion, so each parent
-        // can store a compact firstChild/childCount pair instead of a JS array.
         const firstChild = this.nodeCount;
         let childCount = 0;
         const childDepth = this.nodeDepth[nodeId] + 1;
-
         if (divideFactor === 2) {
             for (let bucketIndex = 0; bucketIndex < 4; bucketIndex++) {
                 const bucketCount = bucketCounts[bucketIndex];
-                if (bucketCount === 0) {
-                    continue;
-                }
+                if (bucketCount === 0) continue;
                 const x = bucketIndex >> 1;
                 const y = bucketIndex & 1;
                 this._createNode(bucketStarts[bucketIndex], bucketCount, targetBufferId, childDepth,
-                    xEdges[x], yEdges[y], xEdges[x + 1], yEdges[y + 1]);
+                    xEdges[x], yEdges[y], xEdges[x + 1], yEdges[y + 1], this.fusedAggregate ? bucketMass[bucketIndex] : null);
                 childCount += 1;
             }
         } else {
@@ -347,15 +448,15 @@ export class FlatSpatialTree {
                 for (let y = 0; y < divideFactor; y++) {
                     const bucketIndex = x * divideFactor + y;
                     const bucketCount = bucketCounts[bucketIndex];
-                    if (bucketCount === 0) {
-                        continue;
-                    }
-
+                    if (bucketCount === 0) continue;
                     this._createNode(bucketStarts[bucketIndex], bucketCount, targetBufferId, childDepth,
-                        xEdges[x], yEdges[y], xEdges[x + 1], yEdges[y + 1]);
+                        xEdges[x], yEdges[y], xEdges[x + 1], yEdges[y + 1], this.fusedAggregate ? bucketMass[bucketIndex] : null);
                     childCount += 1;
                 }
             }
+        }
+        if (fastBuild) {
+            this.profile.nodeInitCount += childCount;
         }
 
         this.nodeFirstChild[nodeId] = firstChild;
@@ -397,6 +498,16 @@ export class FlatSpatialTree {
     }
 
     _markLeaf(nodeId) {
+        if (this.fusedAggregate && !Number.isFinite(this.nodeMass[nodeId])) {
+            const indices = this.indexBuffers[this.nodeIndexBuffer[nodeId]];
+            const start = this.nodeStart[nodeId];
+            const end = start + this.nodeParticleCount[nodeId];
+            let mass = 0;
+            for (let i = start; i < end; i++) {
+                mass += this.particles[indices[i] * ITEM_SIZE + 4];
+            }
+            this.nodeMass[nodeId] = mass;
+        }
         const depth = this.nodeDepth[nodeId];
         if (depth > this.maxDepth) {
             this.maxDepth = depth;
