@@ -468,6 +468,25 @@ export class SettingsBase {
         return result;
     }
 
+    /**
+     * Merge state-file values into the current settings group. Only values
+     * explicitly marked as exportable belong to the saved universe state;
+     * runtime/backend/debug tuning stays untouched.
+     *
+     * @param {object|null} params
+     * @return {SettingsBase}
+     */
+    withImportedValues(params) {
+        const values = this.serialize();
+        for (const [name, prop] of Object.entries(this.constructor.Properties)) {
+            if (prop.exportable && params && Object.prototype.hasOwnProperty.call(params, name)) {
+                values[name] = prop.parse(params[name]);
+            }
+        }
+
+        return new this.constructor(values);
+    }
+
     static import(params) {
         const values = {};
         for (const [name, prop] of Object.entries(this.Properties)) {

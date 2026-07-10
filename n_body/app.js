@@ -7,7 +7,7 @@ import {InteractionHandler} from "./render/interactions.js";
 import {RendererInitializer} from "./render/init.js";
 import {BackendInitializer} from "./backend/init.js";
 import {ComponentType} from "./settings/base.js";
-import {ITEM_SIZE, exportParticleState} from "./utils/particles.js";
+import {ITEM_SIZE, exportParticleState, getParticleCount} from "./utils/particles.js";
 import {ensureCrossOriginIsolationForWorkerMT} from "./utils/coi.js";
 
 export class Application {
@@ -57,18 +57,25 @@ export class Application {
 
     reloadFromState(state) {
         const importedSettings = {...(state.settings || {})};
-        if (!Object.prototype.hasOwnProperty.call(importedSettings, "particleCount") && Array.isArray(state.particles)) {
-            importedSettings.particleCount = state.particles.length;
+        const importedParticleCount = getParticleCount(state.particles);
+        if (importedParticleCount > 0) {
+            // The particle buffer is authoritative. A stale particle_count in
+            // either the URL or an older state file must never prevent loading.
+            importedSettings.particleCount = importedParticleCount;
         }
 
-        // Reuse the same precedence rules as ?state= URL loading:
-        // state values act as defaults, while explicitly specified query
-        // parameters stay pinned for repeatable profiling/import workflows.
-        const newSettings = AppSimulationSettings.fromQueryParams(importedSettings);
-        this.reconfigure(newSettings, state.particles, state.renderer, {updateUrl: false});
+        // Saved universe values override matching URL settings, while runtime
+        // choices not stored in the file (backend, threads, tree tuning, debug,
+        // upload mode, etc.) stay exactly as currently configured.
+        const newSettings = this.settings.withImportedState(importedSettings);
+        // Import changes the live universe only. Keep the address bar untouched:
+        // a locally loaded file should not rewrite or expand the current link.
+        this.reconfigure(newSettings, state.particles, state.renderer, {
+            updateUrl: false
+        });
     }
 
-    reconfigure(newSettings, particles, renderer, {updateUrl = true} = {}) {
+    reconfigure(newSettings, particles, renderer, {updateUrl = true, preserveStateParam = true} = {}) {
         this.simulationCtrl.setState(SimulationStateEnum.reconfigure);
 
         let diff = this.settings.compare(newSettings);
@@ -77,13 +84,13 @@ export class Application {
             // but do not mutate live settings for browser-owned objects that
             // cannot be reconfigured safely after creation, such as WebGL
             // context attributes.
-            if (updateUrl) this._updateUrl(newSettings);
+            if (updateUrl) this._updateUrl(newSettings, diff.changes, {preserveStateParam});
             this._maybeEnableCrossOriginIsolation(newSettings);
             this._notifyReloadRequired(diff.reloadRequired);
             newSettings = this._withCurrentReloadRequiredValues(newSettings);
             diff = this.settings.compare(newSettings);
         } else {
-            if (updateUrl) this._updateUrl(newSettings);
+            if (updateUrl) this._updateUrl(newSettings, diff.changes, {preserveStateParam});
             this._maybeEnableCrossOriginIsolation(newSettings);
         }
 
@@ -188,17 +195,39 @@ export class Application {
         });
     }
 
-    _updateUrl(newSettings) {
-        const params = newSettings.toQueryParams();
-        const url = new URL(window.location.pathname, window.location.origin);
-        for (const param of params) {
-            url.searchParams.set(param.key, param.value ?? "");
+    _updateUrl(newSettings, changes, {preserveStateParam = true} = {}) {
+        if (!changes || changes.length === 0) {
+            return;
         }
 
-        const urlSearchParams = new URLSearchParams(window.location.search);
-        const existingParams = Object.fromEntries(urlSearchParams.entries());
-        if (existingParams.state) {
-            url.searchParams.set("state", existingParams.state);
+        // Patch only settings that actually changed. Rebuilding the full query
+        // from the in-memory configuration used to leak resolved defaults
+        // (renderer, DPR, particle count) and values loaded from state files
+        // into the URL when the user changed an unrelated option.
+        const url = new URL(window.location.href);
+        for (const {groupName, name, prop, newValue} of changes) {
+            const defaultValue = newSettings.effectiveDefaultValue(groupName, name);
+            if (newValue === defaultValue) {
+                url.searchParams.delete(prop.key);
+                continue;
+            }
+
+            let queryValue = newValue;
+            if (prop.type === "enum") {
+                queryValue = typeof newValue === "string"
+                    ? newValue
+                    : Object.entries(prop.enumType).find(([, value]) => value === newValue)?.[0];
+            }
+
+            if (queryValue === null || queryValue === undefined) {
+                url.searchParams.delete(prop.key);
+            } else {
+                url.searchParams.set(prop.key, String(queryValue));
+            }
+        }
+
+        if (!preserveStateParam) {
+            url.searchParams.delete("state");
         }
 
         window.history.replaceState('', '', url);

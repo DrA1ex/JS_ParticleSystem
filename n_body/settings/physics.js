@@ -6,6 +6,7 @@ const collisionEnabled = settings => !!settings.physics.enableCollision;
 export class PhysicsSettings extends SettingsBase {
     static Properties = {
         particleInitType: Property.enum("particle_init", ParticleInitType, ParticleInitType.circle)
+            .setExportable(true)
             .setName("Particle initializer")
             .setBreaks(ComponentType.backend, ComponentType.particles),
         particleCount: Property.int("particle_count", null)
@@ -14,6 +15,7 @@ export class PhysicsSettings extends SettingsBase {
             .setBreaks(ComponentType.backend, ComponentType.renderer, ComponentType.debug, ComponentType.dfri, ComponentType.particles)
             .setConstraints(2, 1e9),
         particleMassFactor: Property.int("particle_mass", 0)
+            .setExportable(true)
             .setName("Particle mass factor").setDescription("Particle mass variance, exponential")
             .setBreaks(ComponentType.backend, ComponentType.particles)
             .setAffects(ComponentType.renderer)

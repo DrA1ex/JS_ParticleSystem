@@ -3,10 +3,12 @@ import {ComponentType, Property, ReadOnlyProperty, SettingsBase} from "./base.js
 export class WorldSettings extends SettingsBase {
     static Properties = {
         worldWidth: Property.int('width', 1920)
+            .setExportable(true)
             .setName("World width")
             .setAffects(ComponentType.renderer)
             .setBreaks(ComponentType.backend, ComponentType.particles),
         worldHeight: Property.int('height', 1080)
+            .setExportable(true)
             .setName("World height")
             .setAffects(ComponentType.renderer)
             .setBreaks(ComponentType.backend, ComponentType.particles),
