@@ -313,7 +313,7 @@ export class Debug {
         const tree = state.treeParallel
             ? `tree ${treeMode}${hybridOptions}, top ${this._formatMs(state.topTreeTime)}, tree max ${this._formatMs(state.treeTimeMax)}, jobs ${state.treeJobCount ?? "n/a"}/${state.treeTargetJobs ?? "n/a"}${spawned}, seed levels ${state.treeSplitLevels ?? "n/a"}, `
             : "tree off, ";
-        const forceKernel = state.forceKernel || "ordered";
+        const forceKernel = state.forceKernel || "symmetric";
         const appliedKernel = Array.isArray(state.forceKernelApplied) && state.forceKernelApplied.length
             ? state.forceKernelApplied.join("/")
             : "n/a";

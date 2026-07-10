@@ -129,11 +129,11 @@ export class SimulationSettings extends SettingsBase {
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)
             .setVisibleWhen(usesWorkerMtFastBuild),
-        workerMtForceKernel: Property.enum("worker_mt_force_kernel", WorkerForceKernel, WorkerForceKernel.ordered)
+        workerMtForceKernel: Property.enum("worker_mt_force_kernel", WorkerForceKernel, WorkerForceKernel.symmetric)
             .setName("Worker MT force kernel").setDescription([
                 "Worker MT backend only. Selects the exact-pair kernel used inside spatial-tree leaves.",
-                "ordered is the existing control implementation and evaluates both directed interactions separately.",
-                "symmetric evaluates each unique particle pair once and applies both accelerations.",
+                "symmetric is the default and evaluates each unique particle pair once while applying both accelerations.",
+                "ordered is the legacy control implementation and evaluates both directed interactions separately.",
                 "symmetric-local also gathers a leaf into reusable local arrays and flushes velocities once per particle to improve cache locality."
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)
