@@ -24,12 +24,52 @@ function clampNumber(value, fallback, min, max) {
     return Math.max(min, Math.min(max, parsed));
 }
 
-function frame() {
-    return new Promise(resolve => requestAnimationFrame(resolve));
+function abortError() {
+    return new DOMException("Performance collection cancelled", "AbortError");
 }
 
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+function throwIfAborted(signal) {
+    if (signal?.aborted) {
+        throw abortError();
+    }
+}
+
+function frame(signal) {
+    throwIfAborted(signal);
+    return new Promise((resolve, reject) => {
+        const id = requestAnimationFrame(timestamp => {
+            cleanup();
+            resolve(timestamp);
+        });
+        const onAbort = () => {
+            cancelAnimationFrame(id);
+            cleanup();
+            reject(abortError());
+        };
+        function cleanup() {
+            signal?.removeEventListener("abort", onAbort);
+        }
+        signal?.addEventListener("abort", onAbort, {once: true});
+    });
+}
+
+function delay(ms, signal) {
+    throwIfAborted(signal);
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            cleanup();
+            resolve();
+        }, ms);
+        const onAbort = () => {
+            clearTimeout(timer);
+            cleanup();
+            reject(abortError());
+        };
+        function cleanup() {
+            signal?.removeEventListener("abort", onAbort);
+        }
+        signal?.addEventListener("abort", onAbort, {once: true});
+    });
 }
 
 function percentile(sortedValues, p) {
@@ -525,7 +565,7 @@ function summarizeBlock(samples, blockLongTasks, countersStart, countersEnd, sta
     };
 }
 
-async function collectFrameBlock(app, blockIndex, frames, longTasks, includeSamples) {
+async function collectFrameBlock(app, blockIndex, frames, longTasks, includeSamples, signal) {
     const startLongTaskIndex = longTasks.length;
     const startTime = performance.now();
     const countersStart = {
@@ -537,7 +577,7 @@ async function collectFrameBlock(app, blockIndex, frames, longTasks, includeSamp
     let previousTimestamp = null;
 
     for (let i = 0; i < frames; i++) {
-        const timestamp = await frame();
+        const timestamp = await frame(signal);
         const collectorRafInterval = previousTimestamp === null ? null : timestamp - previousTimestamp;
         previousTimestamp = timestamp;
         samples.push(snapshotApp(app, collectorRafInterval, timestamp));
@@ -788,6 +828,10 @@ function buildCompactSummaryRows(reports) {
     }));
 }
 
+export function buildPerformanceSummaryRows(reports) {
+    return buildCompactSummaryRows((reports || []).filter(item => item && item.type === "n-body-performance-report"));
+}
+
 function collectReportsFromArguments(items) {
     const reports = items.length ? items : [window.nBodyLastReport];
     return reports.flat().filter(item => item && item.type === "n-body-performance-report");
@@ -815,6 +859,8 @@ export async function collectPerformanceReport(app, options = {}) {
     const includeSamples = options.includeSamples === true;
     const downloadReport = options.download !== false;
     const copyToClipboard = options.copy === true;
+    const logReport = options.log !== false;
+    const signal = options.signal || null;
     const longTasks = [];
     const observer = startLongTaskObserver(longTasks);
 
@@ -822,7 +868,7 @@ export async function collectPerformanceReport(app, options = {}) {
         type: "n-body-performance-report",
         version: 1,
         createdAt: new Date().toISOString(),
-        options: {frames, blocks, intervalMs, includeSamples, download: downloadReport, copy: copyToClipboard},
+        options: {frames, blocks, intervalMs, includeSamples, download: downloadReport, copy: copyToClipboard, log: logReport},
         environment: snapshotEnvironment(app),
         settings: snapshotSettings(app),
         comparisonKey: {
@@ -852,12 +898,12 @@ export async function collectPerformanceReport(app, options = {}) {
 
     try {
         for (let i = 0; i < blocks; i++) {
-            console.info(`[n-body] collecting performance block ${i + 1}/${blocks} (${frames} frames)`);
-            report.blocks.push(await collectFrameBlock(app, i + 1, frames, longTasks, includeSamples));
+            if (logReport) console.info(`[n-body] collecting performance block ${i + 1}/${blocks} (${frames} frames)`);
+            report.blocks.push(await collectFrameBlock(app, i + 1, frames, longTasks, includeSamples, signal));
 
             if (i < blocks - 1 && intervalMs > 0) {
-                console.info(`[n-body] waiting ${(intervalMs / 1000).toFixed(1)}s before next block`);
-                await delay(intervalMs);
+                if (logReport) console.info(`[n-body] waiting ${(intervalMs / 1000).toFixed(1)}s before next block`);
+                await delay(intervalMs, signal);
             }
         }
     } finally {
@@ -867,22 +913,24 @@ export async function collectPerformanceReport(app, options = {}) {
     report.finalSnapshot = snapshotApp(app, null, performance.now());
     report.summary = summarizeReportBlocks(report.blocks);
 
-    console.table(buildCompactSummaryRows([report]));
+    if (logReport) console.table(buildCompactSummaryRows([report]));
 
     const text = JSON.stringify(report, null, 2);
     window.nBodyLastReport = report;
     window.nBodyLastReportText = text;
-    console.log("[n-body] performance report", report);
-    console.log("[n-body] performance report JSON\n" + text);
+    if (logReport) {
+        console.log("[n-body] performance report", report);
+        console.log("[n-body] performance report JSON\n" + text);
+    }
 
     if (downloadReport) {
         const downloaded = downloadReportText(text, report);
-        console.info(downloaded ? "[n-body] report download started" : "[n-body] report download failed; use window.nBodyLastReportText");
+        if (logReport) console.info(downloaded ? "[n-body] report download started" : "[n-body] report download failed; use window.nBodyLastReportText");
     }
 
     if (copyToClipboard) {
         const copied = await copyReportText(text);
-        console.info(copied ? "[n-body] report copied to clipboard" : "[n-body] clipboard copy failed; use window.nBodyLastReportText");
+        if (logReport) console.info(copied ? "[n-body] report copied to clipboard" : "[n-body] clipboard copy failed; use window.nBodyLastReportText");
     }
 
     return report;
@@ -911,6 +959,7 @@ export function installPerformanceReportConsole(app) {
             "  includeSamples: include every per-frame sample, default false",
             "  download: download JSON file, default true",
             "  copy: copy JSON to clipboard, default false",
+            "  log: print progress/full JSON to console, default true",
             "Physics fields:",
             "  summary.physics.treeShare / treePopulate / treeAggregate show how much of the step is tree-bound",
             "MT fields:",
@@ -922,7 +971,8 @@ export function installPerformanceReportConsole(app) {
             "  metrics.physics.mt.* inside each block",
             "Compare reports already loaded in this page:",
             "  window.nBodyCompareReports(reportWorker, reportMt2, reportMt4, reportMt8, reportMt16)",
-            "Last report is also available as window.nBodyLastReport and window.nBodyLastReportText."
+            "Last report is also available as window.nBodyLastReport and window.nBodyLastReportText.",
+            "For reproducible multi-case suites use window.nBodyBenchmarkHelp()."
         ].join("\n");
         console.info(message);
         return message;

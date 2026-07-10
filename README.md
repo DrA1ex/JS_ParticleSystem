@@ -231,3 +231,63 @@ worker_mt_hybrid_split_first=1
 worker_mt_hybrid_job_sorting=1
 worker_mt_hybrid_split_gain=0
 ```
+
+### Reproducible performance benchmark suites
+
+The browser console exposes `window.nBodyRunBenchmark(...)` for comparing settings against the exact same live universe state. The runner captures one in-memory particle snapshot at the start, restores it before every case, restarts the physics pipeline, waits for warm-up physics steps and a stabilization delay, and then calls the regular performance report collector.
+
+Object-form `cases` creates the Cartesian product of array values. Scalar values are applied to every generated case:
+
+```js
+await window.nBodyRunBenchmark({
+  name: "heavy-tree-grid",
+  cases: {
+    worker_threads: [12, 16, 20],
+    segment_max_count: [24, 32, 48],
+    worker_mt_hybrid_profile: "coarse"
+  },
+  warmupSteps: 3,
+  stabilizationMs: 500,
+  report: {
+    frames: 240,
+    blocks: 4,
+    intervalMs: 5000
+  }
+})
+```
+
+Array-form `cases` runs only the explicitly listed combinations:
+
+```js
+await window.nBodyRunBenchmark({
+  name: "selected-cases",
+  cases: [
+    {
+      name: "baseline",
+      worker_threads: 16,
+      segment_max_count: 32
+    },
+    {
+      name: "balanced",
+      worker_threads: 16,
+      segment_max_count: 32,
+      worker_mt_hybrid_profile: "balanced"
+    }
+  ]
+})
+```
+
+Setting keys can use URL/query names such as `worker_threads`, JavaScript property names such as `workerThreads`, or full paths such as `simulation.workerThreads`. Settings that require a page reload or change the captured particle universe are rejected before the suite starts.
+
+The runner downloads one ZIP containing:
+
+```text
+manifest.json
+config.json
+summary.json
+summary.csv
+cases/*.json
+reports/*.json
+```
+
+The original snapshot and settings are restored after the suite by default. Use `window.nBodyCancelBenchmark()` to stop a running suite and `window.nBodyBenchmarkHelp()` for console examples.

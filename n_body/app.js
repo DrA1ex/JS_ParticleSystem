@@ -44,6 +44,7 @@ export class Application {
     };
     _lastNoAheadWarningTime = 0;
     _lastReloadPromptSignature = null;
+    physicsStepCount = 0;
 
     /**
      * @param {AppSimulationSettings} settings
@@ -75,7 +76,7 @@ export class Application {
         });
     }
 
-    reconfigure(newSettings, particles, renderer, {updateUrl = true, preserveStateParam = true} = {}) {
+    reconfigure(newSettings, particles, renderer, {updateUrl = true, preserveStateParam = true, forceBackendRestart = false} = {}) {
         this.simulationCtrl.setState(SimulationStateEnum.reconfigure);
 
         let diff = this.settings.compare(newSettings);
@@ -96,6 +97,16 @@ export class Application {
 
         if (particles) {
             diff.affects.add(ComponentType.backend);
+        }
+
+        if (forceBackendRestart) {
+            // Benchmark runs restore the exact same particle snapshot before each
+            // case. Restart the whole physics pipeline so no ahead buffers,
+            // worker-local tree workspaces, auto-tune state or debug metadata can
+            // leak from the previous case.
+            diff.breaks.add(ComponentType.backend);
+            diff.breaks.add(ComponentType.dfri);
+            diff.breaks.add(ComponentType.debug);
         }
 
         if (diff.breaks.has(ComponentType.renderer) && !diff.breaks.has(ComponentType.particles) && !renderer && this.renderer) {
@@ -309,6 +320,8 @@ export class Application {
         if (this.simulationCtrl.currentState === SimulationStateEnum.reconfigure) {
             return;
         }
+
+        this.physicsStepCount += 1;
 
         const stepLatency = performance.now() - data.timestamp;
         this.dfriHelper.postStepTime(stepLatency);
