@@ -83,6 +83,16 @@ export const WorkerHybridProfile = {
     wide: "wide"
 }
 
+
+/**
+ * @enum(string)
+ */
+export const WorkerForceKernel = {
+    ordered: "ordered",
+    symmetric: "symmetric",
+    symmetricLocal: "symmetric-local"
+}
+
 /**
  * @enum(string)
  */

@@ -188,8 +188,9 @@ export class Debug {
             `  - root bounds: ${this._formatMs(this.treeProfile?.rootBoundsTime)}`,
             `  - populate: ${this._formatMs(this.treeProfile?.populateTime)}`,
             `  - aggregate: ${this._formatMs(this.treeProfile?.aggregateTime)}${this.treeProfile?.fusedAggregate ? ", fused" : ""}`,
-            `  - worker fast build: ${this.treeProfile?.fastBuild ? "on" : "off"}`,
+            `  - worker fast build: requested ${this.treeProfile?.fastBuild ? "on" : "off"}, applied ${this.treeProfile?.fastBuildApplied ? "yes" : "no"}`,
             `  - partition particles: ${this.treeProfile?.partitionCountParticles ?? 0} counted / ${this.treeProfile?.partitionScatterParticles ?? 0} scattered`,
+            `  - partition time: count ${this._formatMs(this.treeProfile?.partitionCountTime)}, scatter ${this._formatMs(this.treeProfile?.partitionScatterTime)}, samples ${this.treeProfile?.partitionTimingSamples ?? 0}`,
             `  - node init: ${this.treeProfile?.nodeInitCount ?? 0}, leaf collect: ${this._formatMs(this.treeProfile?.leafCollectTime)}`,
             `  - single-bucket descents: ${this.treeProfile?.singleBucketSplits ?? 0}, skipped scatter particles: ${this.treeProfile?.skippedScatterParticles ?? 0}`,
             `  - fast buckets: ${this.treeProfile?.fastBucketPath ? "on" : "off"}`,
@@ -312,9 +313,17 @@ export class Debug {
         const tree = state.treeParallel
             ? `tree ${treeMode}${hybridOptions}, top ${this._formatMs(state.topTreeTime)}, tree max ${this._formatMs(state.treeTimeMax)}, jobs ${state.treeJobCount ?? "n/a"}/${state.treeTargetJobs ?? "n/a"}${spawned}, seed levels ${state.treeSplitLevels ?? "n/a"}, `
             : "tree off, ";
+        const forceKernel = state.forceKernel || "ordered";
+        const appliedKernel = Array.isArray(state.forceKernelApplied) && state.forceKernelApplied.length
+            ? state.forceKernelApplied.join("/")
+            : "n/a";
+        const kernelStatus = state.forceKernelConsistent === false ? " mismatch" : "";
+        const runtime = state.workerBuildId
+            ? `, build ${state.workerBuildId}, protocol ${state.workerProtocolVersion ?? "n/a"}`
+            : "";
         return `${state.actualThreads} threads, ${active} active, ${tree}tasks ${tasks}, wait ${wait}, ` +
-            `build ${taskBuild}, partition ${partition}, dispatch ${dispatch}, descriptors ${descriptorBytes}, ` +
-            `index copy ${indexCopyBytes}, ${sharedIndices}`;
+            `build ${taskBuild}, partition ${partition}, dispatch ${dispatch}, force-kernel ${forceKernel}/${appliedKernel}${kernelStatus}, ` +
+            `pairs ${state.forcePairChecks ?? "n/a"}, descriptors ${descriptorBytes}, index copy ${indexCopyBytes}, ${sharedIndices}${runtime}`;
     }
 
     _formatAutoTune(state) {

@@ -51,10 +51,19 @@ export class FlatSpatialTree {
             aggregateTime: 0,
             partitionCountParticles: 0,
             partitionScatterParticles: 0,
+            partitionCountTime: 0,
+            partitionScatterTime: 0,
+            partitionCountSampleTime: 0,
+            partitionScatterSampleTime: 0,
+            partitionCountSampleParticles: 0,
+            partitionScatterSampleParticles: 0,
+            partitionTimingSamples: 0,
             nodeInitCount: 0,
             skippedScatterParticles: 0,
             singleBucketSplits: 0,
             fusedAggregate: false,
+            fastBuildApplied: this.fastBuild,
+            fusedAggregateApplied: this.fusedAggregate,
             fastBucketPath: false,
         };
 
@@ -120,6 +129,14 @@ export class FlatSpatialTree {
         const initialTargetBuffer = this._rootOptions ? 1 - this.nodeIndexBuffer[this.root] : BUFFER_B;
         this._populate(this.root, initialTargetBuffer);
         this.profile.populateTime = performance.now() - profileStart;
+        if (this.profile.partitionCountSampleParticles > 0) {
+            this.profile.partitionCountTime = this.profile.partitionCountSampleTime *
+                this.profile.partitionCountParticles / this.profile.partitionCountSampleParticles;
+        }
+        if (this.profile.partitionScatterSampleParticles > 0) {
+            this.profile.partitionScatterTime = this.profile.partitionScatterSampleTime *
+                this.profile.partitionScatterParticles / this.profile.partitionScatterSampleParticles;
+        }
 
         if (this.fusedAggregate) {
             this.profile.aggregateTime = 0;
@@ -317,12 +334,16 @@ export class FlatSpatialTree {
         let singlePoint = true;
         let firstX = 0;
         let firstY = 0;
+        this.profile.partitionCountParticles += count;
         if (fastBuild) {
             const firstParticleOffset = sourceIndices[start] * ITEM_SIZE;
             firstX = particles[firstParticleOffset];
             firstY = particles[firstParticleOffset + 1];
-            this.profile.partitionCountParticles += count;
         }
+
+        const measurePartitionTiming = (nodeId & 255) === 0;
+        let partitionTimer = measurePartitionTiming ? performance.now() : 0;
+        if (measurePartitionTiming) this.profile.partitionTimingSamples += 1;
 
         if (divideFactor === 2) {
             const xMid = xEdges[1];
@@ -370,6 +391,10 @@ export class FlatSpatialTree {
                     bucketMass[bucketIndex] += particles[offset + 4];
                 }
             }
+        }
+        if (measurePartitionTiming) {
+            this.profile.partitionCountSampleTime += performance.now() - partitionTimer;
+            this.profile.partitionCountSampleParticles += count;
         }
         if (usedBuckets === 0 || (usedBuckets === 1 && (fastBuild ? singlePoint : this._hasSinglePoint(nodeId)))) {
             if (this.fusedAggregate && usedBuckets === 1) {
@@ -422,13 +447,18 @@ export class FlatSpatialTree {
             this.nodeMass[nodeId] = totalMass;
         }
 
+        const measureScatterTiming = measurePartitionTiming || this.profile.partitionScatterSampleParticles === 0;
+        partitionTimer = measureScatterTiming ? performance.now() : 0;
         for (let i = start; i < end; i++) {
             const bucketIndex = bucketIds[i - start];
             targetIndices[bucketWrites[bucketIndex]++] = sourceIndices[i];
         }
-        if (fastBuild) {
-            this.profile.partitionScatterParticles += count;
+        if (measureScatterTiming) {
+            this.profile.partitionScatterSampleTime += performance.now() - partitionTimer;
+            this.profile.partitionScatterSampleParticles += count;
+            if (!measurePartitionTiming) this.profile.partitionTimingSamples += 1;
         }
+        this.profile.partitionScatterParticles += count;
 
         const firstChild = this.nodeCount;
         let childCount = 0;

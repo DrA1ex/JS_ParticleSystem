@@ -1,5 +1,5 @@
 import {ComponentType, Property, ReadOnlyProperty, SettingsBase} from "./base.js";
-import {BackendType, WorkerHybridProfile, WorkerHybridSeedJobCount, WorkerThreadCount, WorkerTreeJobCount, WorkerTreeStrategy} from "./enum.js";
+import {BackendType, WorkerForceKernel, WorkerHybridProfile, WorkerHybridSeedJobCount, WorkerThreadCount, WorkerTreeJobCount, WorkerTreeStrategy} from "./enum.js";
 
 const isCpuBackend = settings => settings.simulation.backend !== BackendType.gpgpu;
 const isWorkerMtBackend = settings => settings.simulation.backend === BackendType.workerMt;
@@ -129,6 +129,15 @@ export class SimulationSettings extends SettingsBase {
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)
             .setVisibleWhen(usesWorkerMtFastBuild),
+        workerMtForceKernel: Property.enum("worker_mt_force_kernel", WorkerForceKernel, WorkerForceKernel.ordered)
+            .setName("Worker MT force kernel").setDescription([
+                "Worker MT backend only. Selects the exact-pair kernel used inside spatial-tree leaves.",
+                "ordered is the existing control implementation and evaluates both directed interactions separately.",
+                "symmetric evaluates each unique particle pair once and applies both accelerations.",
+                "symmetric-local also gathers a leaf into reusable local arrays and flushes velocities once per particle to improve cache locality."
+            ].join("\n"))
+            .setBreaks(ComponentType.backend, ComponentType.debug)
+            .setVisibleWhen(isWorkerMtBackend),
         segmentRandomness: Property.float("segment_random", 0.25)
             .setName("Segmentation randomness").setDescription("Spatial subdivision randomness factor")
             .setAffects(ComponentType.backend)
@@ -169,6 +178,7 @@ export class SimulationSettings extends SettingsBase {
     get workerMtHybridSplitGainFilter() {return this.config.workerMtHybridSplitGainFilter;}
     get workerMtTreeFastBuild() {return this.config.workerMtTreeFastBuild;}
     get workerMtTreeFusedAggregate() {return this.config.workerMtTreeFusedAggregate;}
+    get workerMtForceKernel() {return this.config.workerMtForceKernel;}
     get segmentMaxCount() {return this.config.segmentMaxCount;}
     get bufferCount() {return this.config.bufferCount;}
 

@@ -133,6 +133,10 @@ Hybrid-specific tuning is available through `worker_mt_hybrid_profile`, `worker_
 
 Worker MT also exposes the experimental `worker_mt_tree_fast_build=1` subtree kernel. It keeps the current scheduler and force calculation, but skips index scatter for single-bucket descents, reuses recursive split workspaces, and uses a reusable linear leaf-task collector. The default remains `0` until benchmark suites confirm the result across both dense and regular particle distributions. `worker_mt_tree_fused_aggregate=1` is a separate nested experiment: it accumulates child masses during every partition pass and skips the later aggregate pass, but is disabled by default because the extra mass reads may not help every tree shape.
 
+Leaf-force experiments are available through `worker_mt_force_kernel=ordered|symmetric|symmetric-local`. `ordered` is the unchanged control kernel. `symmetric` evaluates each unique pair once and applies both accelerations while preserving the per-particle accumulation order. `symmetric-local` additionally gathers each leaf into reusable local typed arrays and flushes velocities once per particle. Reports include the requested and applied kernel, exact pair-check counts, and sampled gather/pair/flush timing estimates.
+
+Bundled builds attach one generated build id to the coordinator and task-worker URLs. Worker initialization also validates a protocol version and reports all loaded build ids. This prevents a new main bundle from silently running stale cached worker code after deployment or service-worker refreshes.
+
 This backend is the default CPU backend for `n_body`. It requires `SharedArrayBuffer` and cross-origin isolation for real multithreading. On static hosting, the app can install a local COOP/COEP service worker and automatically reload once so the page becomes cross-origin isolated. If isolation cannot be enabled, the backend falls back to the single-worker path and shows the fallback reason in stats.
 
 _Demos with different worker thread counts_:

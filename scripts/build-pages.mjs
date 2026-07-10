@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT_DIR = path.join(ROOT, ".pages");
+const BUILD_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 const TEXT_FETCH_RE = /await\s+fetch\(\s*new\s+URL\(\s*(["'])([^"']+)\1\s*,\s*import\.meta\.url\s*\)\s*\)\s*\.then\(\s*([A-Za-z_$][\w$]*)\s*=>\s*\3\.text\(\)\s*\)/g;
 
@@ -98,6 +99,9 @@ async function bundleJs(entryPoint, outfile) {
     charset: "utf8",
     absWorkingDir: ROOT,
     plugins: [inlineTextFetchPlugin()],
+    define: {
+      __NBODY_BUILD_ID__: JSON.stringify(BUILD_ID),
+    },
     loader: {
       ".html": "text",
       ".glsl": "text",
@@ -233,7 +237,7 @@ async function main() {
   await buildNBody();
   await writeJekyllConfig();
 
-  console.log(`Built bundled Pages source: ${path.relative(ROOT, OUT_DIR)}`);
+  console.log(`Built bundled Pages source: ${path.relative(ROOT, OUT_DIR)} (build ${BUILD_ID})`);
 }
 
 main().catch((error) => {

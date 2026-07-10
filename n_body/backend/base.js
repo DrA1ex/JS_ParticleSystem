@@ -1,6 +1,7 @@
 import {Particle_initializer} from "../simulation/particle_initializer.js";
 import {AppSimulationSettings} from "../settings/app.js";
 import {ITEM_SIZE} from "../utils/particles.js";
+import {BUILD_ID, WORKER_PROTOCOL_VERSION, withBuildId} from "../utils/build.js";
 
 /**
  * @typedef {{physicsTime:number, treeTime: number, tree: {flops: number, depth: number, segmentCount: number}, profile?: Object, actualSegmentSize?: number, segmentAutoTune?: Object}} StepStatistics
@@ -16,7 +17,7 @@ export class BackendBase {
      * @param {string} workerPath
      */
     constructor(workerPath) {
-        this._worker = new Worker(workerPath, {type: "module"});
+        this._worker = new Worker(withBuildId(workerPath), {type: "module"});
     }
 
     /**
@@ -28,7 +29,13 @@ export class BackendBase {
      */
     async init(onDataFn, onReadyFn, settings, particles = null) {
         this.subscribe(onDataFn, onReadyFn);
-        this._worker.postMessage({type: "init", settings: settings.serialize(), state: particles});
+        this._worker.postMessage({
+            type: "init",
+            settings: settings.serialize(),
+            state: particles,
+            expectedBuildId: BUILD_ID,
+            expectedProtocolVersion: WORKER_PROTOCOL_VERSION,
+        });
     }
 
     /**
@@ -47,6 +54,9 @@ export class BackendBase {
                     break;
                 case "ready":
                     readyFn(e.data);
+                    break;
+                case "ready-error":
+                    setTimeout(() => { throw new Error(e.data.message || "Worker initialization failed"); });
                     break;
             }
         }
@@ -220,8 +230,15 @@ export class WorkerHandler {
         switch (type) {
             case "init": {
                 const {settings, state} = e.data;
-                await this.backend.init(settings, state);
-                postMessage({type: "ready"});
+                try {
+                    await this.backend.init(settings, state, {
+                        expectedBuildId: e.data.expectedBuildId,
+                        expectedProtocolVersion: e.data.expectedProtocolVersion,
+                    });
+                    postMessage({type: "ready", ...(this.backend.getRuntimeMetadata?.() || {})});
+                } catch (error) {
+                    postMessage({type: "ready-error", message: error?.message || String(error), ...(this.backend.getRuntimeMetadata?.() || {})});
+                }
             }
                 break;
 

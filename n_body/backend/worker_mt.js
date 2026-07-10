@@ -2,6 +2,7 @@ import {BackendBase, WorkerHandler} from "./base.js";
 import {FlatPhysicsEngine} from "../simulation/flat_physics.js";
 import {FlatSpatialTree} from "../simulation/flat_tree.js";
 import {ITEM_SIZE} from "../utils/particles.js";
+import {BUILD_ID, WORKER_PROTOCOL_VERSION, assertWorkerRuntime, withBuildId} from "../utils/build.js";
 import {Particle_initializer} from "../simulation/particle_initializer.js";
 import {AppSimulationSettings} from "../settings/app.js";
 
@@ -171,7 +172,26 @@ class SegmentSizeAutoTuner {
 export class WorkerMTBackend extends BackendBase {
     constructor() {
         super("./backend/worker_mt.js");
+        this.expectedBuildId = BUILD_ID;
+        this.expectedProtocolVersion = WORKER_PROTOCOL_VERSION;
         this.displayName = "WorkerMTBackend";
+    }
+
+    subscribe(dataFn, readyFn) {
+        this._worker.onmessage = (event) => {
+            switch (event.data.type) {
+                case "data":
+                    dataFn(event.data);
+                    break;
+                case "ready":
+                    assertWorkerRuntime(event.data, "worker-mt coordinator");
+                    readyFn(event.data);
+                    break;
+                case "ready-error":
+                    setTimeout(() => { throw new Error(event.data.message || "worker-mt coordinator initialization failed"); });
+                    break;
+            }
+        };
     }
 }
 
@@ -180,6 +200,7 @@ class SubworkerPool {
         this.workers = [];
         this._requestId = 0;
         this._pending = new Map();
+        this.runtimeMetadata = [];
     }
 
     async init(settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB, threadCount) {
@@ -187,7 +208,7 @@ class SubworkerPool {
         this._requestId = 0;
         this._pending = new Map();
         for (let i = 0; i < threadCount; i++) {
-            const worker = new Worker(new URL("./worker_mt_task.js", import.meta.url), {type: "module"});
+            const worker = new Worker(withBuildId("./worker_mt_task.js", import.meta.url), {type: "module"});
             worker._mtIndex = i;
             worker.onmessage = (event) => this._handleMessage(worker, event.data);
             worker.onerror = (event) => {
@@ -195,7 +216,8 @@ class SubworkerPool {
             };
             this.workers.push(worker);
         }
-        await Promise.all(this.workers.map(worker => this._sendInit(worker, "init", settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB)));
+        const metadata = await Promise.all(this.workers.map(worker => this._sendInit(worker, "init", settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB)));
+        this.runtimeMetadata = metadata;
     }
 
     async reconfigure(settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB, threadCount) {
@@ -203,7 +225,8 @@ class SubworkerPool {
             await this.init(settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB, threadCount);
             return;
         }
-        await Promise.all(this.workers.map(worker => this._sendInit(worker, "reconfigure", settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB)));
+        const metadata = await Promise.all(this.workers.map(worker => this._sendInit(worker, "reconfigure", settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB)));
+        this.runtimeMetadata = metadata;
     }
 
     process(partitions) {
@@ -343,12 +366,20 @@ class SubworkerPool {
 
 
     _sendInit(worker, type, settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB) {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             const previous = worker.onmessage;
             worker.onmessage = (event) => {
                 if (event.data?.type === "ready") {
                     worker.onmessage = previous;
-                    resolve();
+                    try {
+                        assertWorkerRuntime(event.data, `worker-mt task #${worker._mtIndex}`);
+                        resolve(event.data);
+                    } catch (error) {
+                        reject(error);
+                    }
+                } else if (event.data?.type === "init-error") {
+                    worker.onmessage = previous;
+                    reject(new Error(event.data.message || `worker-mt task #${worker._mtIndex} initialization failed`));
                 } else {
                     previous?.(event);
                 }
@@ -356,6 +387,8 @@ class SubworkerPool {
             worker.postMessage({
                 type,
                 settings: settings.serialize(),
+                expectedBuildId: BUILD_ID,
+                expectedProtocolVersion: WORKER_PROTOCOL_VERSION,
                 particlesBuffer,
                 forceXBuffer,
                 forceYBuffer,
@@ -474,6 +507,7 @@ class SubworkerPool {
         }
         this.workers = [];
         this._pending?.clear?.();
+        this.runtimeMetadata = [];
     }
 }
 
@@ -496,7 +530,13 @@ class WorkerMTBackendImpl {
         this._fallbackReason = null;
     }
 
-    async init(settings, state) {
+    async init(settings, state, runtime = {}) {
+        if (runtime.expectedBuildId && runtime.expectedBuildId !== BUILD_ID) {
+            throw new Error(`worker-mt coordinator build mismatch: expected ${runtime.expectedBuildId}, got ${BUILD_ID}`);
+        }
+        if (runtime.expectedProtocolVersion && runtime.expectedProtocolVersion !== WORKER_PROTOCOL_VERSION) {
+            throw new Error(`worker-mt coordinator protocol mismatch: expected ${runtime.expectedProtocolVersion}, got ${WORKER_PROTOCOL_VERSION}`);
+        }
         this.settings = AppSimulationSettings.deserialize(settings);
         this._initSegmentTuner();
         this._initParticles();
@@ -507,6 +547,15 @@ class WorkerMTBackendImpl {
         await this._configurePool();
     }
 
+
+    getRuntimeMetadata() {
+        return {
+            buildId: BUILD_ID,
+            protocolVersion: WORKER_PROTOCOL_VERSION,
+            taskWorkerBuildIds: [...new Set((this._pool.runtimeMetadata || []).map(item => item.buildId).filter(Boolean))],
+            taskWorkerProtocolVersions: [...new Set((this._pool.runtimeMetadata || []).map(item => item.protocolVersion).filter(Number.isFinite))],
+        };
+    }
     async reconfigure(settings, state) {
         const newSettings = AppSimulationSettings.deserialize(settings);
         const particleCountChanged = !this.settings ||
@@ -604,6 +653,27 @@ class WorkerMTBackendImpl {
             integrateTimeMax: integrateTime,
             forceTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceTime || 0), 0),
             integrateTimeTotal: workerResults.reduce((sum, item) => sum + (item.integrateTime || 0), 0),
+            forceKernel: this.settings.simulation.workerMtForceKernel,
+            forceKernelApplied: [...new Set(workerResults.map(item => item.forceKernel).filter(Boolean))],
+            forceKernelConsistent: workerResults.some(item => item.forceKernel) && workerResults
+                .filter(item => item.forceKernel)
+                .every(item => item.forceKernel === this.settings.simulation.workerMtForceKernel),
+            forcePairChecks: workerResults.reduce((sum, item) => sum + (item.forcePairChecks || 0), 0),
+            forceKernelTimeMax: Math.max(0, ...workerResults.map(item => item.forceKernelTime || 0)),
+            forceKernelTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceKernelTime || 0), 0),
+            forceCollisionTimeMax: Math.max(0, ...workerResults.map(item => item.forceCollisionTime || 0)),
+            forceCollisionTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceCollisionTime || 0), 0),
+            forceGatherTimeMax: Math.max(0, ...workerResults.map(item => item.forceGatherTime || 0)),
+            forceGatherTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceGatherTime || 0), 0),
+            forcePairTimeMax: Math.max(0, ...workerResults.map(item => item.forcePairTime || 0)),
+            forcePairTimeTotal: workerResults.reduce((sum, item) => sum + (item.forcePairTime || 0), 0),
+            forceFlushTimeMax: Math.max(0, ...workerResults.map(item => item.forceFlushTime || 0)),
+            forceFlushTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceFlushTime || 0), 0),
+            forceTimingSamples: workerResults.reduce((sum, item) => sum + (item.forceTimingSamples || 0), 0),
+            workerBuildId: BUILD_ID,
+            workerProtocolVersion: WORKER_PROTOCOL_VERSION,
+            taskWorkerBuildIds: [...new Set((this._pool.runtimeMetadata || []).map(item => item.buildId).filter(Boolean))],
+            taskWorkerProtocolVersions: [...new Set((this._pool.runtimeMetadata || []).map(item => item.protocolVersion).filter(Number.isFinite))],
         };
 
         const stepCalcTime = performance.now() - stepStart;
@@ -743,10 +813,19 @@ class WorkerMTBackendImpl {
             treeHybridSplitGainFilter: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridSplitGainFilter : null,
             treeFastBuild,
             treeFusedAggregate,
-            treePartitionCountParticlesMax: Math.max(0, ...workerResults.map(item => item.treeProfile?.partitionCountParticles || 0)),
-            treePartitionCountParticlesTotal: workerResults.reduce((sum, item) => sum + (item.treeProfile?.partitionCountParticles || 0), 0),
-            treePartitionScatterParticlesMax: Math.max(0, ...workerResults.map(item => item.treeProfile?.partitionScatterParticles || 0)),
-            treePartitionScatterParticlesTotal: workerResults.reduce((sum, item) => sum + (item.treeProfile?.partitionScatterParticles || 0), 0),
+            treeFastBuildApplied: workerResults.length > 0 && workerResults.every(item => item.treeProfile?.fastBuildApplied === true),
+            treeFastBuildConsistent: workerResults.length > 0 && workerResults.every(item => item.treeProfile?.fastBuildApplied === treeFastBuild),
+            treeFusedAggregateApplied: workerResults.length > 0 && workerResults.every(item => item.treeProfile?.fusedAggregateApplied === true),
+            treeFusedAggregateConsistent: workerResults.length > 0 && workerResults.every(item => item.treeProfile?.fusedAggregateApplied === treeFusedAggregate),
+            treePartitionCountParticlesMax: Math.max(0, ...workerResults.map(item => (item.treeProfile?.partitionCountParticles || 0) + (item.recursivePartitionCountParticles || 0))),
+            treePartitionCountParticlesTotal: workerResults.reduce((sum, item) => sum + (item.treeProfile?.partitionCountParticles || 0) + (item.recursivePartitionCountParticles || 0), 0),
+            treePartitionScatterParticlesMax: Math.max(0, ...workerResults.map(item => (item.treeProfile?.partitionScatterParticles || 0) + (item.recursivePartitionScatterParticles || 0))),
+            treePartitionScatterParticlesTotal: workerResults.reduce((sum, item) => sum + (item.treeProfile?.partitionScatterParticles || 0) + (item.recursivePartitionScatterParticles || 0), 0),
+            treePartitionCountTimeMax: Math.max(0, ...workerResults.map(item => (item.treeProfile?.partitionCountTime || 0) + (item.recursivePartitionCountTime || 0))),
+            treePartitionCountTimeTotal: workerResults.reduce((sum, item) => sum + (item.treeProfile?.partitionCountTime || 0) + (item.recursivePartitionCountTime || 0), 0),
+            treePartitionScatterTimeMax: Math.max(0, ...workerResults.map(item => (item.treeProfile?.partitionScatterTime || 0) + (item.recursivePartitionScatterTime || 0))),
+            treePartitionScatterTimeTotal: workerResults.reduce((sum, item) => sum + (item.treeProfile?.partitionScatterTime || 0) + (item.recursivePartitionScatterTime || 0), 0),
+            treePartitionTimingSamples: workerResults.reduce((sum, item) => sum + (item.treeProfile?.partitionTimingSamples || 0) + (item.recursivePartitionTimingSamples || 0), 0),
             treeNodeInitCountMax: Math.max(0, ...workerResults.map(item => item.treeProfile?.nodeInitCount || 0)),
             treeNodeInitCountTotal: workerResults.reduce((sum, item) => sum + (item.treeProfile?.nodeInitCount || 0), 0),
             treeLeafCollectTimeMax: Math.max(0, ...workerResults.map(item => item.treeProfile?.leafCollectTime || 0)),
@@ -779,6 +858,27 @@ class WorkerMTBackendImpl {
             integrateTimeMax: integrateTime,
             forceTimeTotal: workerTiming.forceTimeTotal,
             integrateTimeTotal: workerTiming.integrateTimeTotal,
+            forceKernel: this.settings.simulation.workerMtForceKernel,
+            forceKernelApplied: [...new Set(workerResults.map(item => item.forceKernel).filter(Boolean))],
+            forceKernelConsistent: workerResults.some(item => item.forceKernel) && workerResults
+                .filter(item => item.forceKernel)
+                .every(item => item.forceKernel === this.settings.simulation.workerMtForceKernel),
+            forcePairChecks: workerResults.reduce((sum, item) => sum + (item.forcePairChecks || 0), 0),
+            forceKernelTimeMax: Math.max(0, ...workerResults.map(item => item.forceKernelTime || 0)),
+            forceKernelTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceKernelTime || 0), 0),
+            forceCollisionTimeMax: Math.max(0, ...workerResults.map(item => item.forceCollisionTime || 0)),
+            forceCollisionTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceCollisionTime || 0), 0),
+            forceGatherTimeMax: Math.max(0, ...workerResults.map(item => item.forceGatherTime || 0)),
+            forceGatherTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceGatherTime || 0), 0),
+            forcePairTimeMax: Math.max(0, ...workerResults.map(item => item.forcePairTime || 0)),
+            forcePairTimeTotal: workerResults.reduce((sum, item) => sum + (item.forcePairTime || 0), 0),
+            forceFlushTimeMax: Math.max(0, ...workerResults.map(item => item.forceFlushTime || 0)),
+            forceFlushTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceFlushTime || 0), 0),
+            forceTimingSamples: workerResults.reduce((sum, item) => sum + (item.forceTimingSamples || 0), 0),
+            workerBuildId: BUILD_ID,
+            workerProtocolVersion: WORKER_PROTOCOL_VERSION,
+            taskWorkerBuildIds: [...new Set((this._pool.runtimeMetadata || []).map(item => item.buildId).filter(Boolean))],
+            taskWorkerProtocolVersions: [...new Set((this._pool.runtimeMetadata || []).map(item => item.protocolVersion).filter(Number.isFinite))],
             workerCpuTime,
             workerMaxTime,
         };
@@ -854,11 +954,20 @@ class WorkerMTBackendImpl {
             hybridJobSorting: mtProfile.treeHybridJobSorting ?? null,
             hybridSplitGainFilter: mtProfile.treeHybridSplitGainFilter ?? null,
             fastBuild: mtProfile.treeFastBuild ?? false,
+            fastBuildApplied: mtProfile.treeFastBuildApplied === true,
+            fastBuildConsistent: mtProfile.treeFastBuildConsistent === true,
             fusedAggregateEnabled: mtProfile.treeFusedAggregate ?? false,
+            fusedAggregateApplied: mtProfile.treeFusedAggregateApplied === true,
+            fusedAggregateConsistent: mtProfile.treeFusedAggregateConsistent === true,
             partitionCountParticles: mtProfile.treePartitionCountParticlesMax || 0,
             partitionCountParticlesTotal: mtProfile.treePartitionCountParticlesTotal || 0,
             partitionScatterParticles: mtProfile.treePartitionScatterParticlesMax || 0,
             partitionScatterParticlesTotal: mtProfile.treePartitionScatterParticlesTotal || 0,
+            partitionCountTime: mtProfile.treePartitionCountTimeMax || 0,
+            partitionCountTimeTotal: mtProfile.treePartitionCountTimeTotal || 0,
+            partitionScatterTime: mtProfile.treePartitionScatterTimeMax || 0,
+            partitionScatterTimeTotal: mtProfile.treePartitionScatterTimeTotal || 0,
+            partitionTimingSamples: mtProfile.treePartitionTimingSamples || 0,
             nodeInitCount: mtProfile.treeNodeInitCountMax || 0,
             nodeInitCountTotal: mtProfile.treeNodeInitCountTotal || 0,
             leafCollectTime: mtProfile.treeLeafCollectTimeMax || 0,
@@ -2057,6 +2166,11 @@ class WorkerMTBackendImpl {
             requestedThreads: this.settings.simulation.workerThreads,
             actualThreads: 1,
             fallbackReason: this._fallbackReason || "single-thread fallback",
+            forceKernel: this.settings.simulation.workerMtForceKernel,
+            workerBuildId: BUILD_ID,
+            workerProtocolVersion: WORKER_PROTOCOL_VERSION,
+            taskWorkerBuildIds: [],
+            taskWorkerProtocolVersions: [],
         };
 
         return {
