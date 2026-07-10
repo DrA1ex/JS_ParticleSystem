@@ -83,10 +83,10 @@ export class SimulationSettings extends SettingsBase {
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)
             .setVisibleWhen(isHybridWorkerMt),
-        workerMtHybridSeedParallel: Property.bool("worker_mt_hybrid_seed_parallel", false)
+        workerMtHybridSeedParallel: Property.bool("worker_mt_hybrid_seed_parallel", true)
             .setName("Parallel hybrid seed bootstrap").setDescription([
                 "Worker MT hybrid strategy only. Builds the first root split with the subworker pool instead of scanning and partitioning all particles on the coordinator.",
-                "The serial path remains the default baseline. Enable this option to compare the experimental parallel bounds, bucket-count and shared-buffer scatter phases.",
+                "Enabled by default because the parallel bounds, bucket-count and shared-buffer scatter phases substantially reduce the serial root bootstrap cost. Disable it to compare against the original serial baseline.",
                 "Only the initial seed bootstrap changes; the existing hybrid split-first scheduler handles all later recursive work unchanged."
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.debug)

@@ -56,11 +56,19 @@ export class Application {
     }
 
     reloadFromState(state) {
-        const newSettings = AppSimulationSettings.import(state.settings);
-        this.reconfigure(newSettings, state.particles, state.renderer);
+        const importedSettings = {...(state.settings || {})};
+        if (!Object.prototype.hasOwnProperty.call(importedSettings, "particleCount") && Array.isArray(state.particles)) {
+            importedSettings.particleCount = state.particles.length;
+        }
+
+        // Reuse the same precedence rules as ?state= URL loading:
+        // state values act as defaults, while explicitly specified query
+        // parameters stay pinned for repeatable profiling/import workflows.
+        const newSettings = AppSimulationSettings.fromQueryParams(importedSettings);
+        this.reconfigure(newSettings, state.particles, state.renderer, {updateUrl: false});
     }
 
-    reconfigure(newSettings, particles, renderer) {
+    reconfigure(newSettings, particles, renderer, {updateUrl = true} = {}) {
         this.simulationCtrl.setState(SimulationStateEnum.reconfigure);
 
         let diff = this.settings.compare(newSettings);
@@ -69,13 +77,13 @@ export class Application {
             // but do not mutate live settings for browser-owned objects that
             // cannot be reconfigured safely after creation, such as WebGL
             // context attributes.
-            this._updateUrl(newSettings);
+            if (updateUrl) this._updateUrl(newSettings);
             this._maybeEnableCrossOriginIsolation(newSettings);
             this._notifyReloadRequired(diff.reloadRequired);
             newSettings = this._withCurrentReloadRequiredValues(newSettings);
             diff = this.settings.compare(newSettings);
         } else {
-            this._updateUrl(newSettings);
+            if (updateUrl) this._updateUrl(newSettings);
             this._maybeEnableCrossOriginIsolation(newSettings);
         }
 

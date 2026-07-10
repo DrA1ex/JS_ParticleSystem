@@ -10,6 +10,8 @@ The simulation is an N-Body system, where all particles interact with each other
 _50,000 particles forms a Galaxy-like
 image_ (Try it yourself: [#1](https://dra1ex.github.io/JS_ParticleSystem/n_body/?state=../static/galaxy1.json), [#2](https://dra1ex.github.io/JS_ParticleSystem/n_body/?state=../static/galaxy2.json), [#3](https://dra1ex.github.io/JS_ParticleSystem/n_body/?state=../static/galaxy3.json))
 
+Imported universe state files preserve explicitly selected URL settings. File-provided universe parameters are applied only when the corresponding query parameter is not pinned, while backend, worker, renderer, debug and performance-tuning choices remain unchanged.
+
 [<img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/194406835-25e8af62-3361-45d9-8e53-836f68ae04b3.png">](https://user-images.githubusercontent.com/1194059/194406257-721f5516-9685-425c-b157-f4f28aa12c64.png) [ <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/194406943-f9996d31-2b2d-402f-b50c-6634538a7a5d.png">](https://user-images.githubusercontent.com/1194059/194406416-311b8dfc-857f-458c-8d7c-5cba1cac4636.png) <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193401669-acc131b5-9aa6-4ddb-b2b2-582986dc7320.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193060048-2f9dd976-e675-42f2-aef1-1f381a807ced.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193402299-c9728ea3-b29d-4174-a4d1-3930c85cd863.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193402786-c9d376cf-5170-47e0-974d-c31bd3710558.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193416793-244cf9ba-1218-455b-abf8-da453f3bc14e.png">
 
 Given the complexity of accurately calculating gravitational interactions, several optimizations have been employed. 
@@ -127,7 +129,7 @@ The static and dynamic tree schedulers can be tuned with `worker_mt_tree_jobs`. 
 
 The tree split strategy can be selected with `worker_mt_tree_strategy`. Supported values are `static`, `dynamic`, `recursive`, and `hybrid`. `hybrid` is the default. `dynamic` is the conservative queue-based baseline. `static` is useful as a simple baseline. `recursive` is a legacy experiment that starts from coarse regions and lets subworkers split heavy jobs further, but it can produce a weaker downstream calc/force pipeline. `hybrid` is the recommended high-performance CPU profile: by default it uses the `coarse` hybrid profile, split-first recursive job release, and hybrid job sorting.
 
-Hybrid-specific tuning is available through `worker_mt_hybrid_profile`, `worker_mt_hybrid_seed_jobs`, `worker_mt_hybrid_seed_parallel`, `worker_mt_hybrid_split_first`, `worker_mt_hybrid_job_sorting`, and `worker_mt_hybrid_split_gain`. Hybrid seed-job values are `4`, `8`, `16`, `32`, and `64`; `4` is the default. The recommended baseline is the default hybrid combination: `coarse`, 4 seed jobs, serial seed bootstrap, split-first enabled, job sorting enabled, and split-gain filtering disabled. Four seed jobs keep coordinator preparation shallow while later recursive splitting remains unrestricted. Enable `worker_mt_hybrid_seed_parallel=1` to compare the experimental parallel root bootstrap against the unchanged serial baseline.
+Hybrid-specific tuning is available through `worker_mt_hybrid_profile`, `worker_mt_hybrid_seed_jobs`, `worker_mt_hybrid_seed_parallel`, `worker_mt_hybrid_split_first`, `worker_mt_hybrid_job_sorting`, and `worker_mt_hybrid_split_gain`. Hybrid seed-job values are `4`, `8`, `16`, `32`, and `64`; `4` is the default. The recommended default hybrid combination is `coarse`, 4 seed jobs, parallel seed bootstrap, split-first enabled, job sorting enabled, and split-gain filtering disabled. Four seed jobs keep coordinator preparation shallow while later recursive splitting remains unrestricted. Set `worker_mt_hybrid_seed_parallel=0` only to compare against the original serial root bootstrap.
 
 This backend is the default CPU backend for `n_body`. It requires `SharedArrayBuffer` and cross-origin isolation for real multithreading. On static hosting, the app can install a local COOP/COEP service worker and automatically reload once so the page becomes cross-origin isolated. If isolation cannot be enabled, the backend falls back to the single-worker path and shows the fallback reason in stats.
 
@@ -210,7 +212,7 @@ Application originally developed and optimized for Chrome browser. In other brow
 /n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid
 ```
 
-The current recommended hybrid baseline is `coarse` with `worker_mt_hybrid_seed_jobs=4`, serial seed bootstrap, split-first job release, and hybrid job sorting enabled. Four seed jobs avoid an expensive extra coordinator split level while unexpectedly heavy deep branches can still split recursively. The parallel seed bootstrap is an experimental switch that parallelizes root bounds, bucket counting, and shared-buffer scatter without changing the later hybrid scheduler. The split-gain filter remains disabled by default.
+The current recommended hybrid default is `coarse` with `worker_mt_hybrid_seed_jobs=4`, parallel seed bootstrap, split-first job release, and hybrid job sorting enabled. Four seed jobs avoid an expensive extra coordinator split level while unexpectedly heavy deep branches can still split recursively. Disable the parallel seed bootstrap only when comparing root bounds, bucket counting, and shared-buffer scatter against the original serial path. The split-gain filter remains disabled by default.
 
 Recommended comparison links:
 
@@ -224,7 +226,7 @@ Hybrid comparison toggles:
 
 ```text
 worker_mt_hybrid_seed_jobs=4
-worker_mt_hybrid_seed_parallel=0
+worker_mt_hybrid_seed_parallel=1
 worker_mt_hybrid_split_first=1
 worker_mt_hybrid_job_sorting=1
 worker_mt_hybrid_split_gain=0
