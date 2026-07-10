@@ -42,56 +42,6 @@ export const WorkerThreadCount = {
     "20": "20"
 }
 
-/**
- * @enum(string)
- */
-export const WorkerTreeJobCount = {
-    auto: "auto",
-    "16": "16",
-    "32": "32",
-    "64": "64",
-    "128": "128"
-}
-
-/**
- * @enum(string)
- */
-export const WorkerHybridSeedJobCount = {
-    "4": "4",
-    "8": "8",
-    "16": "16",
-    "32": "32",
-    "64": "64"
-}
-
-/**
- * @enum(string)
- */
-export const WorkerTreeStrategy = {
-    static: "static",
-    dynamic: "dynamic",
-    recursive: "recursive",
-    hybrid: "hybrid"
-}
-
-/**
- * @enum(string)
- */
-export const WorkerHybridProfile = {
-    coarse: "coarse",
-    balanced: "balanced",
-    wide: "wide"
-}
-
-
-/**
- * @enum(string)
- */
-export const WorkerForceKernel = {
-    ordered: "ordered",
-    symmetric: "symmetric",
-    symmetricLocal: "symmetric-local"
-}
 
 /**
  * @enum(string)

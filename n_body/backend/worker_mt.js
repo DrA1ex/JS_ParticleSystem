@@ -11,40 +11,11 @@ const SEGMENT_TUNE_SAMPLES_PER_CANDIDATE = 2;
 const THREAD_CHOICES = [2, 4, 6, 8, 12, 16, 20];
 const BUFFER_A = 0;
 const BUFFER_B = 1;
-const PARALLEL_TREE_MAX_SPLIT_LEVELS = 3;
-const AUTO_TREE_JOBS_PER_THREAD = 4;
-const AUTO_TREE_JOBS_MIN = 8;
-const AUTO_TREE_JOBS_MAX = 32;
-const HYBRID_SEED_JOBS_MIN = 4;
-const HYBRID_SEED_JOBS_MAX = 64;
-const HYBRID_SEED_MAX_SPLIT_LEVELS = 3;
-const RECURSIVE_TREE_SEED_SPLIT_LEVELS = 1;
-const RECURSIVE_TREE_SPLIT_BUDGET = 8;
-const RECURSIVE_TREE_MIN_JOB_PARTICLES = 8192;
-const WORKER_TREE_STRATEGY_STATIC = "static";
-const WORKER_TREE_STRATEGY_DYNAMIC = "dynamic";
-const WORKER_TREE_STRATEGY_RECURSIVE = "recursive";
-const WORKER_TREE_STRATEGY_HYBRID = "hybrid";
-const WORKER_TREE_HYBRID_PROFILE_COARSE = "coarse";
-const WORKER_TREE_HYBRID_PROFILE_BALANCED = "balanced";
-const WORKER_TREE_HYBRID_PROFILE_WIDE = "wide";
-const HYBRID_TREE_PROFILES = {
-    [WORKER_TREE_HYBRID_PROFILE_COARSE]: {
-        splitBudget: 1,
-        minJobParticles: 32768,
-        segmentMultiplier: 256,
-    },
-    [WORKER_TREE_HYBRID_PROFILE_BALANCED]: {
-        splitBudget: 2,
-        minJobParticles: 32768,
-        segmentMultiplier: 128,
-    },
-    [WORKER_TREE_HYBRID_PROFILE_WIDE]: {
-        splitBudget: 2,
-        minJobParticles: 16384,
-        segmentMultiplier: 128,
-    },
-};
+const HYBRID_SEED_TARGET_JOBS = 4;
+const HYBRID_SPLIT_BUDGET = 1;
+const HYBRID_MIN_JOB_PARTICLES = 32768;
+const HYBRID_SEGMENT_MULTIPLIER = 256;
+const FORCE_KERNEL = "symmetric";
 const TREE_FLOPS_PER_OP = 14;
 const EPSILON = 0.1e-6;
 
@@ -241,18 +212,6 @@ class SubworkerPool {
         return Promise.all(promises);
     }
 
-    processTreePartitions(partitions, options = {}) {
-        const promises = [];
-        for (let i = 0; i < this.workers.length; i++) {
-            const partition = partitions[i];
-            if (!partition || partition.jobCount === 0) {
-                continue;
-            }
-            promises.push(this._processTreePartition(this.workers[i], partition, "process-tree", options));
-        }
-        return Promise.all(promises);
-    }
-
     processHybridSeedBounds(ranges) {
         return this._processHybridSeedPhase("hybrid-seed-bounds", ranges);
     }
@@ -264,46 +223,12 @@ class SubworkerPool {
     processHybridSeedScatter(ranges, xMid, yMid, bucketOffsets) {
         return this._processHybridSeedPhase("hybrid-seed-scatter", ranges, {xMid, yMid}, bucketOffsets);
     }
-
-    async processTreeJobsDynamic(jobs, materializePartition, options = {}) {
-        if (this.workers.length === 0 || jobs.length === 0) {
-            return {results: [], dispatchTime: 0, spawnedJobCount: 0};
-        }
-
-        const queue = jobs.slice().sort((a, b) => estimateTreeJobWork(b) - estimateTreeJobWork(a));
-        const results = [];
-        let nextJobIndex = 0;
-        let dispatchTime = 0;
-
-        const runWorker = async (worker) => {
-            while (nextJobIndex < queue.length) {
-                const job = queue[nextJobIndex++];
-                const t = performance.now();
-                const partition = materializePartition({jobs: [job]});
-                dispatchTime += performance.now() - t;
-                if (!partition || partition.jobCount === 0) {
-                    continue;
-                }
-
-                const result = await this._processTreePartition(worker, partition, "process-tree", options);
-                result.descriptorBytes = partition.descriptorBytes || 0;
-                result.indexCopyBytes = partition.indexCopyBytes || 0;
-                results.push(result);
-            }
-        };
-
-        await Promise.all(this.workers.map(worker => runWorker(worker)));
-        return {results, dispatchTime, spawnedJobCount: 0};
-    }
-
-    async processTreeJobsRecursive(initialJobs, materializePartition, options = {}) {
+    async processHybridTreeJobs(initialJobs, materializePartition, options = {}) {
         if (this.workers.length === 0 || initialJobs.length === 0) {
             return {results: [], dispatchTime: 0, spawnedJobCount: 0};
         }
 
-        const taskType = options.taskType || "process-tree-recursive";
-        const isHybrid = taskType === "process-tree-hybrid";
-        const queue = initialJobs.slice().sort((a, b) => this._estimateQueuedJobWork(b, isHybrid) - this._estimateQueuedJobWork(a, isHybrid));
+        const queue = initialJobs.slice().sort((a, b) => estimateHybridJobWork(b) - estimateHybridJobWork(a));
         const idleWorkers = this.workers.slice();
         const results = [];
         let activeCount = 0;
@@ -320,25 +245,21 @@ class SubworkerPool {
                     const t = performance.now();
                     const partition = materializePartition({jobs: [job]});
                     dispatchTime += performance.now() - t;
-
                     if (!partition || partition.jobCount === 0) {
                         activeCount -= 1;
                         idleWorkers.push(worker);
                         continue;
                     }
 
-                    this._processTreePartition(worker, partition, taskType, options)
+                    this._processTreePartition(worker, partition, options)
                         .then((result) => {
                             result.descriptorBytes = partition.descriptorBytes || 0;
                             result.indexCopyBytes = partition.indexCopyBytes || 0;
                             results.push(result);
-
                             if (Array.isArray(result.spawnedJobs) && result.spawnedJobs.length > 0) {
                                 spawnedJobCount += result.spawnedJobs.length;
-                                for (const spawnedJob of result.spawnedJobs) {
-                                    queue.push(spawnedJob);
-                                }
-                                queue.sort((a, b) => this._estimateQueuedJobWork(b, isHybrid) - this._estimateQueuedJobWork(a, isHybrid));
+                                queue.push(...result.spawnedJobs);
+                                queue.sort((a, b) => estimateHybridJobWork(b) - estimateHybridJobWork(a));
                             }
                         })
                         .then(() => {
@@ -348,21 +269,14 @@ class SubworkerPool {
                         })
                         .catch(reject);
                 }
-
                 if (activeCount === 0 && queue.length === 0) {
                     resolve({results, dispatchTime, spawnedJobCount});
                 }
             };
-
             pump();
         });
     }
 
-    _estimateQueuedJobWork(job, isHybrid) {
-        return isHybrid && this.settings?.simulation?.workerMtHybridJobSorting
-            ? estimateHybridJobWork(job)
-            : estimateTreeJobWork(job);
-    }
 
 
     _sendInit(worker, type, settings, particlesBuffer, forceXBuffer, forceYBuffer, indexBufferA, indexBufferB) {
@@ -419,20 +333,15 @@ class SubworkerPool {
             ]);
         });
     }
-
-    _processTreePartition(worker, partition, type = "process-tree", options = {}) {
+    _processTreePartition(worker, partition, options = {}) {
         const requestId = ++this._requestId;
         return new Promise((resolve, reject) => {
             this._pending.set(requestId, {resolve, reject});
             worker.postMessage({
-                type,
+                type: "process-tree-hybrid",
                 requestId,
                 splitBudget: options.splitBudget,
                 minJobParticles: options.minJobParticles,
-                hybridSplitFirst: options.hybridSplitFirst,
-                hybridSplitGainFilter: options.hybridSplitGainFilter,
-                treeFastBuild: options.treeFastBuild === true,
-                treeFusedAggregate: options.treeFusedAggregate === true,
                 debugTree: options.debugTree === true,
                 jobStartsBuffer: partition.jobStarts.buffer,
                 jobCountsBuffer: partition.jobCounts.buffer,
@@ -458,6 +367,7 @@ class SubworkerPool {
             ]);
         });
     }
+
 
     _processHybridSeedPhase(type, ranges, sharedPayload = {}, bucketOffsets = null) {
         const promises = [];
@@ -653,11 +563,11 @@ class WorkerMTBackendImpl {
             integrateTimeMax: integrateTime,
             forceTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceTime || 0), 0),
             integrateTimeTotal: workerResults.reduce((sum, item) => sum + (item.integrateTime || 0), 0),
-            forceKernel: this.settings.simulation.workerMtForceKernel,
+            forceKernel: FORCE_KERNEL,
             forceKernelApplied: [...new Set(workerResults.map(item => item.forceKernel).filter(Boolean))],
             forceKernelConsistent: workerResults.some(item => item.forceKernel) && workerResults
                 .filter(item => item.forceKernel)
-                .every(item => item.forceKernel === this.settings.simulation.workerMtForceKernel),
+                .every(item => item.forceKernel === FORCE_KERNEL),
             forcePairChecks: workerResults.reduce((sum, item) => sum + (item.forcePairChecks || 0), 0),
             forceKernelTimeMax: Math.max(0, ...workerResults.map(item => item.forceKernelTime || 0)),
             forceKernelTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceKernelTime || 0), 0),
@@ -693,84 +603,34 @@ class WorkerMTBackendImpl {
 
         return this._buildResult(timestamp, buffer, tree, treeTime, taskBuildTime + partitionTime + parallelTime, this._calcTreeStats(tree), profile);
     }
-
-
     async _parallelTreeStep(timestamp) {
         this._applyTunedSegmentSize();
         const stepStart = performance.now();
-        const profile = {
-            forceTime: 0,
-            integrateTime: 0,
-            statsTime: 0,
-            exportTime: 0,
-            mt: null,
-        };
+        const profile = {forceTime: 0, integrateTime: 0, statsTime: 0, exportTime: 0, mt: null};
 
         if (this.settings.common.debugForce && this.forceX && this.forceY) {
             this.forceX.fill(0);
             this.forceY.fill(0);
         }
 
-        const strategy = this._getWorkerMtTreeStrategy();
-        const treeFastBuild = this.settings.simulation.workerMtTreeFastBuild === true;
-        const treeFusedAggregate = treeFastBuild && this.settings.simulation.workerMtTreeFusedAggregate === true;
         let t = performance.now();
-        const treeJobs = strategy === WORKER_TREE_STRATEGY_RECURSIVE
-            ? this._buildRecursiveTreeSeedJobs()
-            : strategy === WORKER_TREE_STRATEGY_HYBRID
-                ? await this._buildHybridTreeSeedJobs()
-                : this._buildParallelTreeJobs();
+        const treeJobs = await this._buildHybridTreeSeedJobs();
         const topTreeTime = performance.now() - t;
 
         t = performance.now();
-        const partitionPlan = this._buildDynamicTreeJobPlan(treeJobs.jobs, strategy);
+        const partitionPlan = this._buildHybridTreeJobPlan(treeJobs.jobs);
         const partitionTime = performance.now() - t;
 
         t = performance.now();
-        let schedulerResult;
-        const debugTree = this.settings.common.debugTree === true;
-        if (strategy === WORKER_TREE_STRATEGY_STATIC) {
-            const partitions = this._buildTreeJobPartitions(partitionPlan.jobs);
-            const results = await this._pool.processTreePartitions(partitions, {
-                debugTree,
-                treeFastBuild,
-                treeFusedAggregate,
-            });
-            schedulerResult = {
-                results,
-                dispatchTime: 0,
-                spawnedJobCount: 0,
-            };
-            for (let i = 0; i < results.length; i++) {
-                results[i].descriptorBytes = partitions[i]?.descriptorBytes || 0;
-                results[i].indexCopyBytes = partitions[i]?.indexCopyBytes || 0;
-            }
-        } else if (strategy === WORKER_TREE_STRATEGY_RECURSIVE || strategy === WORKER_TREE_STRATEGY_HYBRID) {
-            schedulerResult = await this._pool.processTreeJobsRecursive(
-                partitionPlan.jobs,
-                (partition) => this._materializeTreeJobPartition(partition),
-                {
-                    splitBudget: this._getTreeRecursiveSplitBudget(strategy),
-                    minJobParticles: this._getTreeRecursiveMinJobParticles(strategy),
-                    taskType: strategy === WORKER_TREE_STRATEGY_HYBRID ? "process-tree-hybrid" : "process-tree-recursive",
-                    hybridSplitFirst: strategy === WORKER_TREE_STRATEGY_HYBRID ? this.settings.simulation.workerMtHybridSplitFirst : null,
-                    hybridSplitGainFilter: strategy === WORKER_TREE_STRATEGY_HYBRID ? this.settings.simulation.workerMtHybridSplitGainFilter : null,
-                    treeFastBuild,
-                    treeFusedAggregate,
-                    debugTree,
-                }
-            );
-        } else {
-            schedulerResult = await this._pool.processTreeJobsDynamic(
-                partitionPlan.jobs,
-                (partition) => this._materializeTreeJobPartition(partition),
-                {
-                    debugTree,
-                    treeFastBuild,
-                    treeFusedAggregate,
-                }
-            );
-        }
+        const schedulerResult = await this._pool.processHybridTreeJobs(
+            partitionPlan.jobs,
+            partition => this._materializeTreeJobPartition(partition),
+            {
+                splitBudget: HYBRID_SPLIT_BUDGET,
+                minJobParticles: this._getHybridMinJobParticles(),
+                debugTree: this.settings.common.debugTree === true,
+            },
+        );
         const parallelWaitTime = performance.now() - t;
         const workerResults = schedulerResult.results;
         const dispatchTime = schedulerResult.dispatchTime || 0;
@@ -780,10 +640,7 @@ class WorkerMTBackendImpl {
         const treeTime = topTreeTime + maxWorkerTreeTime;
         const forceTime = workerTiming.forceTimeMax;
         const integrateTime = workerTiming.integrateTimeMax;
-        const workerCpuTime = workerTiming.workerCpuTime;
-        const workerMaxTime = workerTiming.workerMaxTime;
         const dynamicPhysicsTime = Math.max(0, partitionTime + dispatchTime + parallelWaitTime - maxWorkerTreeTime);
-
         profile.forceTime = forceTime;
         profile.integrateTime = integrateTime;
         profile.mt = {
@@ -795,28 +652,12 @@ class WorkerMTBackendImpl {
             taskCount: workerResults.reduce((sum, item) => sum + (item.leafCount || 0), 0),
             activeWorkers: workerTiming.activeWorkers,
             treeParallel: true,
-            treeStrategy: strategy,
             treeJobCount: treeJobs.jobs.length,
             treeTargetJobs: treeJobs.targetJobs,
             treeSplitLevels: treeJobs.splitLevels,
-            treeDynamicScheduling: strategy !== WORKER_TREE_STRATEGY_STATIC,
-            treeRecursiveScheduling: strategy === WORKER_TREE_STRATEGY_RECURSIVE || strategy === WORKER_TREE_STRATEGY_HYBRID,
-            treeHybridScheduling: strategy === WORKER_TREE_STRATEGY_HYBRID,
-            treeHybridProfile: strategy === WORKER_TREE_STRATEGY_HYBRID ? this._getWorkerMtHybridProfileName() : null,
-            treeHybridSeedJobs: strategy === WORKER_TREE_STRATEGY_HYBRID ? this.settings.simulation.workerMtHybridSeedJobs : null,
-            treeHybridSeedParallel: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridSeedParallel : null,
-            treeHybridSeedBoundsTime: strategy === WORKER_TREE_STRATEGY_HYBRID ? treeJobs.profile.seedBoundsTime || 0 : null,
-            treeHybridSeedCountTime: strategy === WORKER_TREE_STRATEGY_HYBRID ? treeJobs.profile.seedCountTime || 0 : null,
-            treeHybridSeedScatterTime: strategy === WORKER_TREE_STRATEGY_HYBRID ? treeJobs.profile.seedScatterTime || 0 : null,
-            treeHybridSplitFirst: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridSplitFirst : null,
-            treeHybridJobSorting: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridJobSorting : null,
-            treeHybridSplitGainFilter: strategy === WORKER_TREE_STRATEGY_HYBRID ? !!this.settings.simulation.workerMtHybridSplitGainFilter : null,
-            treeFastBuild,
-            treeFusedAggregate,
-            treeFastBuildApplied: workerResults.length > 0 && workerResults.every(item => item.treeProfile?.fastBuildApplied === true),
-            treeFastBuildConsistent: workerResults.length > 0 && workerResults.every(item => item.treeProfile?.fastBuildApplied === treeFastBuild),
-            treeFusedAggregateApplied: workerResults.length > 0 && workerResults.every(item => item.treeProfile?.fusedAggregateApplied === true),
-            treeFusedAggregateConsistent: workerResults.length > 0 && workerResults.every(item => item.treeProfile?.fusedAggregateApplied === treeFusedAggregate),
+            treeHybridSeedBoundsTime: treeJobs.profile.seedBoundsTime || 0,
+            treeHybridSeedCountTime: treeJobs.profile.seedCountTime || 0,
+            treeHybridSeedScatterTime: treeJobs.profile.seedScatterTime || 0,
             treePartitionCountParticlesMax: Math.max(0, ...workerResults.map(item => (item.treeProfile?.partitionCountParticles || 0) + (item.recursivePartitionCountParticles || 0))),
             treePartitionCountParticlesTotal: workerResults.reduce((sum, item) => sum + (item.treeProfile?.partitionCountParticles || 0) + (item.recursivePartitionCountParticles || 0), 0),
             treePartitionScatterParticlesMax: Math.max(0, ...workerResults.map(item => (item.treeProfile?.partitionScatterParticles || 0) + (item.recursivePartitionScatterParticles || 0))),
@@ -830,17 +671,13 @@ class WorkerMTBackendImpl {
             treeNodeInitCountTotal: workerResults.reduce((sum, item) => sum + (item.treeProfile?.nodeInitCount || 0), 0),
             treeLeafCollectTimeMax: Math.max(0, ...workerResults.map(item => item.treeProfile?.leafCollectTime || 0)),
             treeLeafCollectTimeTotal: workerResults.reduce((sum, item) => sum + (item.treeProfile?.leafCollectTime || 0), 0),
-            treeSingleBucketSplits: workerResults.reduce((sum, item) => sum + (item.treeProfile?.singleBucketSplits || 0) + (item.recursiveSingleBucketSplits || 0), 0),
-            treeSkippedScatterParticles: workerResults.reduce((sum, item) => sum + (item.treeProfile?.skippedScatterParticles || 0) + (item.recursiveSkippedScatterParticles || 0), 0),
-            treeFusedAggregateActive: workerResults.some(item => item.treeProfile?.fusedAggregate === true),
             treeSpawnedJobs: schedulerResult.spawnedJobCount || 0,
             treeEarlySplitResults: workerResults.reduce((sum, item) => sum + (item.hybridEarlySplit ? 1 : 0), 0),
             treeEarlySplitJobs: workerResults.reduce((sum, item) => sum + (item.hybridEarlySplitJobs || 0), 0),
-            treeHybridRejectedSplits: workerResults.reduce((sum, item) => sum + (item.hybridRejectedSplits || 0), 0),
             recursiveSplitCount: workerResults.reduce((sum, item) => sum + (item.recursiveSplitCount || 0), 0),
             recursiveSplitTime: workerResults.reduce((sum, item) => sum + (item.recursiveSplitTime || 0), 0),
-            recursiveSplitBudget: (strategy === WORKER_TREE_STRATEGY_RECURSIVE || strategy === WORKER_TREE_STRATEGY_HYBRID) ? this._getTreeRecursiveSplitBudget(strategy) : null,
-            recursiveMinJobParticles: (strategy === WORKER_TREE_STRATEGY_RECURSIVE || strategy === WORKER_TREE_STRATEGY_HYBRID) ? this._getTreeRecursiveMinJobParticles(strategy) : null,
+            recursiveSplitBudget: HYBRID_SPLIT_BUDGET,
+            recursiveMinJobParticles: this._getHybridMinJobParticles(),
             topTreeTime,
             topTreeSplitTime: treeJobs.profile.populateTime,
             treeRootBoundsTime: treeJobs.profile.rootBoundsTime,
@@ -858,34 +695,31 @@ class WorkerMTBackendImpl {
             integrateTimeMax: integrateTime,
             forceTimeTotal: workerTiming.forceTimeTotal,
             integrateTimeTotal: workerTiming.integrateTimeTotal,
-            forceKernel: this.settings.simulation.workerMtForceKernel,
+            forceKernel: FORCE_KERNEL,
             forceKernelApplied: [...new Set(workerResults.map(item => item.forceKernel).filter(Boolean))],
-            forceKernelConsistent: workerResults.some(item => item.forceKernel) && workerResults
-                .filter(item => item.forceKernel)
-                .every(item => item.forceKernel === this.settings.simulation.workerMtForceKernel),
+            forceKernelConsistent: workerResults.some(item => item.forceKernel) && workerResults.filter(item => item.forceKernel).every(item => item.forceKernel === FORCE_KERNEL),
             forcePairChecks: workerResults.reduce((sum, item) => sum + (item.forcePairChecks || 0), 0),
             forceKernelTimeMax: Math.max(0, ...workerResults.map(item => item.forceKernelTime || 0)),
             forceKernelTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceKernelTime || 0), 0),
             forceCollisionTimeMax: Math.max(0, ...workerResults.map(item => item.forceCollisionTime || 0)),
             forceCollisionTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceCollisionTime || 0), 0),
-            forceGatherTimeMax: Math.max(0, ...workerResults.map(item => item.forceGatherTime || 0)),
-            forceGatherTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceGatherTime || 0), 0),
+            forceGatherTimeMax: 0,
+            forceGatherTimeTotal: 0,
             forcePairTimeMax: Math.max(0, ...workerResults.map(item => item.forcePairTime || 0)),
             forcePairTimeTotal: workerResults.reduce((sum, item) => sum + (item.forcePairTime || 0), 0),
-            forceFlushTimeMax: Math.max(0, ...workerResults.map(item => item.forceFlushTime || 0)),
-            forceFlushTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceFlushTime || 0), 0),
-            forceTimingSamples: workerResults.reduce((sum, item) => sum + (item.forceTimingSamples || 0), 0),
+            forceFlushTimeMax: 0,
+            forceFlushTimeTotal: 0,
+            forceTimingSamples: 0,
             workerBuildId: BUILD_ID,
             workerProtocolVersion: WORKER_PROTOCOL_VERSION,
             taskWorkerBuildIds: [...new Set((this._pool.runtimeMetadata || []).map(item => item.buildId).filter(Boolean))],
             taskWorkerProtocolVersions: [...new Set((this._pool.runtimeMetadata || []).map(item => item.protocolVersion).filter(Number.isFinite))],
-            workerCpuTime,
-            workerMaxTime,
+            workerCpuTime: workerTiming.workerCpuTime,
+            workerMaxTime: workerTiming.workerMaxTime,
         };
 
         const stepCalcTime = performance.now() - stepStart;
         this._recordTuningSample(stepCalcTime);
-
         const buffer = this.buffers.shift();
         t = performance.now();
         buffer.set(this.particles);
@@ -893,9 +727,10 @@ class WorkerMTBackendImpl {
 
         const treeStats = this._mergeParallelTreeStats(treeJobs.stats, workerResults);
         const treeProfile = this._mergeParallelTreeProfile(treeJobs.profile, workerResults, workerTiming, treeJobs, dispatchTime, profile.mt);
-        const treeDebug = debugTree ? this._mergeParallelTreeDebug(treeJobs.debugData, workerResults) : [];
+        const treeDebug = this.settings.common.debugTree ? this._mergeParallelTreeDebug(treeJobs.debugData, workerResults) : [];
         return this._buildParallelResult(timestamp, buffer, treeTime, dynamicPhysicsTime, treeStats, treeProfile, profile, treeDebug);
     }
+
 
     _buildParallelResult(timestamp, buffer, treeTime, physicsTime, treeStats, treeProfile, profile, treeDebug = []) {
         return {
@@ -932,7 +767,6 @@ class WorkerMTBackendImpl {
             segmentCount: topStats.segmentCount + workerResults.reduce((sum, item) => sum + (item.treeStats?.segmentCount || 0), 0),
         };
     }
-
     _mergeParallelTreeProfile(topProfile, workerResults, workerTiming, treeJobs, dispatchTime, mtProfile = {}) {
         return {
             resetTime: topProfile.resetTime,
@@ -941,24 +775,9 @@ class WorkerMTBackendImpl {
             aggregateTime: Math.max(0, ...workerResults.map(item => item.treeProfile?.aggregateTime || 0)),
             fastBucketPath: true,
             parallel: true,
-            strategy: mtProfile.treeStrategy || WORKER_TREE_STRATEGY_HYBRID,
-            dynamicScheduling: !!mtProfile.treeDynamicScheduling,
-            recursiveScheduling: !!mtProfile.treeRecursiveScheduling,
-            hybridScheduling: !!mtProfile.treeHybridScheduling,
-            hybridProfile: mtProfile.treeHybridProfile || null,
-            hybridSeedParallel: mtProfile.treeHybridSeedParallel ?? null,
             seedBoundsTime: topProfile.seedBoundsTime || 0,
             seedCountTime: topProfile.seedCountTime || 0,
             seedScatterTime: topProfile.seedScatterTime || 0,
-            hybridSplitFirst: mtProfile.treeHybridSplitFirst ?? null,
-            hybridJobSorting: mtProfile.treeHybridJobSorting ?? null,
-            hybridSplitGainFilter: mtProfile.treeHybridSplitGainFilter ?? null,
-            fastBuild: mtProfile.treeFastBuild ?? false,
-            fastBuildApplied: mtProfile.treeFastBuildApplied === true,
-            fastBuildConsistent: mtProfile.treeFastBuildConsistent === true,
-            fusedAggregateEnabled: mtProfile.treeFusedAggregate ?? false,
-            fusedAggregateApplied: mtProfile.treeFusedAggregateApplied === true,
-            fusedAggregateConsistent: mtProfile.treeFusedAggregateConsistent === true,
             partitionCountParticles: mtProfile.treePartitionCountParticlesMax || 0,
             partitionCountParticlesTotal: mtProfile.treePartitionCountParticlesTotal || 0,
             partitionScatterParticles: mtProfile.treePartitionScatterParticlesMax || 0,
@@ -972,17 +791,13 @@ class WorkerMTBackendImpl {
             nodeInitCountTotal: mtProfile.treeNodeInitCountTotal || 0,
             leafCollectTime: mtProfile.treeLeafCollectTimeMax || 0,
             leafCollectTimeTotal: mtProfile.treeLeafCollectTimeTotal || 0,
-            singleBucketSplits: mtProfile.treeSingleBucketSplits || 0,
-            skippedScatterParticles: mtProfile.treeSkippedScatterParticles || 0,
-            fusedAggregate: mtProfile.treeFusedAggregateActive === true,
             spawnedJobs: mtProfile.treeSpawnedJobs || 0,
             earlySplitResults: mtProfile.treeEarlySplitResults || 0,
             earlySplitJobs: mtProfile.treeEarlySplitJobs || 0,
-            hybridRejectedSplits: mtProfile.treeHybridRejectedSplits || 0,
             recursiveSplitCount: mtProfile.recursiveSplitCount || 0,
             recursiveSplitTime: mtProfile.recursiveSplitTime || 0,
-            recursiveSplitBudget: mtProfile.recursiveSplitBudget ?? null,
-            recursiveMinJobParticles: mtProfile.recursiveMinJobParticles ?? null,
+            recursiveSplitBudget: HYBRID_SPLIT_BUDGET,
+            recursiveMinJobParticles: this._getHybridMinJobParticles(),
             targetJobs: treeJobs.targetJobs,
             splitLevels: treeJobs.splitLevels,
             topPopulateTime: topProfile.populateTime,
@@ -994,222 +809,9 @@ class WorkerMTBackendImpl {
             dispatchTime,
         };
     }
-
-    _buildParallelTreeJobs() {
-        const count = this.settings.physics.particleCount;
-        const source = this._treeWorkspace.indices;
-        const identity = this._treeWorkspace.identityIndices;
-        const profile = {
-            resetTime: 0,
-            rootBoundsTime: 0,
-            populateTime: 0,
-            aggregateTime: 0,
-            fastBucketPath: true,
-        };
-        const stats = {flops: 0, depth: 1, segmentCount: 1};
-        const debugData = this.settings.common.debugTree ? [] : null;
-
-        let t = performance.now();
-        source.set(identity.subarray(0, count), 0);
-        profile.resetTime = performance.now() - t;
-
-        t = performance.now();
-        const rootBounds = this._calculateBounds(source, 0, count);
-        profile.rootBoundsTime = performance.now() - t;
-
-        let nodes = [{
-            start: 0,
-            count,
-            indexBuffer: BUFFER_A,
-            depth: 1,
-            left: rootBounds.left,
-            top: rootBounds.top,
-            right: rootBounds.right,
-            bottom: rootBounds.bottom,
-            parentForceX: 0,
-            parentForceY: 0,
-        }];
-
-        const targetJobs = this._getWorkerMtTreeTargetJobs(count);
-        let splitLevels = 0;
-        t = performance.now();
-        for (let level = 0; level < PARALLEL_TREE_MAX_SPLIT_LEVELS; level++) {
-            if (nodes.length >= targetJobs) {
-                break;
-            }
-
-            const next = [];
-            let didSplit = false;
-            nodes.sort((a, b) => b.count - a.count);
-            for (const node of nodes) {
-                if (next.length >= targetJobs) {
-                    next.push(node);
-                    continue;
-                }
-                if (node.count <= this.settings.simulation.segmentMaxCount || this._isParallelNodeTooSmall(node)) {
-                    next.push(node);
-                    continue;
-                }
-                const children = this._splitParallelNode(node, 1 - node.indexBuffer);
-                if (children.length <= 1) {
-                    next.push(node);
-                    continue;
-                }
-
-                if (debugData) {
-                    debugData.push(this._createTreeDebugEntry(node));
-                }
-                didSplit = true;
-                stats.flops += Math.pow(children.length, 2) * TREE_FLOPS_PER_OP;
-                stats.segmentCount += children.length;
-                stats.depth = Math.max(stats.depth, ...children.map(item => item.depth));
-                next.push(...children);
-            }
-            nodes = next;
-            splitLevels = level + 1;
-            if (!didSplit) {
-                break;
-            }
-        }
-        profile.populateTime = performance.now() - t;
-        // The final job roots are built and counted inside subworkers. Keep the
-        // coordinator segment count limited to the shallow internal nodes that
-        // it actually materialized while partitioning the tree.
-        stats.segmentCount = Math.max(0, stats.segmentCount - nodes.length);
-
-        return {jobs: nodes, profile, stats, targetJobs, splitLevels, debugData};
-    }
-
-    _buildRecursiveTreeSeedJobs() {
-        const count = this.settings.physics.particleCount;
-        const source = this._treeWorkspace.indices;
-        const identity = this._treeWorkspace.identityIndices;
-        const profile = {
-            resetTime: 0,
-            rootBoundsTime: 0,
-            populateTime: 0,
-            aggregateTime: 0,
-            fastBucketPath: true,
-        };
-        const stats = {flops: 0, depth: 1, segmentCount: 1};
-        const debugData = this.settings.common.debugTree ? [] : null;
-
-        let t = performance.now();
-        source.set(identity.subarray(0, count), 0);
-        profile.resetTime = performance.now() - t;
-
-        t = performance.now();
-        const rootBounds = this._calculateBounds(source, 0, count);
-        profile.rootBoundsTime = performance.now() - t;
-
-        let nodes = [{
-            start: 0,
-            count,
-            indexBuffer: BUFFER_A,
-            depth: 1,
-            left: rootBounds.left,
-            top: rootBounds.top,
-            right: rootBounds.right,
-            bottom: rootBounds.bottom,
-            parentForceX: 0,
-            parentForceY: 0,
-        }];
-
-        const targetJobs = Math.max(4, this._threadCount);
-        let splitLevels = 0;
-        t = performance.now();
-        for (let level = 0; level < RECURSIVE_TREE_SEED_SPLIT_LEVELS; level++) {
-            const next = [];
-            let didSplit = false;
-            for (const node of nodes) {
-                if (node.count <= this.settings.simulation.segmentMaxCount || this._isParallelNodeTooSmall(node)) {
-                    next.push(node);
-                    continue;
-                }
-                const children = this._splitParallelNode(node, 1 - node.indexBuffer);
-                if (children.length <= 1) {
-                    next.push(node);
-                    continue;
-                }
-                if (debugData) {
-                    debugData.push(this._createTreeDebugEntry(node));
-                }
-                didSplit = true;
-                stats.flops += Math.pow(children.length, 2) * TREE_FLOPS_PER_OP;
-                stats.segmentCount += children.length;
-                stats.depth = Math.max(stats.depth, ...children.map(item => item.depth));
-                next.push(...children);
-            }
-            nodes = next;
-            splitLevels = level + 1;
-            if (!didSplit || nodes.length >= targetJobs) {
-                break;
-            }
-        }
-        profile.populateTime = performance.now() - t;
-        stats.segmentCount = Math.max(0, stats.segmentCount - nodes.length);
-
-        return {jobs: nodes, profile, stats, targetJobs, splitLevels, debugData};
-    }
-
     async _buildHybridTreeSeedJobs() {
-        if (this.settings.simulation.workerMtHybridSeedParallel) {
-            return await this._buildHybridTreeSeedJobsParallel();
-        }
-        return this._buildHybridTreeSeedJobsSerial();
-    }
-
-    _buildHybridTreeSeedJobsSerial() {
         const count = this.settings.physics.particleCount;
-        const source = this._treeWorkspace.indices;
-        const identity = this._treeWorkspace.identityIndices;
-        const profile = {
-            resetTime: 0,
-            rootBoundsTime: 0,
-            populateTime: 0,
-            aggregateTime: 0,
-            fastBucketPath: true,
-            parallelSeedBootstrap: false,
-            seedBoundsTime: 0,
-            seedCountTime: 0,
-            seedScatterTime: 0,
-        };
-        const stats = {flops: 0, depth: 1, segmentCount: 1};
-        const debugData = this.settings.common.debugTree ? [] : null;
-
-        let t = performance.now();
-        source.set(identity.subarray(0, count), 0);
-        profile.resetTime = performance.now() - t;
-
-        t = performance.now();
-        const rootBounds = this._calculateBounds(source, 0, count);
-        profile.rootBoundsTime = performance.now() - t;
-
-        const root = {
-            start: 0,
-            count,
-            indexBuffer: BUFFER_A,
-            depth: 1,
-            left: rootBounds.left,
-            top: rootBounds.top,
-            right: rootBounds.right,
-            bottom: rootBounds.bottom,
-            parentForceX: 0,
-            parentForceY: 0,
-        };
-
-        const targetJobs = this._getWorkerMtHybridSeedTargetJobs(count);
-        const maxSplitLevels = this._getWorkerMtHybridSeedSplitLevels(targetJobs);
-        t = performance.now();
-        const expanded = this._expandHybridSeedNodes([root], targetJobs, maxSplitLevels, 0, stats, debugData);
-        profile.populateTime = performance.now() - t;
-        stats.segmentCount = Math.max(0, stats.segmentCount - expanded.nodes.length);
-
-        return {jobs: expanded.nodes, profile, stats, targetJobs, splitLevels: expanded.splitLevels, debugData};
-    }
-
-    async _buildHybridTreeSeedJobsParallel() {
-        const count = this.settings.physics.particleCount;
+        const targetJobs = Math.min(HYBRID_SEED_TARGET_JOBS, Math.max(1, count));
         const profile = {
             resetTime: 0,
             rootBoundsTime: 0,
@@ -1223,40 +825,27 @@ class WorkerMTBackendImpl {
         };
         const stats = {flops: 0, depth: 1, segmentCount: 1};
         const debugData = this.settings.common.debugTree ? [] : null;
-        const targetJobs = this._getWorkerMtHybridSeedTargetJobs(count);
-        const maxSplitLevels = this._getWorkerMtHybridSeedSplitLevels(targetJobs);
         const ranges = this._buildHybridSeedRanges(count);
 
         let t = performance.now();
         const boundsResults = await this._pool.processHybridSeedBounds(ranges);
         profile.seedBoundsTime = performance.now() - t;
         profile.rootBoundsTime = profile.seedBoundsTime;
-
         const rootBounds = this._mergeHybridSeedBounds(boundsResults);
         const root = {
-            start: 0,
-            count,
-            indexBuffer: BUFFER_A,
-            depth: 1,
-            left: rootBounds.left,
-            top: rootBounds.top,
-            right: rootBounds.right,
-            bottom: rootBounds.bottom,
-            parentForceX: 0,
-            parentForceY: 0,
+            start: 0, count, indexBuffer: BUFFER_A, depth: 1,
+            left: rootBounds.left, top: rootBounds.top, right: rootBounds.right, bottom: rootBounds.bottom,
+            parentForceX: 0, parentForceY: 0,
         };
-
         if (count <= this.settings.simulation.segmentMaxCount || this._isParallelNodeTooSmall(root)) {
             return {jobs: [root], profile, stats: {...stats, segmentCount: 0}, targetJobs, splitLevels: 0, debugData};
         }
 
         const xMid = this._buildParallelMid(root.left, root.right - root.left);
         const yMid = this._buildParallelMid(root.top, root.bottom - root.top);
-
         t = performance.now();
         const countResults = await this._pool.processHybridSeedCounts(ranges, xMid, yMid);
         profile.seedCountTime = performance.now() - t;
-
         const bucketData = this._mergeHybridSeedBucketData(countResults);
         const usedBuckets = bucketData.counts.reduce((sum, value) => sum + (value > 0 ? 1 : 0), 0);
         if (usedBuckets <= 1) {
@@ -1268,88 +857,12 @@ class WorkerMTBackendImpl {
         t = performance.now();
         await this._pool.processHybridSeedScatter(ranges, xMid, yMid, bucketOffsets);
         profile.seedScatterTime = performance.now() - t;
-
-        let nodes = this._createParallelChildrenFromBuckets(
-            root,
-            BUFFER_B,
-            xMid,
-            yMid,
-            bucketData.counts,
-            bucketData.mass,
-        );
-        let splitLevels = nodes.length > 1 ? 1 : 0;
-        if (nodes.length > 1) {
-            if (debugData) {
-                debugData.push(this._createTreeDebugEntry(root));
-            }
-            stats.flops += Math.pow(nodes.length, 2) * TREE_FLOPS_PER_OP;
-            stats.segmentCount += nodes.length;
-            stats.depth = Math.max(stats.depth, ...nodes.map(item => item.depth));
-        }
-
-        let serialExpandTime = 0;
-        if (nodes.length > 1 && nodes.length < targetJobs && splitLevels < maxSplitLevels) {
-            t = performance.now();
-            const expanded = this._expandHybridSeedNodes(
-                nodes,
-                targetJobs,
-                maxSplitLevels,
-                splitLevels,
-                stats,
-                debugData,
-            );
-            serialExpandTime = performance.now() - t;
-            nodes = expanded.nodes;
-            splitLevels = expanded.splitLevels;
-        }
-
-        profile.populateTime = profile.seedCountTime + profile.seedScatterTime + serialExpandTime;
-        stats.segmentCount = Math.max(0, stats.segmentCount - nodes.length);
-        return {jobs: nodes, profile, stats, targetJobs, splitLevels, debugData};
-    }
-
-    _expandHybridSeedNodes(initialNodes, targetJobs, maxSplitLevels, startLevel, stats, debugData) {
-        let nodes = initialNodes;
-        let splitLevels = startLevel;
-        for (let level = startLevel; level < maxSplitLevels; level++) {
-            if (nodes.length >= targetJobs) {
-                break;
-            }
-
-            const next = [];
-            let didSplit = false;
-            nodes.sort((a, b) => b.count - a.count);
-            for (const node of nodes) {
-                if (next.length >= targetJobs) {
-                    next.push(node);
-                    continue;
-                }
-                if (node.count <= this.settings.simulation.segmentMaxCount || this._isParallelNodeTooSmall(node)) {
-                    next.push(node);
-                    continue;
-                }
-                const children = this._splitParallelNode(node, 1 - node.indexBuffer);
-                if (children.length <= 1) {
-                    next.push(node);
-                    continue;
-                }
-
-                if (debugData) {
-                    debugData.push(this._createTreeDebugEntry(node));
-                }
-                didSplit = true;
-                stats.flops += Math.pow(children.length, 2) * TREE_FLOPS_PER_OP;
-                stats.segmentCount += children.length;
-                stats.depth = Math.max(stats.depth, ...children.map(item => item.depth));
-                next.push(...children);
-            }
-            nodes = next;
-            splitLevels = level + 1;
-            if (!didSplit) {
-                break;
-            }
-        }
-        return {nodes, splitLevels};
+        const jobs = this._createParallelChildrenFromBuckets(root, BUFFER_B, xMid, yMid, bucketData.counts, bucketData.mass);
+        if (debugData) debugData.push(this._createTreeDebugEntry(root));
+        stats.flops += Math.pow(jobs.length, 2) * TREE_FLOPS_PER_OP;
+        stats.depth = Math.max(stats.depth, ...jobs.map(item => item.depth));
+        profile.populateTime = profile.seedCountTime + profile.seedScatterTime;
+        return {jobs, profile, stats: {...stats, segmentCount: 1}, targetJobs, splitLevels: 1, debugData};
     }
 
     _buildHybridSeedRanges(count) {
@@ -1416,45 +929,6 @@ class WorkerMTBackendImpl {
         return offsets;
     }
 
-    _getWorkerMtTreeStrategy() {
-        const value = this.settings.simulation.workerMtTreeStrategy;
-        if (value === WORKER_TREE_STRATEGY_STATIC ||
-            value === WORKER_TREE_STRATEGY_DYNAMIC ||
-            value === WORKER_TREE_STRATEGY_RECURSIVE ||
-            value === WORKER_TREE_STRATEGY_HYBRID) {
-            return value;
-        }
-        return WORKER_TREE_STRATEGY_HYBRID;
-    }
-
-    _getTreeRecursiveSplitBudget(strategy) {
-        if (strategy === WORKER_TREE_STRATEGY_HYBRID) {
-            return this._getWorkerMtHybridProfileConfig().splitBudget;
-        }
-        return RECURSIVE_TREE_SPLIT_BUDGET;
-    }
-
-    _getTreeRecursiveMinJobParticles(strategy) {
-        const tuned = this._actualSegmentSize || this.settings.simulation.segmentMaxCount || 32;
-        if (strategy === WORKER_TREE_STRATEGY_HYBRID) {
-            const profile = this._getWorkerMtHybridProfileConfig();
-            return Math.max(profile.minJobParticles, tuned * profile.segmentMultiplier);
-        }
-        return Math.max(RECURSIVE_TREE_MIN_JOB_PARTICLES, tuned * 64);
-    }
-
-    _getWorkerMtHybridProfileName() {
-        const value = this.settings.simulation.workerMtHybridProfile;
-        if (HYBRID_TREE_PROFILES[value]) {
-            return value;
-        }
-        return WORKER_TREE_HYBRID_PROFILE_COARSE;
-    }
-
-    _getWorkerMtHybridProfileConfig() {
-        return HYBRID_TREE_PROFILES[this._getWorkerMtHybridProfileName()];
-    }
-
     _createTreeDebugEntry(node) {
         return {
             x: node.left,
@@ -1464,65 +938,6 @@ class WorkerMTBackendImpl {
             count: node.count,
             depth: node.depth,
         };
-    }
-
-    _splitParallelNode(node, targetBufferId) {
-        const sourceIndices = this._treeWorkspace.indexBuffers[node.indexBuffer];
-        const targetIndices = this._treeWorkspace.indexBuffers[targetBufferId];
-        const particles = this.particles;
-        const left = node.left;
-        const top = node.top;
-        const right = node.right;
-        const bottom = node.bottom;
-        const width = right - left;
-        const height = bottom - top;
-        const xMid = this._buildParallelMid(left, width);
-        const yMid = this._buildParallelMid(top, height);
-        const start = node.start;
-        const end = start + node.count;
-        const bucketCounts = new Int32Array(4);
-        const bucketMass = new Float64Array(4);
-        const bucketIds = this._treeWorkspace.bucketIds;
-        let usedBuckets = 0;
-
-        for (let i = start; i < end; i++) {
-            const particleIndex = sourceIndices[i];
-            const offset = particleIndex * ITEM_SIZE;
-            const bucketIndex = (particles[offset] < xMid ? 0 : 2) + (particles[offset + 1] < yMid ? 0 : 1);
-            bucketIds[i - start] = bucketIndex;
-            if (bucketCounts[bucketIndex] === 0) {
-                usedBuckets += 1;
-            }
-            bucketCounts[bucketIndex] += 1;
-            bucketMass[bucketIndex] += particles[offset + 4];
-        }
-
-        if (usedBuckets <= 1 && this._parallelNodeHasSinglePoint(node, sourceIndices)) {
-            return [node];
-        }
-
-        const bucketStarts = new Int32Array(4);
-        const bucketWrites = new Int32Array(4);
-        let writeStart = start;
-        for (let i = 0; i < 4; i++) {
-            bucketStarts[i] = writeStart;
-            bucketWrites[i] = writeStart;
-            writeStart += bucketCounts[i];
-        }
-
-        for (let i = start; i < end; i++) {
-            const bucketIndex = bucketIds[i - start];
-            targetIndices[bucketWrites[bucketIndex]++] = sourceIndices[i];
-        }
-
-        return this._createParallelChildrenFromBuckets(
-            node,
-            targetBufferId,
-            xMid,
-            yMid,
-            bucketCounts,
-            bucketMass,
-        );
     }
 
     _createParallelChildrenFromBuckets(node, targetBufferId, xMid, yMid, bucketCounts, bucketMass) {
@@ -1594,14 +1009,10 @@ class WorkerMTBackendImpl {
         const secondWeight = 1 + randomness * (Math.random() - 0.5);
         return start + size * firstWeight / (firstWeight + secondWeight);
     }
-
-    _buildDynamicTreeJobPlan(jobs, strategy = this._getWorkerMtTreeStrategy()) {
-        const useHybridSorting = strategy === WORKER_TREE_STRATEGY_HYBRID && !!this.settings.simulation.workerMtHybridJobSorting;
-        const estimator = useHybridSorting ? estimateHybridJobWork : estimateTreeJobWork;
-        return {
-            jobs: jobs.slice().sort((a, b) => estimator(b) - estimator(a)),
-        };
+    _buildHybridTreeJobPlan(jobs) {
+        return {jobs: jobs.slice().sort((a, b) => estimateHybridJobWork(b) - estimateHybridJobWork(a))};
     }
+
 
     _aggregateDynamicWorkerTiming(workerResults) {
         const workerCount = Math.max(1, this._threadCount);
@@ -1657,52 +1068,9 @@ class WorkerMTBackendImpl {
         };
     }
 
-    _getWorkerMtTreeTargetJobs(particleCount) {
-        const configured = this.settings.simulation.workerMtTreeJobs;
-        if (configured && configured !== "auto") {
-            const parsed = Number.parseInt(configured, 10);
-            if (Number.isFinite(parsed)) {
-                return Math.max(this._threadCount, Math.min(128, parsed));
-            }
-        }
-
-        const autoTarget = this._threadCount * AUTO_TREE_JOBS_PER_THREAD;
-        return Math.max(AUTO_TREE_JOBS_MIN, Math.min(AUTO_TREE_JOBS_MAX, autoTarget, Math.max(this._threadCount, particleCount)));
-    }
-
-    _getWorkerMtHybridSeedTargetJobs(particleCount) {
-        const configured = this.settings.simulation.workerMtHybridSeedJobs;
-        if (configured) {
-            const parsed = Number.parseInt(configured, 10);
-            if (Number.isFinite(parsed)) {
-                return Math.max(HYBRID_SEED_JOBS_MIN, Math.min(HYBRID_SEED_JOBS_MAX, parsed, particleCount));
-            }
-        }
-        return Math.max(1, Math.min(HYBRID_SEED_JOBS_MIN, particleCount));
-    }
-
-    _getWorkerMtHybridSeedSplitLevels(targetJobs) {
-        const requiredLevels = Math.ceil(Math.log(Math.max(1, targetJobs)) / Math.log(4));
-        return Math.max(1, Math.min(HYBRID_SEED_MAX_SPLIT_LEVELS, requiredLevels));
-    }
-
-    _buildTreeJobPartitions(jobs) {
-        const partitions = new Array(this._threadCount).fill(null).map(() => ({jobs: [], work: 0, particleCount: 0}));
-        for (const job of jobs) {
-            let bestIndex = 0;
-            let bestWork = partitions[0].work;
-            for (let i = 1; i < partitions.length; i++) {
-                if (partitions[i].work < bestWork) {
-                    bestIndex = i;
-                    bestWork = partitions[i].work;
-                }
-            }
-            const work = estimateTreeJobWork(job);
-            partitions[bestIndex].jobs.push(job);
-            partitions[bestIndex].work += work;
-            partitions[bestIndex].particleCount += job.count;
-        }
-        return partitions.map(partition => this._materializeTreeJobPartition(partition));
+    _getHybridMinJobParticles() {
+        const tuned = this._actualSegmentSize || this.settings.simulation.segmentMaxCount || 32;
+        return Math.max(HYBRID_MIN_JOB_PARTICLES, tuned * HYBRID_SEGMENT_MULTIPLIER);
     }
 
     _materializeTreeJobPartition(partition) {
@@ -1753,47 +1121,8 @@ class WorkerMTBackendImpl {
         };
     }
 
-    _calculateBounds(indices, start, count) {
-        if (count <= 0) {
-            return {left: 0, top: 0, right: 0, bottom: 0};
-        }
-        const firstOffset = indices[start] * ITEM_SIZE;
-        let minX = this.particles[firstOffset];
-        let maxX = minX;
-        let minY = this.particles[firstOffset + 1];
-        let maxY = minY;
-        const end = start + count;
-        for (let i = start + 1; i < end; i++) {
-            const offset = indices[i] * ITEM_SIZE;
-            const x = this.particles[offset];
-            if (minX > x) minX = x;
-            if (maxX < x) maxX = x;
-            const y = this.particles[offset + 1];
-            if (minY > y) minY = y;
-            if (maxY < y) maxY = y;
-        }
-        return {left: minX, top: minY, right: maxX, bottom: maxY};
-    }
-
     _isParallelNodeTooSmall(node) {
         return node.right - node.left <= EPSILON && node.bottom - node.top <= EPSILON;
-    }
-
-    _parallelNodeHasSinglePoint(node, indices) {
-        if (node.count < 2) {
-            return true;
-        }
-        const firstOffset = indices[node.start] * ITEM_SIZE;
-        const x = this.particles[firstOffset];
-        const y = this.particles[firstOffset + 1];
-        const end = node.start + node.count;
-        for (let i = node.start + 1; i < end; i++) {
-            const offset = indices[i] * ITEM_SIZE;
-            if (Math.abs(this.particles[offset] - x) > EPSILON || Math.abs(this.particles[offset + 1] - y) > EPSILON) {
-                return false;
-            }
-        }
-        return true;
     }
 
     _buildResult(timestamp, buffer, tree, treeTime, physicsTime, treeStats, profile) {
@@ -2166,7 +1495,6 @@ class WorkerMTBackendImpl {
             requestedThreads: this.settings.simulation.workerThreads,
             actualThreads: 1,
             fallbackReason: this._fallbackReason || "single-thread fallback",
-            forceKernel: this.settings.simulation.workerMtForceKernel,
             workerBuildId: BUILD_ID,
             workerProtocolVersion: WORKER_PROTOCOL_VERSION,
             taskWorkerBuildIds: [],

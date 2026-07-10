@@ -187,16 +187,14 @@ export class Debug {
             `  - reset: ${this._formatMs(this.treeProfile?.resetTime)}`,
             `  - root bounds: ${this._formatMs(this.treeProfile?.rootBoundsTime)}`,
             `  - populate: ${this._formatMs(this.treeProfile?.populateTime)}`,
-            `  - aggregate: ${this._formatMs(this.treeProfile?.aggregateTime)}${this.treeProfile?.fusedAggregate ? ", fused" : ""}`,
-            `  - worker fast build: requested ${this.treeProfile?.fastBuild ? "on" : "off"}, applied ${this.treeProfile?.fastBuildApplied ? "yes" : "no"}`,
+            `  - aggregate: ${this._formatMs(this.treeProfile?.aggregateTime)}`,
             `  - partition particles: ${this.treeProfile?.partitionCountParticles ?? 0} counted / ${this.treeProfile?.partitionScatterParticles ?? 0} scattered`,
             `  - partition time: count ${this._formatMs(this.treeProfile?.partitionCountTime)}, scatter ${this._formatMs(this.treeProfile?.partitionScatterTime)}, samples ${this.treeProfile?.partitionTimingSamples ?? 0}`,
             `  - node init: ${this.treeProfile?.nodeInitCount ?? 0}, leaf collect: ${this._formatMs(this.treeProfile?.leafCollectTime)}`,
-            `  - single-bucket descents: ${this.treeProfile?.singleBucketSplits ?? 0}, skipped scatter particles: ${this.treeProfile?.skippedScatterParticles ?? 0}`,
             `  - fast buckets: ${this.treeProfile?.fastBucketPath ? "on" : "off"}`,
-            `  - parallel: ${this.treeProfile?.parallel ? "on" : "off"}${this.treeProfile?.dynamicScheduling ? ", dynamic" : ""}`,
+            `  - parallel hybrid tree: ${this.treeProfile?.parallel ? "on" : "off"}`,
             `  - target jobs: ${this.treeProfile?.targetJobs ?? "n/a"}, actual jobs: ${this.treeProfile?.parallelTreeJobs ?? "n/a"}, seed split levels: ${this.treeProfile?.splitLevels ?? "n/a"}`,
-            `  - seed bootstrap: ${this.treeProfile?.hybridSeedParallel ? "parallel" : "serial"}, bounds ${this._formatMs(this.treeProfile?.seedBoundsTime)}, count ${this._formatMs(this.treeProfile?.seedCountTime)}, scatter ${this._formatMs(this.treeProfile?.seedScatterTime)}`,
+            `  - parallel seed bootstrap: bounds ${this._formatMs(this.treeProfile?.seedBoundsTime)}, count ${this._formatMs(this.treeProfile?.seedCountTime)}, scatter ${this._formatMs(this.treeProfile?.seedScatterTime)}`,
             `  - top populate: ${this._formatMs(this.treeProfile?.topPopulateTime)}`,
             `  - parallel wait: ${this._formatMs(this.treeProfile?.parallelTreeWaitTime)}`,
             `  - dispatch: ${this._formatMs(this.treeProfile?.dispatchTime)}`,
@@ -304,14 +302,9 @@ export class Debug {
         const active = Number.isFinite(state.activeWorkers) ? state.activeWorkers : "n/a";
         const sharedIndices = state.sharedIndexBuffers ? "shared indices" : "copied indices";
         const dispatch = this._formatMs(state.dispatchTime);
-        const treeModeBase = state.treeStrategy || (state.treeDynamicScheduling ? "dynamic" : "static");
-        const treeMode = state.treeHybridProfile ? `${treeModeBase}/${state.treeHybridProfile}` : treeModeBase;
-        const hybridOptions = state.treeHybridScheduling
-            ? `, seed ${state.treeHybridSeedJobs ?? 4}, seed-bootstrap ${state.treeHybridSeedParallel ? "parallel" : "serial"}, split-first ${state.treeHybridSplitFirst ? "on" : "off"}, sorting ${state.treeHybridJobSorting ? "on" : "off"}, split-gain ${state.treeHybridSplitGainFilter ? "on" : "off"}`
-            : "";
         const spawned = Number.isFinite(state.treeSpawnedJobs) ? `, spawned ${state.treeSpawnedJobs}` : "";
         const tree = state.treeParallel
-            ? `tree ${treeMode}${hybridOptions}, top ${this._formatMs(state.topTreeTime)}, tree max ${this._formatMs(state.treeTimeMax)}, jobs ${state.treeJobCount ?? "n/a"}/${state.treeTargetJobs ?? "n/a"}${spawned}, seed levels ${state.treeSplitLevels ?? "n/a"}, `
+            ? `tree hybrid, top ${this._formatMs(state.topTreeTime)}, tree max ${this._formatMs(state.treeTimeMax)}, seeds ${state.treeJobCount ?? "n/a"}/${state.treeTargetJobs ?? "n/a"}${spawned}, seed levels ${state.treeSplitLevels ?? "n/a"}, `
             : "tree off, ";
         const forceKernel = state.forceKernel || "symmetric";
         const appliedKernel = Array.isArray(state.forceKernelApplied) && state.forceKernelApplied.length

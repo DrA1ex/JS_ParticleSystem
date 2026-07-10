@@ -9,21 +9,9 @@ let forceX = null;
 let forceY = null;
 let collisionVelX = new Float32Array(0);
 let collisionVelY = new Float32Array(0);
-let localX = new Float32Array(0);
-let localY = new Float32Array(0);
-let localMass = new Float32Array(0);
-let localVelX = new Float32Array(0);
-let localVelY = new Float32Array(0);
 let indexBuffers = null;
 let treeWorkspace = null;
 let recursiveBucketIds = new Int32Array(0);
-const recursiveBucketCounts = new Int32Array(4);
-const recursiveBucketStarts = new Int32Array(4);
-const recursiveBucketWrites = new Int32Array(4);
-const recursiveBucketMass = new Float64Array(4);
-const leafTaskPool = [];
-let recursiveSingleBucketSplits = 0;
-let recursiveSkippedScatterParticles = 0;
 let recursivePartitionCountSampleTime = 0;
 let recursivePartitionScatterSampleTime = 0;
 let recursivePartitionCountSampleParticles = 0;
@@ -163,65 +151,13 @@ function ensureCollisionBuffer(length) {
     }
 }
 
-const FORCE_KERNEL_ORDERED = "ordered";
-const FORCE_KERNEL_SYMMETRIC = "symmetric";
-const FORCE_KERNEL_SYMMETRIC_LOCAL = "symmetric-local";
-const FORCE_TIMING_SAMPLE_MASK = 255;
 
-function ensureLocalForceBuffers(length) {
-    if (localX.length >= length) {
-        return;
-    }
-    let capacity = Math.max(16, localX.length || 16);
-    while (capacity < length) capacity *= 2;
-    localX = new Float32Array(capacity);
-    localY = new Float32Array(capacity);
-    localMass = new Float32Array(capacity);
-    localVelX = new Float32Array(capacity);
-    localVelY = new Float32Array(capacity);
-}
 
-function calculateLeafOrdered(indices, start, count, pForceX, pForceY, metrics) {
-    const end = start + count;
-    const particleGravity = settings.physics.particleGravity;
-    const minInteractionDistanceSq = settings.physics.minInteractionDistanceSq;
-    const accumulateForce = !!settings.common.debugForce && forceX && forceY;
 
-    for (let i = start; i < end; i++) {
-        const attractorIndex = indices[i];
-        const attractorOffset = attractorIndex * ITEM_SIZE;
-        const attractorX = particles[attractorOffset];
-        const attractorY = particles[attractorOffset + 1];
-        const g = particleGravity * particles[attractorOffset + 4];
 
-        particles[attractorOffset + 2] += pForceX;
-        particles[attractorOffset + 3] += pForceY;
 
-        for (let j = start; j < end; j++) {
-            if (i === j) continue;
-            const particleIndex = indices[j];
-            const particleOffset = particleIndex * ITEM_SIZE;
-            const dx = particles[particleOffset] - attractorX;
-            const dy = particles[particleOffset + 1] - attractorY;
-            const distSquare = dx * dx + dy * dy;
 
-            if (distSquare >= minInteractionDistanceSq) {
-                const force = -g / distSquare;
-                const vx = dx * force;
-                const vy = dy * force;
-                particles[particleOffset + 2] += vx;
-                particles[particleOffset + 3] += vy;
-
-                if (accumulateForce) {
-                    forceX[particleIndex] += vx;
-                    forceY[particleIndex] += vy;
-                }
-            }
-        }
-    }
-}
-
-function calculateLeafSymmetric(indices, start, count, pForceX, pForceY, metrics) {
+function calculateLeaf(indices, start, count, pForceX, pForceY) {
     const end = start + count;
     const particleGravity = settings.physics.particleGravity;
     const minInteractionDistanceSq = settings.physics.minInteractionDistanceSq;
@@ -244,8 +180,9 @@ function calculateLeafSymmetric(indices, start, count, pForceX, pForceY, metrics
             if (distSquare < minInteractionDistanceSq) continue;
 
             const scale = particleGravity / distSquare;
-            const dvIX = dx * scale * particles[offsetJ + 4];
-            const dvIY = dy * scale * particles[offsetJ + 4];
+            const massJ = particles[offsetJ + 4];
+            const dvIX = dx * scale * massJ;
+            const dvIY = dy * scale * massJ;
             const dvJX = -dx * scale * massI;
             const dvJY = -dy * scale * massI;
             particles[offsetI + 2] += dvIX;
@@ -265,86 +202,6 @@ function calculateLeafSymmetric(indices, start, count, pForceX, pForceY, metrics
         const lastOffset = indices[end - 1] * ITEM_SIZE;
         particles[lastOffset + 2] += pForceX;
         particles[lastOffset + 3] += pForceY;
-    }
-}
-
-function calculateLeafSymmetricLocal(indices, start, count, pForceX, pForceY, metrics, measureTiming) {
-    ensureLocalForceBuffers(count);
-    const particleGravity = settings.physics.particleGravity;
-    const minInteractionDistanceSq = settings.physics.minInteractionDistanceSq;
-    const accumulateForce = !!settings.common.debugForce && forceX && forceY;
-    let t = measureTiming ? performance.now() : 0;
-
-    for (let localIndex = 0; localIndex < count; localIndex++) {
-        const particleIndex = indices[start + localIndex];
-        const offset = particleIndex * ITEM_SIZE;
-        localX[localIndex] = particles[offset];
-        localY[localIndex] = particles[offset + 1];
-        localMass[localIndex] = particles[offset + 4];
-        localVelX[localIndex] = particles[offset + 2];
-        localVelY[localIndex] = particles[offset + 3];
-    }
-    if (measureTiming) {
-        metrics.gatherSampleTime += performance.now() - t;
-        metrics.sampledParticles += count;
-        t = performance.now();
-    }
-
-    for (let i = 0; i < count - 1; i++) {
-        localVelX[i] += pForceX;
-        localVelY[i] += pForceY;
-        const xI = localX[i];
-        const yI = localY[i];
-        const massI = localMass[i];
-        for (let j = i + 1; j < count; j++) {
-            const dx = localX[j] - xI;
-            const dy = localY[j] - yI;
-            const distSquare = dx * dx + dy * dy;
-            if (distSquare < minInteractionDistanceSq) continue;
-
-            const scale = particleGravity / distSquare;
-            localVelX[i] += dx * scale * localMass[j];
-            localVelY[i] += dy * scale * localMass[j];
-            localVelX[j] -= dx * scale * massI;
-            localVelY[j] -= dy * scale * massI;
-        }
-    }
-    if (count > 0) {
-        localVelX[count - 1] += pForceX;
-        localVelY[count - 1] += pForceY;
-    }
-    if (measureTiming) {
-        metrics.pairSampleTime += performance.now() - t;
-        metrics.sampledPairChecks += count * Math.max(0, count - 1) / 2;
-        t = performance.now();
-    }
-
-    for (let localIndex = 0; localIndex < count; localIndex++) {
-        const particleIndex = indices[start + localIndex];
-        const offset = particleIndex * ITEM_SIZE;
-        if (accumulateForce) {
-            forceX[particleIndex] += localVelX[localIndex] - particles[offset + 2] - pForceX;
-            forceY[particleIndex] += localVelY[localIndex] - particles[offset + 3] - pForceY;
-        }
-        particles[offset + 2] = localVelX[localIndex];
-        particles[offset + 3] = localVelY[localIndex];
-    }
-    if (measureTiming) {
-        metrics.flushSampleTime += performance.now() - t;
-    }
-}
-
-function calculateLeaf(indices, start, count, pForceX, pForceY, metrics, measureTiming = false) {
-    switch (metrics.kernel) {
-        case FORCE_KERNEL_SYMMETRIC:
-            calculateLeafSymmetric(indices, start, count, pForceX, pForceY, metrics);
-            break;
-        case FORCE_KERNEL_SYMMETRIC_LOCAL:
-            calculateLeafSymmetricLocal(indices, start, count, pForceX, pForceY, metrics, measureTiming);
-            break;
-        default:
-            calculateLeafOrdered(indices, start, count, pForceX, pForceY, metrics);
-            break;
     }
 }
 
@@ -440,9 +297,7 @@ function buildTreeStats(tree) {
 }
 
 function addTreeProfile(total, profile) {
-    if (!profile) {
-        return;
-    }
+    if (!profile) return;
     total.resetTime += profile.resetTime || 0;
     total.rootBoundsTime += profile.rootBoundsTime || 0;
     total.populateTime += profile.populateTime || 0;
@@ -454,13 +309,9 @@ function addTreeProfile(total, profile) {
     total.partitionTimingSamples += profile.partitionTimingSamples || 0;
     total.nodeInitCount += profile.nodeInitCount || 0;
     total.leafCollectTime += profile.leafCollectTime || 0;
-    total.skippedScatterParticles += profile.skippedScatterParticles || 0;
-    total.singleBucketSplits += profile.singleBucketSplits || 0;
-    total.fusedAggregate = total.fusedAggregate || profile.fusedAggregate === true;
-    total.fastBuildApplied = total.fastBuildApplied || profile.fastBuildApplied === true;
-    total.fusedAggregateApplied = total.fusedAggregateApplied || profile.fusedAggregateApplied === true;
     total.fastBucketPath = total.fastBucketPath && profile.fastBucketPath !== false;
 }
+
 
 function collectLeafTasks(tree, nodeId, pForceX, pForceY, tasks) {
     if (tree.nodeChildCount[nodeId] === 0) {
@@ -503,107 +354,30 @@ function collectLeafTasks(tree, nodeId, pForceX, pForceY, tasks) {
     }
 }
 
-function writeLeafTask(taskIndex, start, count, indexBuffer, forceX, forceY) {
-    let task = leafTaskPool[taskIndex];
-    if (!task) {
-        task = {start: 0, count: 0, indexBuffer: 0, forceX: 0, forceY: 0};
-        leafTaskPool[taskIndex] = task;
-    }
-    task.start = start;
-    task.count = count;
-    task.indexBuffer = indexBuffer;
-    task.forceX = forceX;
-    task.forceY = forceY;
-}
 
-function collectLeafTasksLinear(tree, rootForceX, rootForceY, taskOffset = 0) {
-    const particleGravity = settings.physics.particleGravity;
-    const minInteractionDistanceSq = settings.physics.minInteractionDistanceSq;
-    const nodeForceX = tree.nodeForceX;
-    const nodeForceY = tree.nodeForceY;
-    nodeForceX[tree.root] = rootForceX;
-    nodeForceY[tree.root] = rootForceY;
-    let taskCount = taskOffset;
-
-    for (let nodeId = tree.root; nodeId < tree.nodeCount; nodeId++) {
-        const childCount = tree.nodeChildCount[nodeId];
-        if (childCount === 0) {
-            writeLeafTask(taskCount++, tree.nodeStart[nodeId], tree.nodeParticleCount[nodeId],
-                tree.nodeIndexBuffer[nodeId], nodeForceX[nodeId], nodeForceY[nodeId]);
-            continue;
-        }
-
-        const firstChild = tree.nodeFirstChild[nodeId];
-        for (let i = 0; i < childCount; i++) {
-            const childId = firstChild + i;
-            let forceX = nodeForceX[nodeId];
-            let forceY = nodeForceY[nodeId];
-            const childCenterX = tree.nodeCenterX[childId];
-            const childCenterY = tree.nodeCenterY[childId];
-
-            for (let j = 0; j < childCount; j++) {
-                if (i === j) continue;
-                const otherId = firstChild + j;
-                const dx = childCenterX - tree.nodeCenterX[otherId];
-                const dy = childCenterY - tree.nodeCenterY[otherId];
-                const distSquare = dx * dx + dy * dy;
-                if (distSquare >= minInteractionDistanceSq) {
-                    const force = -(particleGravity * tree.nodeMass[otherId]) / distSquare;
-                    forceX += dx * force;
-                    forceY += dy * force;
-                }
-            }
-
-            nodeForceX[childId] = forceX;
-            nodeForceY[childId] = forceY;
-        }
-    }
-
-    return taskCount;
-}
 
 function createForceMetrics() {
-    const configured = settings.simulation.workerMtForceKernel;
-    const kernel = configured === FORCE_KERNEL_SYMMETRIC || configured === FORCE_KERNEL_SYMMETRIC_LOCAL
-        ? configured
-        : FORCE_KERNEL_ORDERED;
     return {
-        kernel,
         pairChecks: 0,
         kernelTime: 0,
         collisionTime: 0,
-        gatherSampleTime: 0,
-        pairSampleTime: 0,
-        flushSampleTime: 0,
-        sampledParticles: 0,
-        sampledPairChecks: 0,
-        timingSamples: 0,
-        totalParticles: 0,
     };
 }
 
+
 function finalizeForceMetrics(metrics) {
-    let gatherTime = 0;
-    let pairTime = metrics.kernelTime;
-    let flushTime = 0;
-    if (metrics.kernel === FORCE_KERNEL_SYMMETRIC_LOCAL && metrics.sampledParticles > 0) {
-        const particleScale = metrics.totalParticles / metrics.sampledParticles;
-        const pairScale = metrics.sampledPairChecks > 0 ? metrics.pairChecks / metrics.sampledPairChecks : 0;
-        gatherTime = metrics.gatherSampleTime * particleScale;
-        pairTime = metrics.pairSampleTime * pairScale;
-        flushTime = metrics.flushSampleTime * particleScale;
-    }
     return {
-        forceKernel: metrics.kernel,
+        forceKernel: "symmetric",
         forcePairChecks: metrics.pairChecks,
         forceKernelTime: metrics.kernelTime,
         forceCollisionTime: metrics.collisionTime,
-        forceGatherTime: gatherTime,
-        forcePairTime: pairTime,
-        forceFlushTime: flushTime,
-        forceTimingSamples: metrics.timingSamples,
+        forceGatherTime: 0,
+        forcePairTime: metrics.kernelTime,
+        forceFlushTime: 0,
+        forceTimingSamples: 0,
     };
 }
+
 
 function processLeafTasks(tasks, taskCount = tasks.length) {
     let particleCount = 0;
@@ -612,17 +386,11 @@ function processLeafTasks(tasks, taskCount = tasks.length) {
     for (let i = 0; i < taskCount; i++) {
         const task = tasks[i];
         const indices = indexBuffers[task.indexBuffer];
-        const directedPairChecks = task.count * Math.max(0, task.count - 1);
-        forceMetrics.pairChecks += forceMetrics.kernel === FORCE_KERNEL_ORDERED
-            ? directedPairChecks
-            : directedPairChecks / 2;
-        const measureTiming = forceMetrics.kernel === FORCE_KERNEL_SYMMETRIC_LOCAL && (i & FORCE_TIMING_SAMPLE_MASK) === 0;
-        if (measureTiming) forceMetrics.timingSamples += 1;
-        calculateLeaf(indices, task.start, task.count, task.forceX, task.forceY, forceMetrics, measureTiming);
+        forceMetrics.pairChecks += task.count * Math.max(0, task.count - 1) / 2;
+        calculateLeaf(indices, task.start, task.count, task.forceX, task.forceY);
         particleCount += task.count;
     }
     forceMetrics.kernelTime = performance.now() - t;
-    forceMetrics.totalParticles = particleCount;
 
     if (settings.physics.enableCollision) {
         t = performance.now();
@@ -641,8 +409,14 @@ function processLeafTasks(tasks, taskCount = tasks.length) {
     }
     const integrateTime = performance.now() - t;
 
-    return {forceTime, integrateTime, particleCount, ...finalizeForceMetrics(forceMetrics)};
+    return {
+        forceTime,
+        integrateTime,
+        particleCount,
+        ...finalizeForceMetrics(forceMetrics),
+    };
 }
+
 
 
 function ensureRecursiveBucketIds(length) {
@@ -676,7 +450,6 @@ function parallelNodeHasSinglePoint(node, indices) {
 }
 
 function splitRecursiveNode(node) {
-    const fastBuild = settings.simulation.workerMtTreeFastBuild === true;
     const sourceIndices = indexBuffers[node.indexBuffer];
     const targetBufferId = 1 - node.indexBuffer;
     const targetIndices = indexBuffers[targetBufferId];
@@ -684,48 +457,26 @@ function splitRecursiveNode(node) {
     const top = node.top;
     const right = node.right;
     const bottom = node.bottom;
-    const width = right - left;
-    const height = bottom - top;
-    const xMid = buildParallelMid(left, width);
-    const yMid = buildParallelMid(top, height);
+    const xMid = buildParallelMid(left, right - left);
+    const yMid = buildParallelMid(top, bottom - top);
     const start = node.start;
     const end = start + node.count;
-    const bucketCounts = fastBuild ? recursiveBucketCounts : new Int32Array(4);
-    const bucketMass = fastBuild ? recursiveBucketMass : new Float64Array(4);
-    bucketCounts.fill(0);
-    bucketMass.fill(0);
+    const bucketCounts = new Int32Array(4);
+    const bucketMass = new Float64Array(4);
     ensureRecursiveBucketIds(node.count);
     let usedBuckets = 0;
-    let usedBucketIndex = -1;
-    let firstX = 0;
-    let firstY = 0;
-    let singlePoint = true;
-    if (fastBuild) {
-        const firstOffset = sourceIndices[start] * ITEM_SIZE;
-        firstX = particles[firstOffset];
-        firstY = particles[firstOffset + 1];
-    }
 
     const measurePartitionTiming = (recursivePartitionTimingCounter++ & RECURSIVE_PARTITION_TIMING_MASK) === 0;
     let partitionTimer = measurePartitionTiming ? performance.now() : 0;
     for (let i = start; i < end; i++) {
         const particleIndex = sourceIndices[i];
         const offset = particleIndex * ITEM_SIZE;
-        const xValue = particles[offset];
-        const yValue = particles[offset + 1];
-        const bucketIndex = (xValue < xMid ? 0 : 2) + (yValue < yMid ? 0 : 1);
+        const bucketIndex = (particles[offset] < xMid ? 0 : 2) + (particles[offset + 1] < yMid ? 0 : 1);
         recursiveBucketIds[i - start] = bucketIndex;
-        if (bucketCounts[bucketIndex] === 0) {
-            usedBuckets += 1;
-            usedBucketIndex = bucketIndex;
-        }
+        if (bucketCounts[bucketIndex] === 0) usedBuckets += 1;
         bucketCounts[bucketIndex] += 1;
         bucketMass[bucketIndex] += particles[offset + 4];
-        if (fastBuild && singlePoint && (Math.abs(xValue - firstX) > EPSILON || Math.abs(yValue - firstY) > EPSILON)) {
-            singlePoint = false;
-        }
     }
-
     recursivePartitionCountParticles += node.count;
     if (measurePartitionTiming) {
         recursivePartitionCountSampleTime += performance.now() - partitionTimer;
@@ -733,44 +484,10 @@ function splitRecursiveNode(node) {
         recursivePartitionTimingSamples += 1;
     }
 
-    if (usedBuckets <= 1 && (fastBuild ? singlePoint : parallelNodeHasSinglePoint(node, sourceIndices))) {
-        return [node];
-    }
+    if (usedBuckets <= 1 && parallelNodeHasSinglePoint(node, sourceIndices)) return [node];
 
-    const createChild = (bucketIndex, childStart, childCount, childBufferId) => {
-        const x = bucketIndex >> 1;
-        const y = bucketIndex & 1;
-        const childLeft = x === 0 ? left : xMid;
-        const childRight = x === 0 ? xMid : right + EPSILON;
-        const childTop = y === 0 ? top : yMid;
-        const childBottom = y === 0 ? yMid : bottom + EPSILON;
-        return {
-            start: childStart,
-            count: childCount,
-            indexBuffer: childBufferId,
-            depth: node.depth + 1,
-            left: childLeft,
-            top: childTop,
-            right: childRight,
-            bottom: childBottom,
-            centerX: childLeft + (childRight - childLeft) / 2,
-            centerY: childTop + (childBottom - childTop) / 2,
-            mass: bucketMass[bucketIndex],
-            parentForceX: node.parentForceX,
-            parentForceY: node.parentForceY,
-            singleBucketDescent: usedBuckets === 1,
-            singleBucketDepth: (node.singleBucketDepth || 0) + (usedBuckets === 1 ? 1 : 0),
-        };
-    };
-
-    if (fastBuild && usedBuckets === 1) {
-        recursiveSingleBucketSplits += 1;
-        recursiveSkippedScatterParticles += node.count;
-        return [createChild(usedBucketIndex, start, node.count, node.indexBuffer)];
-    }
-
-    const bucketStarts = fastBuild ? recursiveBucketStarts : new Int32Array(4);
-    const bucketWrites = fastBuild ? recursiveBucketWrites : new Int32Array(4);
+    const bucketStarts = new Int32Array(4);
+    const bucketWrites = new Int32Array(4);
     let writeStart = start;
     for (let i = 0; i < 4; i++) {
         bucketStarts[i] = writeStart;
@@ -793,17 +510,37 @@ function splitRecursiveNode(node) {
 
     const children = [];
     for (let bucketIndex = 0; bucketIndex < 4; bucketIndex++) {
-        const bucketCount = bucketCounts[bucketIndex];
-        if (bucketCount === 0) continue;
-        children.push(createChild(bucketIndex, bucketStarts[bucketIndex], bucketCount, targetBufferId));
+        const count = bucketCounts[bucketIndex];
+        if (count === 0) continue;
+        const x = bucketIndex >> 1;
+        const y = bucketIndex & 1;
+        const childLeft = x === 0 ? left : xMid;
+        const childRight = x === 0 ? xMid : right + EPSILON;
+        const childTop = y === 0 ? top : yMid;
+        const childBottom = y === 0 ? yMid : bottom + EPSILON;
+        children.push({
+            start: bucketStarts[bucketIndex],
+            count,
+            indexBuffer: targetBufferId,
+            depth: node.depth + 1,
+            left: childLeft,
+            top: childTop,
+            right: childRight,
+            bottom: childBottom,
+            centerX: childLeft + (childRight - childLeft) / 2,
+            centerY: childTop + (childBottom - childTop) / 2,
+            mass: bucketMass[bucketIndex],
+            parentForceX: node.parentForceX,
+            parentForceY: node.parentForceY,
+        });
     }
 
     const particleGravity = settings.physics.particleGravity;
     const minInteractionDistanceSq = settings.physics.minInteractionDistanceSq;
     for (let i = 0; i < children.length; i++) {
         const child = children[i];
-        let forceX = child.parentForceX;
-        let forceY = child.parentForceY;
+        let forceXValue = child.parentForceX;
+        let forceYValue = child.parentForceY;
         for (let j = 0; j < children.length; j++) {
             if (i === j) continue;
             const other = children[j];
@@ -812,16 +549,16 @@ function splitRecursiveNode(node) {
             const distSquare = dx * dx + dy * dy;
             if (distSquare >= minInteractionDistanceSq) {
                 const force = -(particleGravity * other.mass) / distSquare;
-                forceX += dx * force;
-                forceY += dy * force;
+                forceXValue += dx * force;
+                forceYValue += dy * force;
             }
         }
-        child.parentForceX = forceX;
-        child.parentForceY = forceY;
+        child.parentForceX = forceXValue;
+        child.parentForceY = forceYValue;
     }
-
     return children;
 }
+
 
 function shouldSplitRecursiveNode(node, splitBudget, minJobParticles) {
     return splitBudget > 0 &&
@@ -830,35 +567,7 @@ function shouldSplitRecursiveNode(node, splitBudget, minJobParticles) {
         node.bottom - node.top > EPSILON;
 }
 
-function estimateHybridNodeWorkByCount(count, depth = 1) {
-    if (!Number.isFinite(count) || count <= 0) {
-        return 0;
-    }
 
-    const treeCost = count * Math.max(1, Math.log2(Math.max(2, count)));
-    const solveTailCost = count * Math.sqrt(Math.max(1, count));
-    const depthBias = 1 + Math.min(0.5, Math.max(0, depth - 1) * 0.025);
-    return (treeCost + solveTailCost * 0.02) * depthBias;
-}
-
-function isUsefulHybridSplit(job, children) {
-    if (children.length <= 1) {
-        return false;
-    }
-
-    let largest = 0;
-    let criticalChildWork = 0;
-    for (const child of children) {
-        largest = Math.max(largest, child.count);
-        criticalChildWork = Math.max(criticalChildWork, estimateHybridNodeWorkByCount(child.count, child.depth));
-    }
-
-    const largestRatio = largest / Math.max(1, job.count);
-    const parentWork = estimateHybridNodeWorkByCount(job.count, job.depth);
-    const criticalGain = parentWork > 0 ? (parentWork - criticalChildWork) / parentWork : 0;
-
-    return largestRatio <= 0.9 || criticalGain >= 0.1;
-}
 
 function readTreeJobs(data) {
     const jobStarts = new Uint32Array(data.jobStartsBuffer);
@@ -918,38 +627,24 @@ function createEmptyTreeProfile() {
         partitionTimingSamples: 0,
         nodeInitCount: 0,
         leafCollectTime: 0,
-        skippedScatterParticles: 0,
-        singleBucketSplits: 0,
-        fusedAggregate: false,
-        fastBuildApplied: false,
-        fusedAggregateApplied: false,
         fastBucketPath: true,
     };
 }
 
+
 function buildAndProcessTreeJobs(jobs, requestId, extra = {}, options = {}) {
-    const fastBuild = options.treeFastBuild === true;
-    const tasks = fastBuild ? leafTaskPool : [];
-    let taskCount = 0;
+    const tasks = [];
     const treeProfile = createEmptyTreeProfile();
-    treeProfile.fastBuildApplied = fastBuild;
-    treeProfile.fusedAggregateApplied = fastBuild && options.treeFusedAggregate === true;
     const treeStats = {flops: 0, depth: 0, segmentCount: 0};
     const treeDebug = options.debugTree ? (Array.isArray(options.treeDebug) ? options.treeDebug.slice() : []) : null;
 
     if (!treeWorkspace) {
-        treeWorkspace = {
-            indices: indexBuffers[0],
-            scratchIndices: indexBuffers[1],
-        };
+        treeWorkspace = {indices: indexBuffers[0], scratchIndices: indexBuffers[1]};
     }
 
     const treeStart = performance.now();
     for (const job of jobs) {
-        if (job.count === 0) {
-            continue;
-        }
-
+        if (job.count === 0) continue;
         const tree = new FlatSpatialTree(
             particles,
             settings.simulation.segmentMaxCount,
@@ -960,8 +655,6 @@ function buildAndProcessTreeJobs(jobs, requestId, extra = {}, options = {}) {
                 count: job.count,
                 indexCapacity: Math.floor(particles.length / ITEM_SIZE),
                 skipIndexReset: true,
-                fastBuild,
-                fusedAggregate: options.treeFusedAggregate === true,
                 root: {
                     start: job.start,
                     count: job.count,
@@ -974,27 +667,18 @@ function buildAndProcessTreeJobs(jobs, requestId, extra = {}, options = {}) {
                 }
             }
         );
-
         addTreeProfile(treeProfile, tree.profile);
-        if (treeDebug) {
-            treeDebug.push(...tree.getDebugData());
-        }
+        if (treeDebug) treeDebug.push(...tree.getDebugData());
         const stats = buildTreeStats(tree);
         treeStats.flops += stats.flops;
         treeStats.depth = Math.max(treeStats.depth, stats.depth);
         treeStats.segmentCount += stats.segmentCount;
         const leafCollectStart = performance.now();
-        if (fastBuild) {
-            taskCount = collectLeafTasksLinear(tree, job.parentForceX, job.parentForceY, taskCount);
-        } else {
-            collectLeafTasks(tree, tree.root, job.parentForceX, job.parentForceY, tasks);
-            taskCount = tasks.length;
-        }
+        collectLeafTasks(tree, tree.root, job.parentForceX, job.parentForceY, tasks);
         treeProfile.leafCollectTime += performance.now() - leafCollectStart;
     }
     const treeTime = performance.now() - treeStart;
-
-    const processed = processLeafTasks(tasks, taskCount);
+    const processed = processLeafTasks(tasks);
 
     postMessage({
         type: "done",
@@ -1004,7 +688,7 @@ function buildAndProcessTreeJobs(jobs, requestId, extra = {}, options = {}) {
         treeStats,
         forceTime: processed.forceTime,
         integrateTime: processed.integrateTime,
-        leafCount: taskCount,
+        leafCount: tasks.length,
         particleCount: processed.particleCount,
         forceKernel: processed.forceKernel,
         forcePairChecks: processed.forcePairChecks,
@@ -1020,112 +704,15 @@ function buildAndProcessTreeJobs(jobs, requestId, extra = {}, options = {}) {
     });
 }
 
-function processRecursiveTreeJobs(data) {
-    resetRecursivePartitionProfile();
-    recursiveSingleBucketSplits = 0;
-    recursiveSkippedScatterParticles = 0;
-    const jobs = readTreeJobs(data);
-    const splitBudget = Number.isFinite(data.splitBudget) ? data.splitBudget : 8;
-    const minJobParticles = Number.isFinite(data.minJobParticles) ? data.minJobParticles : 8192;
-    const stack = jobs.slice();
-    const localJobs = [];
-    const spawnedJobs = [];
-    const treeDebug = data.debugTree === true ? [] : null;
-    let splitCount = 0;
-    const splitStart = performance.now();
-
-    while (stack.length > 0) {
-        const job = stack.pop();
-        if (shouldSplitRecursiveNode(job, splitBudget - splitCount, minJobParticles)) {
-            const children = splitRecursiveNode(job);
-            if (data.treeFastBuild === true && children.length === 1 && children[0].singleBucketDescent === true && children[0].singleBucketDepth <= 64) {
-                if (treeDebug) {
-                    treeDebug.push(createDebugEntryFromJob(job));
-                }
-                stack.push(children[0]);
-                continue;
-            }
-            if (children.length > 1) {
-                if (treeDebug) {
-                    treeDebug.push(createDebugEntryFromJob(job));
-                }
-                splitCount += 1;
-                for (const child of children) {
-                    if (splitCount < splitBudget && child.count > minJobParticles * 2) {
-                        stack.push(child);
-                    } else if (child.count > minJobParticles) {
-                        spawnedJobs.push(child);
-                    } else {
-                        localJobs.push(child);
-                    }
-                }
-                continue;
-            }
-        }
-
-        if (job.count > minJobParticles && splitCount >= splitBudget) {
-            spawnedJobs.push(job);
-        } else {
-            localJobs.push(job);
-        }
-    }
-
-    const splitTime = performance.now() - splitStart;
-    if (localJobs.length === 0) {
-        postMessage({
-            type: "done",
-            requestId: data.requestId,
-            treeTime: splitTime,
-            treeProfile: {
-                resetTime: 0,
-                rootBoundsTime: 0,
-                populateTime: splitTime,
-                aggregateTime: 0,
-                fastBuildApplied: data.treeFastBuild === true,
-                fusedAggregateApplied: data.treeFastBuild === true && data.treeFusedAggregate === true,
-                fastBucketPath: true,
-            },
-            treeStats: {flops: 0, depth: 0, segmentCount: 0},
-            forceTime: 0,
-            integrateTime: 0,
-            leafCount: 0,
-            particleCount: 0,
-            jobCount: 0,
-            treeDebug: treeDebug || undefined,
-            spawnedJobs,
-            recursiveSplitCount: splitCount,
-            recursiveSingleBucketSplits,
-            recursiveSkippedScatterParticles,
-            ...getRecursivePartitionProfile(),
-        });
-        return;
-    }
-
-    buildAndProcessTreeJobs(localJobs, data.requestId, {
-        spawnedJobs,
-        recursiveSplitCount: splitCount,
-        recursiveSplitTime: splitTime,
-        recursiveSingleBucketSplits,
-        recursiveSkippedScatterParticles,
-        ...getRecursivePartitionProfile(),
-    }, {debugTree: data.debugTree === true, treeDebug, treeFastBuild: data.treeFastBuild === true, treeFusedAggregate: data.treeFusedAggregate === true});
-}
 
 
-function postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, rejectedSplits, hybridEarlySplit = false, treeDebug = null) {
+
+function postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, treeDebug = null) {
     postMessage({
         type: "done",
         requestId: data.requestId,
         treeTime: splitTime,
-        treeProfile: {
-            resetTime: 0,
-            rootBoundsTime: 0,
-            populateTime: splitTime,
-            aggregateTime: 0,
-            fastBuildApplied: data.treeFastBuild === true,
-            fusedAggregateApplied: data.treeFastBuild === true && data.treeFusedAggregate === true,
-            fastBucketPath: true,
-        },
+        treeProfile: {resetTime: 0, rootBoundsTime: 0, populateTime: splitTime, aggregateTime: 0, fastBucketPath: true},
         treeStats: {flops: 0, depth: 0, segmentCount: 0},
         forceTime: 0,
         integrateTime: 0,
@@ -1136,108 +723,60 @@ function postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, rej
         spawnedJobs,
         recursiveSplitCount: splitCount,
         recursiveSplitTime: splitTime,
-        hybridEarlySplit,
-        hybridEarlySplitJobs: hybridEarlySplit ? spawnedJobs.length : 0,
-        hybridRejectedSplits: rejectedSplits,
-        recursiveSingleBucketSplits,
-        recursiveSkippedScatterParticles,
+        hybridEarlySplit: spawnedJobs.length > 0,
+        hybridEarlySplitJobs: spawnedJobs.length,
         ...getRecursivePartitionProfile(),
-        forceKernel: settings.simulation.workerMtForceKernel,
+        forceKernel: "symmetric",
     });
 }
 
+
 function processHybridTreeJobs(data) {
     resetRecursivePartitionProfile();
-    recursiveSingleBucketSplits = 0;
-    recursiveSkippedScatterParticles = 0;
     const jobs = readTreeJobs(data);
-    const splitBudget = Number.isFinite(data.splitBudget) ? data.splitBudget : 2;
-    const minJobParticles = Number.isFinite(data.minJobParticles) ? data.minJobParticles : 16384;
-    const splitFirst = data.hybridSplitFirst !== false;
-    const splitGainFilter = data.hybridSplitGainFilter === true;
-    const stack = jobs.slice();
+    const splitBudget = Number.isFinite(data.splitBudget) ? data.splitBudget : 1;
+    const minJobParticles = Number.isFinite(data.minJobParticles) ? data.minJobParticles : 32768;
     const localJobs = [];
     const spawnedJobs = [];
     const treeDebug = data.debugTree === true ? [] : null;
     let splitCount = 0;
-    let rejectedSplits = 0;
     const splitStart = performance.now();
 
-    while (stack.length > 0) {
-        const job = stack.pop();
+    for (const job of jobs) {
         if (shouldSplitRecursiveNode(job, splitBudget - splitCount, minJobParticles)) {
             const children = splitRecursiveNode(job);
-            if (data.treeFastBuild === true && children.length === 1 && children[0].singleBucketDescent === true && children[0].singleBucketDepth <= 64) {
-                if (treeDebug) {
-                    treeDebug.push(createDebugEntryFromJob(job));
-                }
-                stack.push(children[0]);
-                continue;
-            }
-            const acceptSplit = children.length > 1 && (!splitGainFilter || isUsefulHybridSplit(job, children));
-            if (acceptSplit) {
-                if (treeDebug) {
-                    treeDebug.push(createDebugEntryFromJob(job));
-                }
-                splitCount += 1;
-                children.sort((a, b) => b.count - a.count);
-                for (const child of children) {
-                    const canSplitChild = splitCount < splitBudget && child.count > minJobParticles * 2;
-                    if (canSplitChild) {
-                        stack.push(child);
-                    } else if (splitFirst) {
-                        spawnedJobs.push(child);
-                    } else if (child.count > minJobParticles) {
-                        spawnedJobs.push(child);
-                    } else {
-                        localJobs.push(child);
-                    }
-                }
-                continue;
-            }
             if (children.length > 1) {
-                rejectedSplits += 1;
+                if (treeDebug) treeDebug.push(createDebugEntryFromJob(job));
+                splitCount += 1;
+                spawnedJobs.push(...children);
+                continue;
             }
         }
-
         localJobs.push(job);
     }
 
     const splitTime = performance.now() - splitStart;
-
-    // Default hybrid behavior remains split-first: when a request produced child
-    // jobs, return them to the coordinator immediately. The setting lets us
-    // compare that against a more recursive local-processing path without
-    // adding another public tree strategy.
-    if (splitFirst && spawnedJobs.length > 0) {
+    if (spawnedJobs.length > 0) {
         spawnedJobs.push(...localJobs);
         spawnedJobs.sort((a, b) => b.count - a.count);
-        postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, rejectedSplits, true, treeDebug);
+        postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, treeDebug);
         return;
     }
-
     if (localJobs.length === 0) {
-        postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, rejectedSplits, false, treeDebug);
+        postEmptyHybridTreeResult(data, splitTime, [], splitCount, treeDebug);
         return;
     }
-
     buildAndProcessTreeJobs(localJobs, data.requestId, {
-        spawnedJobs,
+        spawnedJobs: [],
         recursiveSplitCount: splitCount,
         recursiveSplitTime: splitTime,
         hybridEarlySplit: false,
         hybridEarlySplitJobs: 0,
-        hybridRejectedSplits: rejectedSplits,
-        recursiveSingleBucketSplits,
-        recursiveSkippedScatterParticles,
         ...getRecursivePartitionProfile(),
-    }, {debugTree: data.debugTree === true, treeDebug, treeFastBuild: data.treeFastBuild === true, treeFusedAggregate: data.treeFusedAggregate === true});
+    }, {debugTree: data.debugTree === true, treeDebug});
 }
 
-function processTreeJobs(data) {
-    const jobs = readTreeJobs(data);
-    buildAndProcessTreeJobs(jobs, data.requestId, {}, {debugTree: data.debugTree === true, treeFastBuild: data.treeFastBuild === true, treeFusedAggregate: data.treeFusedAggregate === true});
-}
+
 
 function processTasks(data) {
     const leafStarts = new Uint32Array(data.leafStartsBuffer);
@@ -1252,17 +791,11 @@ function processTasks(data) {
     for (let i = 0; i < leafStarts.length; i++) {
         const indices = indexBuffers[leafIndexBuffers[i]];
         const count = leafCounts[i];
-        const directedPairChecks = count * Math.max(0, count - 1);
-        forceMetrics.pairChecks += forceMetrics.kernel === FORCE_KERNEL_ORDERED
-            ? directedPairChecks
-            : directedPairChecks / 2;
-        const measureTiming = forceMetrics.kernel === FORCE_KERNEL_SYMMETRIC_LOCAL && (i & FORCE_TIMING_SAMPLE_MASK) === 0;
-        if (measureTiming) forceMetrics.timingSamples += 1;
-        calculateLeaf(indices, leafStarts[i], count, parentForceX[i], parentForceY[i], forceMetrics, measureTiming);
+        forceMetrics.pairChecks += count * Math.max(0, count - 1) / 2;
+        calculateLeaf(indices, leafStarts[i], count, parentForceX[i], parentForceY[i]);
         particleCount += count;
     }
     forceMetrics.kernelTime = performance.now() - t;
-    forceMetrics.totalParticles = particleCount;
 
     if (settings.physics.enableCollision) {
         t = performance.now();
@@ -1290,6 +823,7 @@ function processTasks(data) {
     });
 }
 
+
 onmessage = (event) => {
     const data = event.data;
     switch (data.type) {
@@ -1309,12 +843,6 @@ onmessage = (event) => {
             break;
         case "process":
             processTasks(data);
-            break;
-        case "process-tree":
-            processTreeJobs(data);
-            break;
-        case "process-tree-recursive":
-            processRecursiveTreeJobs(data);
             break;
         case "process-tree-hybrid":
             processHybridTreeJobs(data);

@@ -10,7 +10,7 @@ The simulation is an N-Body system, where all particles interact with each other
 _50,000 particles forms a Galaxy-like
 image_ (Try it yourself: [#1](https://dra1ex.github.io/JS_ParticleSystem/n_body/?state=../static/galaxy1.json), [#2](https://dra1ex.github.io/JS_ParticleSystem/n_body/?state=../static/galaxy2.json), [#3](https://dra1ex.github.io/JS_ParticleSystem/n_body/?state=../static/galaxy3.json))
 
-Imported universe state files override matching universe parameters, including the actual particle count, initializer, mass distribution, world size and saved physics/visual state, even when those values were present in the URL. The URL is updated after import, while backend, worker, tree, renderer-pipeline, debug and performance-tuning choices that are not stored in the file remain unchanged.
+Imported universe state files restore the particle data and saved universe parameters without rewriting the current URL. Runtime choices such as backend, worker count, renderer, debug options and performance tuning remain unchanged unless they are part of the imported state.
 
 [<img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/194406835-25e8af62-3361-45d9-8e53-836f68ae04b3.png">](https://user-images.githubusercontent.com/1194059/194406257-721f5516-9685-425c-b157-f4f28aa12c64.png) [ <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/194406943-f9996d31-2b2d-402f-b50c-6634538a7a5d.png">](https://user-images.githubusercontent.com/1194059/194406416-311b8dfc-857f-458c-8d7c-5cba1cac4636.png) <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193401669-acc131b5-9aa6-4ddb-b2b2-582986dc7320.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193060048-2f9dd976-e675-42f2-aef1-1f381a807ced.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193402299-c9728ea3-b29d-4174-a4d1-3930c85cd863.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193402786-c9d376cf-5170-47e0-974d-c31bd3710558.png"> <img height="250" alt="image" src="https://user-images.githubusercontent.com/1194059/193416793-244cf9ba-1218-455b-abf8-da453f3bc14e.png">
 
@@ -35,8 +35,8 @@ _Visualization of 1,000,000 particles (click image to open YouTube video)_
 - Accurate CPU simulation, galaxy-like pattern may born (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=250000&segment_max_count=32&segment_auto=0&particle_init=bang)
 - Fast CPU simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=60000&particle_init=rotation&g=1000)
 - Fast CPU simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=60000&particle_init=collision&g=1000)
-- Big CPU multithreaded simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&particle_count=500000&segment_auto=1)
-- Big CPU multithreaded simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=6&worker_mt_tree_strategy=hybrid&particle_count=750000&segment_auto=1)
+- Big CPU multithreaded simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&particle_count=500000&segment_auto=1)
+- Big CPU multithreaded simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=6&particle_count=750000&segment_auto=1)
 - Big GPGPU simulation (#1): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=16384&segment_max_count=128&particle_init=uniform&particle_mass=10&g=10)
 - Big GPGPU simulation (#2): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=gpgpu&particle_count=16384&segment_max_count=128&particle_mass=10&g=100)
 - Particle collisions CPU (accurate): [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&collision=1)
@@ -121,42 +121,28 @@ _Demo links_:
 Supported backends:
 
 ##### `worker-mt`
-`worker-mt` is a multithreaded CPU backend. It keeps the same spatial-tree approximation as `worker`, but distributes leaf force solving and particle integration across several subworkers. This backend is useful when the simulation is CPU-bound and the machine has several available cores.
+`worker-mt` is the default and recommended CPU backend. It uses one production pipeline rather than exposing the historical scheduler experiments:
 
-The number of subworkers can be selected with the `worker_threads` parameter. Supported values are `auto`, `2`, `4`, `6`, `8`, `12`, `16`, and `20`. The `auto` mode uses browser hardware concurrency information when available, keeps one logical processor available for the coordinator/main thread, and otherwise falls back to a safe default. `auto` is recommended; explicit higher values are useful for profiling machines with many logical processors, but may still add scheduling overhead.
+- four root seed regions are prepared in parallel;
+- heavy regions are split recursively and returned to a globally sorted queue;
+- exact interactions inside leaves use the symmetric pair kernel, evaluating every pair once;
+- `SharedArrayBuffer` keeps particle and tree-index data shared between workers.
 
-The static and dynamic tree schedulers can be tuned with `worker_mt_tree_jobs`. Supported values are `auto`, `16`, `32`, `64`, and `128`. The default `auto` mode is intentionally conservative: it avoids spending too much coordinator time preparing work before subworkers can start. Hybrid uses the separate `worker_mt_hybrid_seed_jobs` setting instead.
+The only worker-specific tuning exposed to users is `worker_threads`. `auto` keeps one logical processor available for the coordinator/main thread and selects the nearest supported worker count. The effective leaf size can be controlled with `segment_max_count` or selected automatically with `segment_auto=1`.
 
-The tree split strategy can be selected with `worker_mt_tree_strategy`. Supported values are `static`, `dynamic`, `recursive`, and `hybrid`. `hybrid` is the default. `dynamic` is the conservative queue-based baseline. `static` is useful as a simple baseline. `recursive` is a legacy experiment that starts from coarse regions and lets subworkers split heavy jobs further, but it can produce a weaker downstream calc/force pipeline. `hybrid` is the recommended high-performance CPU profile: by default it uses the `coarse` hybrid profile, split-first recursive job release, and hybrid job sorting.
+Real multithreading requires cross-origin isolation and `SharedArrayBuffer`. On static hosting, the app can install a local COOP/COEP service worker and reload once. If isolation is unavailable, `worker-mt` falls back to its single-threaded path.
 
-Hybrid-specific tuning is available through `worker_mt_hybrid_profile`, `worker_mt_hybrid_seed_jobs`, `worker_mt_hybrid_seed_parallel`, `worker_mt_hybrid_split_first`, `worker_mt_hybrid_job_sorting`, and `worker_mt_hybrid_split_gain`. Hybrid seed-job values are `4`, `8`, `16`, `32`, and `64`; `4` is the default. The recommended default hybrid combination is `coarse`, 4 seed jobs, parallel seed bootstrap, split-first enabled, job sorting enabled, and split-gain filtering disabled. Four seed jobs keep coordinator preparation shallow while later recursive splitting remains unrestricted. Set `worker_mt_hybrid_seed_parallel=0` only to compare against the original serial root bootstrap.
-
-Worker MT also exposes the experimental `worker_mt_tree_fast_build=1` subtree kernel. It keeps the current scheduler and force calculation, but skips index scatter for single-bucket descents, reuses recursive split workspaces, and uses a reusable linear leaf-task collector. The default remains `0` until benchmark suites confirm the result across both dense and regular particle distributions. `worker_mt_tree_fused_aggregate=1` is a separate nested experiment: it accumulates child masses during every partition pass and skips the later aggregate pass, but is disabled by default because the extra mass reads may not help every tree shape.
-
-Leaf-force kernels are available through `worker_mt_force_kernel=ordered|symmetric|symmetric-local`. `symmetric` is the default: it evaluates each unique pair once and applies both accelerations while preserving the per-particle accumulation order. `ordered` remains available as the legacy control kernel and evaluates both directed interactions separately. `symmetric-local` additionally gathers each leaf into reusable local typed arrays and flushes velocities once per particle, but remains experimental. Reports include the requested and applied kernel, exact pair-check counts, and sampled gather/pair/flush timing estimates.
-
-Bundled builds attach one generated build id to the coordinator and task-worker URLs. Worker initialization also validates a protocol version and reports all loaded build ids. This prevents a new main bundle from silently running stale cached worker code after deployment or service-worker refreshes.
-
-This backend is the default CPU backend for `n_body`. It requires `SharedArrayBuffer` and cross-origin isolation for real multithreading. On static hosting, the app can install a local COOP/COEP service worker and automatically reload once so the page becomes cross-origin isolated. If isolation cannot be enabled, the backend falls back to the single-worker path and shows the fallback reason in stats.
-
-_Demos with different worker thread counts_:
-- Auto threads, 500k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=auto&worker_mt_tree_strategy=hybrid&particle_count=500000&segment_auto=1)
-- 2 threads, 400k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=2&worker_mt_tree_strategy=hybrid&particle_count=400000&segment_auto=1)
-- 4 threads, 500k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&particle_count=500000&segment_auto=1)
-- 6 threads, 750k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=6&worker_mt_tree_strategy=hybrid&particle_count=750000&segment_auto=1)
-- 12 threads, 1M particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=12&worker_mt_tree_strategy=hybrid&particle_count=1000000&segment_auto=1)
-- 16 threads, 2M particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=16&worker_mt_tree_strategy=hybrid&particle_count=2000000&segment_auto=1)
-- 20 threads, 3M particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=20&worker_mt_tree_strategy=hybrid&particle_count=3000000&segment_auto=1)
-- 4 threads with 16 hybrid seed jobs, 500k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&worker_mt_hybrid_seed_jobs=16&particle_count=500000&segment_auto=1)
-- 4 threads with recursive tree splitting, 500k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=recursive&particle_count=500000&segment_auto=1)
-- 4 threads with hybrid tree splitting, 500k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&particle_count=500000&segment_auto=1)
+_Demos with different worker counts_:
+- Auto threads, 500k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=auto&particle_count=500000&segment_auto=1)
+- 4 threads, 500k particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&particle_count=500000&segment_auto=1)
+- 8 threads, 1M particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=8&particle_count=1000000&segment_auto=1)
+- 12 threads, 1M particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=12&particle_count=1000000&segment_auto=1)
+- 16 threads, 2M particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=16&particle_count=2000000&segment_auto=1)
+- 20 threads, 3M particles: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=20&particle_count=3000000&segment_auto=1)
 
 _Heavier multithreaded demos_:
-- 750k particles with 4 threads and hybrid tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&worker_mt_hybrid_seed_jobs=4&particle_count=750000&segment_auto=1)
-- 1M particles with 4 threads and hybrid tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&worker_mt_hybrid_seed_jobs=4&particle_count=1000000&segment_auto=0&segment_max_count=40)
-- 1M particles with 4 threads and dynamic tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=dynamic&worker_mt_tree_jobs=auto&particle_count=1000000&segment_auto=0&segment_max_count=40)
-- 1M particles with 4 threads and recursive tree jobs: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=recursive&particle_count=1000000&segment_auto=0&segment_max_count=40)
-
+- 750k particles with 4 threads: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&particle_count=750000&segment_auto=1)
+- 1M particles with 4 threads and fixed leaf size: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?backend=worker-mt&worker_threads=4&particle_count=1000000&segment_auto=0&segment_max_count=40)
 
 ##### `worker`
 `worker` is the legacy single-threaded CPU backend. It is still useful as a compatibility fallback and as a baseline when comparing the multithreaded scheduler, but it is no longer the recommended CPU path for large real-time demos. Prefer `worker-mt` for normal desktop CPU simulations.
@@ -210,33 +196,11 @@ Application originally developed and optimized for Chrome browser. In other brow
 - Due to lack of [OffscreenCanvas](https://caniuse.com/offscreencanvas) GPGPU backend may not be available in Safari/Firefox.
 
 
-### Worker MT hybrid tree strategy
+### Worker MT production pipeline
 
-`hybrid` is the recommended high-performance tree scheduler for `worker-mt`:
+The historical `static`, `dynamic`, `recursive` and configurable `hybrid` variants have been consolidated into one tested worker-mt pipeline. The implementation always uses shallow parallel seed bootstrap, split-first recursive work release, tail-oriented queue sorting and symmetric leaf-force evaluation. These details remain visible in performance reports, but they are no longer user-selectable settings.
 
-```text
-/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid
-```
-
-The current recommended hybrid default is `coarse` with `worker_mt_hybrid_seed_jobs=4`, parallel seed bootstrap, split-first job release, and hybrid job sorting enabled. Four seed jobs avoid an expensive extra coordinator split level while unexpectedly heavy deep branches can still split recursively. Disable the parallel seed bootstrap only when comparing root bounds, bucket counting, and shared-buffer scatter against the original serial path. The split-gain filter remains disabled by default.
-
-Recommended comparison links:
-
-```text
-/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=hybrid&worker_mt_hybrid_profile=coarse&particle_count=1000000&segment_auto=0&segment_max_count=40
-/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=dynamic&particle_count=1000000&segment_auto=0&segment_max_count=40
-/n_body/?backend=worker-mt&worker_threads=4&worker_mt_tree_strategy=recursive&particle_count=1000000&segment_auto=0&segment_max_count=40
-```
-
-Hybrid comparison toggles:
-
-```text
-worker_mt_hybrid_seed_jobs=4
-worker_mt_hybrid_seed_parallel=1
-worker_mt_hybrid_split_first=1
-worker_mt_hybrid_job_sorting=1
-worker_mt_hybrid_split_gain=0
-```
+`segment_random` remains available because randomized split positions soften persistent grid-aligned artifacts caused by the spatial-tree approximation. Set it to `0` when you need clearly visible deterministic segmentation for debugging.
 
 ### Reproducible performance benchmark suites
 
@@ -249,8 +213,7 @@ await window.nBodyRunBenchmark({
   name: "heavy-tree-grid",
   cases: {
     worker_threads: [12, 16, 20],
-    segment_max_count: [24, 32, 48],
-    worker_mt_hybrid_profile: "coarse"
+    segment_max_count: [24, 32, 48]
   },
   warmupSteps: 3,
   stabilizationMs: 500,
@@ -274,10 +237,9 @@ await window.nBodyRunBenchmark({
       segment_max_count: 32
     },
     {
-      name: "balanced",
+      name: "lower-leaf-size",
       worker_threads: 16,
-      segment_max_count: 32,
-      worker_mt_hybrid_profile: "balanced"
+      segment_max_count: 24
     }
   ]
 })
