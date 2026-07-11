@@ -1,7 +1,21 @@
 import {ComponentType, Property, ReadOnlyProperty, SettingsBase} from "./base.js";
-import {ParticleInitType} from "./enum.js";
+import {CollisionContactMode, ParticleInitType} from "./enum.js";
 
 const collisionEnabled = settings => !!settings.physics.enableCollision;
+
+function migrateLegacyCollisionValues(values) {
+    if (!values || values.collisionContactMode !== undefined
+        || typeof values.collisionAverageContacts !== "boolean") {
+        return values;
+    }
+
+    return {
+        ...values,
+        collisionContactMode: values.collisionAverageContacts
+            ? CollisionContactMode.average
+            : CollisionContactMode.full,
+    };
+}
 
 export class PhysicsSettings extends SettingsBase {
     static Properties = {
@@ -46,21 +60,28 @@ export class PhysicsSettings extends SettingsBase {
             .setAffects(ComponentType.backend)
             .setVisibleWhen(collisionEnabled)
             .setConstraints(0, 1),
-        collisionAverageContacts: Property.bool("collision_average", true)
+        collisionContactMode: Property.enum("collision_contacts", CollisionContactMode, CollisionContactMode.balanced)
             .setExportable(true)
-            .setName("Average dense contacts").setDescription("Divide the accumulated collision response by the number of simultaneous contacts. This is the strongest anti-explosion stabilization, but it can make dense clusters feel sticky. Disable it for stronger dispersal while keeping the impulse cap enabled.")
+            .setName("Dense contact response").setDescription("How simultaneous contacts are combined. Balanced divides by sqrt(contact count), preserving dispersal without the explosive full sum. Average divides by contact count and is the calmest mode. Full keeps the complete sum and is mainly useful for intentionally energetic collisions.")
             .setAffects(ComponentType.backend)
             .setVisibleWhen(collisionEnabled),
         collisionLimitImpulse: Property.bool("collision_cap", true)
             .setExportable(true)
-            .setName("Limit collision impulse").setDescription("Cap the accumulated response by the fastest measured closing contact. Disabling it allows more energetic dense collisions, but can reintroduce large velocity bursts.")
+            .setName("Limit full contact impulse").setDescription("Limit a full multi-contact sum to the root-sum-square energy of its individual pair impulses. This mainly affects Dense contact response = Full; Balanced and Average are already naturally bounded.")
             .setAffects(ComponentType.backend)
-            .setVisibleWhen(collisionEnabled),
+            .setVisibleWhen(settings => collisionEnabled(settings)
+                && settings.physics.collisionContactMode === CollisionContactMode.full),
         collisionIgnoreMicro: Property.bool("collision_micro", true)
             .setExportable(true)
-            .setName("Ignore micro-collisions").setDescription("Ignore extremely small closing speeds to suppress jitter in resting dense clusters. Disable it when very slow contacts should still separate particles.")
+            .setName("Ignore micro-collisions").setDescription("Suppress extremely small bounce impulses. Overlap separation remains active, so resting intersecting particles can still move apart instead of sticking together.")
             .setAffects(ComponentType.backend)
             .setVisibleWhen(collisionEnabled),
+        collisionSeparation: Property.float("collision_separation", 0.15)
+            .setExportable(true)
+            .setName("Overlap separation").setDescription("Adds a small velocity bias proportional to penetration depth, allowing already-overlapping or nearly resting particles to separate. Set to 0 to disable. This is not an iterative positional solver.")
+            .setAffects(ComponentType.backend)
+            .setVisibleWhen(collisionEnabled)
+            .setConstraints(0, 2),
         minInteractionDistance: Property.float("min_distance", 0.01)
             .setExportable(true)
             .setName("Min interaction distance").setDescription("Minimal distance (pixels) to process interactions")
@@ -78,13 +99,41 @@ export class PhysicsSettings extends SettingsBase {
         [this.Properties.enableCollision, [
             this.Properties.collisionSize,
             this.Properties.collisionRestitution,
-            this.Properties.collisionAverageContacts,
+            this.Properties.collisionContactMode,
             this.Properties.collisionLimitImpulse,
             this.Properties.collisionIgnoreMicro,
+            this.Properties.collisionSeparation,
         ]],
         [this.Properties.gravity, [this.ReadOnlyProperties.particleGravity]],
         [this.Properties.particleMassFactor, [this.ReadOnlyProperties.particleMass]],
     ]);
+
+
+    static fromQueryParams(defaults = null) {
+        const result = super.fromQueryParams(migrateLegacyCollisionValues(defaults));
+        if (globalThis.window) {
+            const params = new URLSearchParams(window.location.search);
+            if (!params.has("collision_contacts") && params.has("collision_average")) {
+                const legacyValue = params.get("collision_average")?.trim().toLowerCase();
+                result.config.collisionContactMode = ["0", "false", "off"].includes(legacyValue)
+                    ? CollisionContactMode.full
+                    : CollisionContactMode.average;
+            }
+        }
+        return result;
+    }
+
+    static deserialize(serialized) {
+        return super.deserialize(migrateLegacyCollisionValues(serialized));
+    }
+
+    static import(params) {
+        return super.import(migrateLegacyCollisionValues(params));
+    }
+
+    withImportedValues(params) {
+        return super.withImportedValues(migrateLegacyCollisionValues(params));
+    }
 
 
     get particleInitType() {return this.config.particleInitType;}
@@ -95,9 +144,10 @@ export class PhysicsSettings extends SettingsBase {
     get enableCollision() {return this.config.enableCollision;}
     get collisionSize() {return this.config.collisionSize;}
     get collisionRestitution() {return this.config.collisionRestitution;}
-    get collisionAverageContacts() {return this.config.collisionAverageContacts;}
+    get collisionContactMode() {return this.config.collisionContactMode;}
     get collisionLimitImpulse() {return this.config.collisionLimitImpulse;}
     get collisionIgnoreMicro() {return this.config.collisionIgnoreMicro;}
+    get collisionSeparation() {return this.config.collisionSeparation;}
     get minInteractionDistance() {return this.config.minInteractionDistance;}
 
     particleGravity;

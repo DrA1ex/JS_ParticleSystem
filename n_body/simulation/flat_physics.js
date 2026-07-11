@@ -1,6 +1,6 @@
 import {ITEM_SIZE} from "../utils/particles.js";
 import {FlatSpatialTree} from "./flat_tree.js";
-import {COLLISION_MIN_CLOSING_SPEED_SQ, collisionMinDistanceSq, collisionDeltaScale} from "./collision_response.js";
+import {COLLISION_MIN_CLOSING_SPEED_SQ, collisionMinDistanceSq, collisionDeltaScale, collisionFallbackNormal} from "./collision_response.js";
 
 // CPU implementation of the existing approximation algorithm over an
 // interleaved Float32Array particle buffer. The algorithm is intentionally kept
@@ -186,10 +186,6 @@ export class FlatPhysicsEngine {
     }
 
     _processCollisions(tree, nodeId) {
-        // Use a staged Jacobi-style response. Each contact is evaluated from
-        // the original velocities, only approaching pairs produce an impulse,
-        // and dense multi-contact leaves are normalized so a particle cannot
-        // receive an arbitrarily large kick from many simultaneous neighbours.
         const leafCount = tree.nodeParticleCount[nodeId];
         this._ensureCollisionBuffer(leafCount);
         const particles = tree.particles;
@@ -198,11 +194,13 @@ export class FlatPhysicsEngine {
         const end = start + leafCount;
         const nextVelXBuffer = this._collisionVelX;
         const nextVelYBuffer = this._collisionVelY;
+        const collisionSize = this.settings.physics.collisionSize;
         const collisionSizeSq = this.settings.physics.collisionSizeSq;
         const minCollisionDistanceSq = collisionMinDistanceSq(collisionSizeSq);
         const restitution = this.settings.physics.collisionRestitution;
-        const averageContacts = this.settings.physics.collisionAverageContacts;
+        const contactMode = this.settings.physics.collisionContactMode;
         const limitImpulse = this.settings.physics.collisionLimitImpulse;
+        const separationStrength = this.settings.physics.collisionSeparation;
         const minClosingSpeedSq = this.settings.physics.collisionIgnoreMicro
             ? COLLISION_MIN_CLOSING_SPEED_SQ
             : 0;
@@ -219,7 +217,7 @@ export class FlatPhysicsEngine {
             let deltaVelX = 0;
             let deltaVelY = 0;
             let contactCount = 0;
-            let maxClosingSpeedSq = 0;
+            let impulseSquareSum = 0;
 
             for (let j = start; j < end; j++) {
                 if (i === j) continue;
@@ -228,30 +226,45 @@ export class FlatPhysicsEngine {
                 const dx = p1X - particles[p2Offset];
                 const dy = p1Y - particles[p2Offset + 1];
                 const distSquare = dx * dx + dy * dy;
-                if (distSquare <= minCollisionDistanceSq || distSquare >= collisionSizeSq) continue;
+                if (distSquare >= collisionSizeSq) continue;
 
-                const relativeDot = (p1VelX - particles[p2Offset + 2]) * dx
-                    + (p1VelY - particles[p2Offset + 3]) * dy;
-                // Positive means the distance along the contact normal is
-                // already increasing. Applying an impulse here caused the old
-                // implementation to bounce separating particles back together.
-                if (relativeDot >= 0) continue;
-                const closingSpeedSq = relativeDot * relativeDot / distSquare;
-                if (closingSpeedSq <= minClosingSpeedSq) continue;
-                if (closingSpeedSq > maxClosingSpeedSq) maxClosingSpeedSq = closingSpeedSq;
+                let distance = 0;
+                let normalX;
+                let normalY;
+                if (distSquare <= minCollisionDistanceSq) {
+                    [normalX, normalY] = collisionFallbackNormal(p1Index, p2Index);
+                } else {
+                    distance = Math.sqrt(distSquare);
+                    normalX = dx / distance;
+                    normalY = dy / distance;
+                }
+
+                const relativeNormal = (p1VelX - particles[p2Offset + 2]) * normalX
+                    + (p1VelY - particles[p2Offset + 3]) * normalY;
+                let closingSpeed = Math.max(0, -relativeNormal);
+                if (closingSpeed * closingSpeed <= minClosingSpeedSq) {
+                    closingSpeed = 0;
+                }
+
+                const penetration = Math.max(0, collisionSize - distance);
+                const targetSeparationSpeed = separationStrength * penetration;
+                const separationSpeed = Math.max(0, targetSeparationSpeed - Math.max(0, relativeNormal));
+                const desiredRelativeChange = impulseRestitution * closingSpeed + separationSpeed;
+                if (desiredRelativeChange <= 0) continue;
 
                 const p2Mass = particles[p2Offset + 4];
-                const impulseFactor = -impulseRestitution * p2Mass / (p1Mass + p2Mass)
-                    * relativeDot / distSquare;
-                deltaVelX += impulseFactor * dx;
-                deltaVelY += impulseFactor * dy;
+                const deltaSpeed = desiredRelativeChange * p2Mass / (p1Mass + p2Mass);
+                const pairDeltaX = deltaSpeed * normalX;
+                const pairDeltaY = deltaSpeed * normalY;
+                deltaVelX += pairDeltaX;
+                deltaVelY += pairDeltaY;
+                impulseSquareSum += pairDeltaX * pairDeltaX + pairDeltaY * pairDeltaY;
                 contactCount += 1;
             }
 
             const localIndex = i - start;
             const deltaScale = collisionDeltaScale(
-                deltaVelX, deltaVelY, contactCount, Math.sqrt(maxClosingSpeedSq), restitution,
-                averageContacts, limitImpulse);
+                deltaVelX, deltaVelY, contactCount, impulseSquareSum, contactMode, limitImpulse);
             nextVelXBuffer[localIndex] = p1VelX + deltaVelX * deltaScale;
             nextVelYBuffer[localIndex] = p1VelY + deltaVelY * deltaScale;
         }

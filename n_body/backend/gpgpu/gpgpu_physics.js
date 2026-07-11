@@ -1,5 +1,6 @@
 import {PhysicsEngine} from "../../simulation/physics.js";
 import * as WebglUtils from "../../utils/webgl.js";
+import {collisionContactModeCode} from "../../simulation/collision_response.js";
 
 const GL = WebGL2RenderingContext;
 
@@ -62,9 +63,10 @@ const CONFIGURATION1 = [{
     uniforms: [
         {name: "min_dist_square", type: "uniform1f"},
         {name: "restitution", type: "uniform1f"},
-        {name: "average_contacts", type: "uniform1i"},
+        {name: "contact_mode", type: "uniform1i"},
         {name: "limit_impulse", type: "uniform1i"},
         {name: "ignore_micro", type: "uniform1i"},
+        {name: "separation_strength", type: "uniform1f"},
         {name: "count", type: "uniform1i"},
     ],
     vertexArrays: [{
@@ -175,9 +177,10 @@ export class GPUPhysicsEngine extends PhysicsEngine {
             uniforms: [
                 {name: "min_dist_square", values: [this.settings.physics.collisionSizeSq]},
                 {name: "restitution", values: [this.settings.physics.collisionRestitution]},
-                {name: "average_contacts", values: [this.settings.physics.collisionAverageContacts ? 1 : 0]},
+                {name: "contact_mode", values: [collisionContactModeCode(this.settings.physics.collisionContactMode)]},
                 {name: "limit_impulse", values: [this.settings.physics.collisionLimitImpulse ? 1 : 0]},
                 {name: "ignore_micro", values: [this.settings.physics.collisionIgnoreMicro ? 1 : 0]},
+                {name: "separation_strength", values: [this.settings.physics.collisionSeparation]},
             ],
             buffers: [
                 {name: "index", data: this._indexBufferData},
@@ -206,9 +209,10 @@ export class GPUPhysicsEngine extends PhysicsEngine {
             uniforms: [
                 {name: "min_dist_square", values: [this.settings.physics.collisionSizeSq]},
                 {name: "restitution", values: [this.settings.physics.collisionRestitution]},
-                {name: "average_contacts", values: [this.settings.physics.collisionAverageContacts ? 1 : 0]},
+                {name: "contact_mode", values: [collisionContactModeCode(this.settings.physics.collisionContactMode)]},
                 {name: "limit_impulse", values: [this.settings.physics.collisionLimitImpulse ? 1 : 0]},
                 {name: "ignore_micro", values: [this.settings.physics.collisionIgnoreMicro ? 1 : 0]},
+                {name: "separation_strength", values: [this.settings.physics.collisionSeparation]},
             ]
         }]);
     }

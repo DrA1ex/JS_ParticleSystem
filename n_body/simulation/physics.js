@@ -1,5 +1,5 @@
 import {SpatialTree} from "./tree.js";
-import {COLLISION_MIN_CLOSING_SPEED_SQ, collisionMinDistanceSq, collisionDeltaScale} from "./collision_response.js";
+import {COLLISION_MIN_CLOSING_SPEED_SQ, collisionMinDistanceSq, collisionDeltaScale, collisionFallbackNormal} from "./collision_response.js";
 
 /**
  * @typedef {{x: number, y: number}} PositionVector
@@ -138,11 +138,13 @@ export class PhysicsEngine {
 
         const nextVelXBuffer = this._collisionVelX;
         const nextVelYBuffer = this._collisionVelY;
+        const collisionSize = this.settings.physics.collisionSize;
         const collisionSizeSq = this.settings.physics.collisionSizeSq;
         const minCollisionDistanceSq = collisionMinDistanceSq(collisionSizeSq);
         const restitution = this.settings.physics.collisionRestitution;
-        const averageContacts = this.settings.physics.collisionAverageContacts;
+        const contactMode = this.settings.physics.collisionContactMode;
         const limitImpulse = this.settings.physics.collisionLimitImpulse;
+        const separationStrength = this.settings.physics.collisionSeparation;
         const minClosingSpeedSq = this.settings.physics.collisionIgnoreMicro
             ? COLLISION_MIN_CLOSING_SPEED_SQ
             : 0;
@@ -153,7 +155,7 @@ export class PhysicsEngine {
             let deltaVelX = 0;
             let deltaVelY = 0;
             let contactCount = 0;
-            let maxClosingSpeedSq = 0;
+            let impulseSquareSum = 0;
 
             for (let j = 0; j < leaf.length; j++) {
                 if (i === j) continue;
@@ -161,24 +163,43 @@ export class PhysicsEngine {
                 const dx = p1.x - p2.x;
                 const dy = p1.y - p2.y;
                 const distSquare = dx * dx + dy * dy;
-                if (distSquare <= minCollisionDistanceSq || distSquare >= collisionSizeSq) continue;
+                if (distSquare >= collisionSizeSq) continue;
 
-                const relativeDot = (p1.velX - p2.velX) * dx + (p1.velY - p2.velY) * dy;
-                if (relativeDot >= 0) continue;
-                const closingSpeedSq = relativeDot * relativeDot / distSquare;
-                if (closingSpeedSq <= minClosingSpeedSq) continue;
-                if (closingSpeedSq > maxClosingSpeedSq) maxClosingSpeedSq = closingSpeedSq;
+                let distance = 0;
+                let normalX;
+                let normalY;
+                if (distSquare <= minCollisionDistanceSq) {
+                    [normalX, normalY] = collisionFallbackNormal(i, j);
+                } else {
+                    distance = Math.sqrt(distSquare);
+                    normalX = dx / distance;
+                    normalY = dy / distance;
+                }
 
-                const impulseFactor = -impulseRestitution * p2.mass / (p1.mass + p2.mass)
-                    * relativeDot / distSquare;
-                deltaVelX += impulseFactor * dx;
-                deltaVelY += impulseFactor * dy;
+                const relativeNormal = (p1.velX - p2.velX) * normalX
+                    + (p1.velY - p2.velY) * normalY;
+                let closingSpeed = Math.max(0, -relativeNormal);
+                if (closingSpeed * closingSpeed <= minClosingSpeedSq) {
+                    closingSpeed = 0;
+                }
+
+                const penetration = Math.max(0, collisionSize - distance);
+                const targetSeparationSpeed = separationStrength * penetration;
+                const separationSpeed = Math.max(0, targetSeparationSpeed - Math.max(0, relativeNormal));
+                const desiredRelativeChange = impulseRestitution * closingSpeed + separationSpeed;
+                if (desiredRelativeChange <= 0) continue;
+
+                const deltaSpeed = desiredRelativeChange * p2.mass / (p1.mass + p2.mass);
+                const pairDeltaX = deltaSpeed * normalX;
+                const pairDeltaY = deltaSpeed * normalY;
+                deltaVelX += pairDeltaX;
+                deltaVelY += pairDeltaY;
+                impulseSquareSum += pairDeltaX * pairDeltaX + pairDeltaY * pairDeltaY;
                 contactCount += 1;
             }
 
             const deltaScale = collisionDeltaScale(
-                deltaVelX, deltaVelY, contactCount, Math.sqrt(maxClosingSpeedSq), restitution,
-                averageContacts, limitImpulse);
+                deltaVelX, deltaVelY, contactCount, impulseSquareSum, contactMode, limitImpulse);
             nextVelXBuffer[i] = p1.velX + deltaVelX * deltaScale;
             nextVelYBuffer[i] = p1.velY + deltaVelY * deltaScale;
         }

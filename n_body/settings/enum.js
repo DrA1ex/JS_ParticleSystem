@@ -11,6 +11,16 @@ export const ParticleInitType = {
     swirl: 6,
 }
 
+
+/**
+ * @enum(string)
+ */
+export const CollisionContactMode = {
+    full: "full",
+    balanced: "balanced",
+    average: "average"
+}
+
 /**
  * @enum(string)
  */

@@ -2,7 +2,7 @@ import {AppSimulationSettings} from "../settings/app.js";
 import {FlatSpatialTree} from "../simulation/flat_tree.js";
 import {ITEM_SIZE} from "../utils/particles.js";
 import {BUILD_ID, WORKER_PROTOCOL_VERSION} from "../utils/build.js";
-import {COLLISION_MIN_CLOSING_SPEED_SQ, collisionMinDistanceSq, collisionDeltaScale} from "../simulation/collision_response.js";
+import {COLLISION_MIN_CLOSING_SPEED_SQ, collisionMinDistanceSq, collisionDeltaScale, collisionFallbackNormal} from "../simulation/collision_response.js";
 
 let settings = null;
 let particles = null;
@@ -238,11 +238,13 @@ function calculateLeaf(indices, start, count, pForceX, pForceY) {
 function processCollisions(indices, start, count) {
     ensureCollisionBuffer(count);
     const end = start + count;
+    const collisionSize = settings.physics.collisionSize;
     const collisionSizeSq = settings.physics.collisionSizeSq;
     const minCollisionDistanceSq = collisionMinDistanceSq(collisionSizeSq);
     const restitution = settings.physics.collisionRestitution;
-    const averageContacts = settings.physics.collisionAverageContacts;
+    const contactMode = settings.physics.collisionContactMode;
     const limitImpulse = settings.physics.collisionLimitImpulse;
+    const separationStrength = settings.physics.collisionSeparation;
     const minClosingSpeedSq = settings.physics.collisionIgnoreMicro
         ? COLLISION_MIN_CLOSING_SPEED_SQ
         : 0;
@@ -260,7 +262,7 @@ function processCollisions(indices, start, count) {
         let deltaVelX = 0;
         let deltaVelY = 0;
         let contactCount = 0;
-        let maxClosingSpeedSq = 0;
+        let impulseSquareSum = 0;
 
         for (let j = start; j < end; j++) {
             if (i === j) continue;
@@ -269,27 +271,45 @@ function processCollisions(indices, start, count) {
             const dx = p1X - particles[p2Offset];
             const dy = p1Y - particles[p2Offset + 1];
             const distSquare = dx * dx + dy * dy;
-            if (distSquare <= minCollisionDistanceSq || distSquare >= collisionSizeSq) continue;
+            if (distSquare >= collisionSizeSq) continue;
 
-            const relativeDot = (p1VelX - particles[p2Offset + 2]) * dx
-                + (p1VelY - particles[p2Offset + 3]) * dy;
-            if (relativeDot >= 0) continue;
-            const closingSpeedSq = relativeDot * relativeDot / distSquare;
-            if (closingSpeedSq <= minClosingSpeedSq) continue;
-            if (closingSpeedSq > maxClosingSpeedSq) maxClosingSpeedSq = closingSpeedSq;
+            let distance = 0;
+            let normalX;
+            let normalY;
+            if (distSquare <= minCollisionDistanceSq) {
+                [normalX, normalY] = collisionFallbackNormal(p1Index, p2Index);
+            } else {
+                distance = Math.sqrt(distSquare);
+                normalX = dx / distance;
+                normalY = dy / distance;
+            }
+
+            const relativeNormal = (p1VelX - particles[p2Offset + 2]) * normalX
+                + (p1VelY - particles[p2Offset + 3]) * normalY;
+            let closingSpeed = Math.max(0, -relativeNormal);
+            if (closingSpeed * closingSpeed <= minClosingSpeedSq) {
+                closingSpeed = 0;
+            }
+
+            const penetration = Math.max(0, collisionSize - distance);
+            const targetSeparationSpeed = separationStrength * penetration;
+            const separationSpeed = Math.max(0, targetSeparationSpeed - Math.max(0, relativeNormal));
+            const desiredRelativeChange = impulseRestitution * closingSpeed + separationSpeed;
+            if (desiredRelativeChange <= 0) continue;
 
             const p2Mass = particles[p2Offset + 4];
-            const impulseFactor = -impulseRestitution * p2Mass / (p1Mass + p2Mass)
-                * relativeDot / distSquare;
-            deltaVelX += impulseFactor * dx;
-            deltaVelY += impulseFactor * dy;
+            const deltaSpeed = desiredRelativeChange * p2Mass / (p1Mass + p2Mass);
+            const pairDeltaX = deltaSpeed * normalX;
+            const pairDeltaY = deltaSpeed * normalY;
+            deltaVelX += pairDeltaX;
+            deltaVelY += pairDeltaY;
+            impulseSquareSum += pairDeltaX * pairDeltaX + pairDeltaY * pairDeltaY;
             contactCount += 1;
         }
 
         const localIndex = i - start;
         const deltaScale = collisionDeltaScale(
-            deltaVelX, deltaVelY, contactCount, Math.sqrt(maxClosingSpeedSq), restitution,
-            averageContacts, limitImpulse);
+            deltaVelX, deltaVelY, contactCount, impulseSquareSum, contactMode, limitImpulse);
         collisionVelX[localIndex] = p1VelX + deltaVelX * deltaScale;
         collisionVelY[localIndex] = p1VelY + deltaVelY * deltaScale;
     }
