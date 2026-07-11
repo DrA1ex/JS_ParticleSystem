@@ -80,7 +80,8 @@ export const ParticleSpriteMode = {
     point: "point",
     circle: "circle",
     softCircle: "soft_circle",
-    glow: "glow"
+    glow: "glow",
+    softGlow: "soft_glow"
 }
 
 /**

@@ -39,7 +39,8 @@ export class RenderSettings extends SettingsBase {
                 "point: current square WebGL point rendering.",
                 "circle: crisp procedural circle.",
                 "soft_circle: slightly transparent circle with a soft antialiased edge.",
-                "glow: bright core with a scalable radial halo. No texture is used, so it stays sharp at every DPR and size."
+                "glow: bright core with a scalable radial halo.",
+                "soft_glow: a wider, dimmer halo with a softer falloff and less pronounced core. No texture is used, so all sprite modes stay smooth at every DPR and size."
             ].join("\n"))
             .setAffects(ComponentType.renderer)
             .setVisibleWhen(isWebglRenderer),

@@ -238,7 +238,7 @@ function processCollisions(indices, start, count) {
     ensureCollisionBuffer(count);
     const end = start + count;
     const collisionSizeSq = settings.physics.collisionSizeSq;
-    const collisionRestitution = settings.physics.collisionRestitution;
+    const impulseRestitution = 1 + settings.physics.collisionRestitution;
     const accumulateForce = !!settings.common.debugForce && forceX && forceY;
 
     for (let i = start; i < end; i++) {
@@ -246,10 +246,12 @@ function processCollisions(indices, start, count) {
         const p1Offset = p1Index * ITEM_SIZE;
         const p1X = particles[p1Offset];
         const p1Y = particles[p1Offset + 1];
+        const p1VelX = particles[p1Offset + 2];
+        const p1VelY = particles[p1Offset + 3];
         const p1Mass = particles[p1Offset + 4];
-        let nextVelX = particles[p1Offset + 2];
-        let nextVelY = particles[p1Offset + 3];
-        let hasCollision = false;
+        let deltaVelX = 0;
+        let deltaVelY = 0;
+        let contactCount = 0;
 
         for (let j = start; j < end; j++) {
             if (i === j) continue;
@@ -258,20 +260,24 @@ function processCollisions(indices, start, count) {
             const dx = p1X - particles[p2Offset];
             const dy = p1Y - particles[p2Offset + 1];
             const distSquare = dx * dx + dy * dy;
+            if (distSquare <= 0 || distSquare >= collisionSizeSq) continue;
 
-            if (distSquare > 0 && distSquare < collisionSizeSq) {
-                const p2Mass = particles[p2Offset + 4];
-                const massFactor = 2 * p2Mass / (p1Mass + p2Mass);
-                const dot = massFactor * ((nextVelX - particles[p2Offset + 2]) * dx + (nextVelY - particles[p2Offset + 3]) * dy);
-                nextVelX -= dot / distSquare * dx;
-                nextVelY -= dot / distSquare * dy;
-                hasCollision = true;
-            }
+            const relativeDot = (p1VelX - particles[p2Offset + 2]) * dx
+                + (p1VelY - particles[p2Offset + 3]) * dy;
+            if (relativeDot >= 0) continue;
+
+            const p2Mass = particles[p2Offset + 4];
+            const impulseFactor = -impulseRestitution * p2Mass / (p1Mass + p2Mass)
+                * relativeDot / distSquare;
+            deltaVelX += impulseFactor * dx;
+            deltaVelY += impulseFactor * dy;
+            contactCount += 1;
         }
 
+        const contactScale = contactCount > 1 ? 1 / Math.sqrt(contactCount) : 1;
         const localIndex = i - start;
-        collisionVelX[localIndex] = hasCollision ? nextVelX * collisionRestitution : nextVelX;
-        collisionVelY[localIndex] = hasCollision ? nextVelY * collisionRestitution : nextVelY;
+        collisionVelX[localIndex] = p1VelX + deltaVelX * contactScale;
+        collisionVelY[localIndex] = p1VelY + deltaVelY * contactScale;
     }
 
     for (let i = start; i < end; i++) {

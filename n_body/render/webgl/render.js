@@ -20,6 +20,7 @@ const PARTICLE_SPRITE_IDS = {
     [ParticleSpriteMode.circle]: 1,
     [ParticleSpriteMode.softCircle]: 2,
     [ParticleSpriteMode.glow]: 3,
+    [ParticleSpriteMode.softGlow]: 4,
 };
 const PROGRAM_NAMES = {
     [RenderColorMode.velocity]: {

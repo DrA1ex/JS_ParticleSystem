@@ -45,7 +45,7 @@ void main() {
     if (max_mass > 1.0) base_size += 2.0 * mass / max_mass;
 #endif
     float desired_size = max(0.01, base_size * particle_scale);
-    float extent = sprite_mode == 3 ? 2.5 : 1.0;
+    float extent = sprite_mode == 3 ? 2.5 : (sprite_mode == 4 ? 4.0 : 1.0);
     float raster_size = desired_size < 1.0 ? 1.0 : desired_size * extent;
     gl_PointSize = max(1.0, raster_size);
     sprite_radius = desired_size < 1.0 ? 0.5 : 0.5 * desired_size / gl_PointSize;

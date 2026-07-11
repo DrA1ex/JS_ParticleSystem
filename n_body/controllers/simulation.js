@@ -14,7 +14,7 @@ import {RecordSettingsController} from "./record_settings.js";
 import {Dialog, DialogPositionEnum, DialogTypeEnum} from "../ui/controls/dialog.js";
 import {SettingsController} from "./settings.js";
 import {Frame} from "../ui/controls/frame.js";
-import {exportParticleState} from "../utils/particles.js";
+import {createStateBlob, readStateFile} from "../utils/state_file.js";
 
 /**
  * @extends StateControllerBase<SimulationStateEnum>
@@ -150,21 +150,21 @@ export class SimulationController extends StateControllerBase {
     }
 
     exportState() {
-        const data = {
+        const blob = createStateBlob({
             settings: this.app.settings.export(),
-            particles: exportParticleState(this.app.particles),
+            particles: this.app.particles,
             renderer: {
                 scale: this.app.renderer.scale / this.app.renderer.dpr,
                 relativeOffset: this.app.renderer.centeredRelativeOffset()
             }
-        }
+        });
 
-        FileUtils.saveFile(JSON.stringify(data),
-            `universe_state_${new Date().toISOString()}.json`, "application/json");
+        FileUtils.saveBlob(blob,
+            `universe_state_${new Date().toISOString()}.nbody`);
     }
 
     async importState() {
-        const file = await FileUtils.openFile("application/json", false);
+        const file = await FileUtils.openFile(".nbody,.json,application/json,application/octet-stream", false);
         if (!file) {
             return;
         }
@@ -172,8 +172,7 @@ export class SimulationController extends StateControllerBase {
         this.setState(SimulationStateEnum.reconfigure);
 
         try {
-            const data = await file.text();
-            const state = JSON.parse(data);
+            const state = await readStateFile(file);
             this.app.reloadFromState(state);
         } catch (e) {
             this.setState(SimulationStateEnum.active);

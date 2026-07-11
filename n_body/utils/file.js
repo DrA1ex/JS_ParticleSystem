@@ -28,6 +28,27 @@ export function openFile(contentType, multiple) {
     });
 }
 
+
+/**
+ * Download an already constructed Blob without rebuilding its contents.
+ * @param {Blob} blob
+ * @param {string} fileName
+ */
+export function saveBlob(blob, fileName) {
+    const a = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = fileName;
+    a.click();
+
+    // Keep the object URL alive long enough for browsers to start streaming
+    // very large files instead of revoking it in the same event turn.
+    setTimeout(() => {
+        URL.revokeObjectURL(url);
+        a.remove();
+    }, 60_000);
+}
+
 /**
  *
  * @param {*} content

@@ -1,5 +1,8 @@
 #version 300 es
 
+precision highp float;
+precision highp int;
+
 uniform float min_dist_square;
 uniform int count;
 uniform float restitution;
@@ -14,36 +17,31 @@ in float index;
 
 out vec2 out_velocity;
 
-bool has_collision = false;
-
-void collide(vec2 p1, vec2 p2, vec2 p2Vel, float p2Mass) {
-    vec2 deltaPos =  p1 - p2;
-    float distSquare = dot(deltaPos, deltaPos);
-
-    if (distSquare < min_dist_square) {
-        out_velocity -= (2.0 * p2Mass) / (mass + p2Mass) * dot((out_velocity - p2Vel), deltaPos) / distSquare * deltaPos;
-        has_collision = true;
-    }
-}
-
 void main() {
     ivec2 dimensions = textureSize(particle_pos_mass_tex, 0);
     highp int p_index = int(index);
+    vec2 velocity_delta = vec2(0.0);
+    int contact_count = 0;
 
-    out_velocity = velocity;
     for (int i = 0; i < count; ++i) {
-        if (i == p_index) {
-            continue;
-        }
+        if (i == p_index) continue;
 
-        ivec2 index = ivec2(i % dimensions.x, i / dimensions.x);
-        vec3 atractor = texelFetch(particle_pos_mass_tex, index, 0).xyz;
-        vec2 atractor_velocity = texelFetch(particle_velocity_tex, index, 0).xy;
+        ivec2 tex_index = ivec2(i % dimensions.x, i / dimensions.x);
+        vec3 other = texelFetch(particle_pos_mass_tex, tex_index, 0).xyz;
+        vec2 other_velocity = texelFetch(particle_velocity_tex, tex_index, 0).xy;
+        vec2 delta_pos = position - other.xy;
+        float dist_square = dot(delta_pos, delta_pos);
+        if (dist_square <= 0.0 || dist_square >= min_dist_square) continue;
 
-        collide(position, atractor.xy, atractor_velocity, atractor.z);
+        float relative_dot = dot(velocity - other_velocity, delta_pos);
+        if (relative_dot >= 0.0) continue;
+
+        float impulse_factor = -(1.0 + restitution) * other.z / (mass + other.z)
+            * relative_dot / dist_square;
+        velocity_delta += impulse_factor * delta_pos;
+        contact_count += 1;
     }
 
-    if (has_collision) {
-        out_velocity *= restitution;
-    }
+    float contact_scale = contact_count > 1 ? inversesqrt(float(contact_count)) : 1.0;
+    out_velocity = velocity + velocity_delta * contact_scale;
 }

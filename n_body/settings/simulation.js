@@ -3,6 +3,7 @@ import {BackendType, WorkerThreadCount} from "./enum.js";
 
 const isCpuBackend = settings => settings.simulation.backend !== BackendType.gpgpu;
 const isWorkerMtBackend = settings => settings.simulation.backend === BackendType.workerMt;
+const manualSegmentSize = settings => !isCpuBackend(settings) || !settings.simulation.autoTuneSegmentSize;
 
 export class SimulationSettings extends SettingsBase {
     static Properties = {
@@ -23,6 +24,7 @@ export class SimulationSettings extends SettingsBase {
             ].join("\n"))
             .setBreaks(ComponentType.backend, ComponentType.dfri)
             .setAffects(ComponentType.debug)
+            .setVisibleWhen(manualSegmentSize)
             .setConstraints(1, 1e6),
         autoTuneSegmentSize: Property.bool("segment_auto", true)
             .setName("Auto tune segment size").setDescription([

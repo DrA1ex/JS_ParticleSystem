@@ -138,36 +138,35 @@ export class PhysicsEngine {
         const nextVelXBuffer = this._collisionVelX;
         const nextVelYBuffer = this._collisionVelY;
         const collisionSizeSq = this.settings.physics.collisionSizeSq;
-        const collisionRestitution = this.settings.physics.collisionRestitution;
+        const impulseRestitution = 1 + this.settings.physics.collisionRestitution;
 
         for (let i = 0; i < leaf.length; i++) {
             const p1 = leaf.data[i];
-            let nextVelX = p1.velX,
-                nextVelY = p1.velY,
-                hasCollision = false;
+            let deltaVelX = 0;
+            let deltaVelY = 0;
+            let contactCount = 0;
 
             for (let j = 0; j < leaf.length; j++) {
-                if (i === j) {
-                    continue;
-                }
-
+                if (i === j) continue;
                 const p2 = leaf.data[j];
-                const dx = p1.x - p2.x,
-                    dy = p1.y - p2.y;
+                const dx = p1.x - p2.x;
+                const dy = p1.y - p2.y;
                 const distSquare = dx * dx + dy * dy;
+                if (distSquare <= 0 || distSquare >= collisionSizeSq) continue;
 
-                if (distSquare > 0 && distSquare < collisionSizeSq) {
-                    const massFactor = 2 * p2.mass / (p1.mass + p2.mass);
-                    const dot = massFactor * ((nextVelX - p2.velX) * dx + (nextVelY - p2.velY) * dy);
-                    nextVelX -= dot / distSquare * dx;
-                    nextVelY -= dot / distSquare * dy;
+                const relativeDot = (p1.velX - p2.velX) * dx + (p1.velY - p2.velY) * dy;
+                if (relativeDot >= 0) continue;
 
-                    hasCollision = true;
-                }
+                const impulseFactor = -impulseRestitution * p2.mass / (p1.mass + p2.mass)
+                    * relativeDot / distSquare;
+                deltaVelX += impulseFactor * dx;
+                deltaVelY += impulseFactor * dy;
+                contactCount += 1;
             }
 
-            nextVelXBuffer[i] = hasCollision ? nextVelX * collisionRestitution : nextVelX;
-            nextVelYBuffer[i] = hasCollision ? nextVelY * collisionRestitution : nextVelY;
+            const contactScale = contactCount > 1 ? 1 / Math.sqrt(contactCount) : 1;
+            nextVelXBuffer[i] = p1.velX + deltaVelX * contactScale;
+            nextVelYBuffer[i] = p1.velY + deltaVelY * contactScale;
         }
 
         for (let i = 0; i < leaf.length; i++) {

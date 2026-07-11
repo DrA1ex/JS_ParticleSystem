@@ -42,10 +42,10 @@ export class PhysicsSettings extends SettingsBase {
             .setConstraints(1e-6, 1e3),
         collisionRestitution: Property.float("collision_r", 1)
             .setExportable(true)
-            .setName("Collision restitution").setDescription("Sets collision restitution, 1 - means no energy loss during collision")
+            .setName("Collision restitution").setDescription("Bounciness used by the collision impulse: 0 removes normal relative velocity, 1 is elastic. Values above 1 are intentionally disallowed to avoid injecting energy.")
             .setAffects(ComponentType.backend)
             .setVisibleWhen(collisionEnabled)
-            .setConstraints(0, 2),
+            .setConstraints(0, 1),
         minInteractionDistance: Property.float("min_distance", 0.01)
             .setExportable(true)
             .setName("Min interaction distance").setDescription("Minimal distance (pixels) to process interactions")
