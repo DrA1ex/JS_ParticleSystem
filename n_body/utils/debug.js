@@ -245,7 +245,7 @@ export class Debug {
             `render: ${this._formatMs(this.renderTime)}, prepare: ${this._formatMs(r.prepareDataTime)}, upload: ${this._formatMs(r.uploadTime)}`,
             `- uploaded: ${this._formatBytes(r.uploadedBytes)}, preload: ${this._formatMs(r.preloadTime)} / ${this._formatBytes(r.preloadedBytes)}, queue: ${r.uploadQueue ?? 0}`,
             `- draw: ${this._formatMs(r.drawTime)}, gpu: ${this._formatMs(r.gpuDrawTime)} (${r.gpuTimerStatus || "n/a"})`,
-            `- color: ${r.colorMode || "n/a"}${r.effectiveColorMode && r.effectiveColorMode !== r.colorMode ? ` (${r.effectiveColorMode})` : ""}, freeze: ${r.colorFreezeStatus || "off"}`,
+            `- color: ${r.colorMode || "n/a"}${r.staticColorStatus && r.staticColorStatus !== "off" ? ` (${r.staticColorStatus})` : ""}`,
             `- sprite: ${r.particleSprite || "n/a"}, size: ${this._formatNumber(r.particleSizeScale, 2)}`,
             `- upload mode: ${r.uploadMode || "n/a"}, low latency: ${r.webglLowLatency ? "on" : "off"}, interpolation: ${r.gpuInterpolation || "off"}`,
         ];

@@ -57,9 +57,10 @@ export const MaxSpeedUpdateMode = {
  */
 export const RenderColorMode = {
     velocity: "velocity",
-    velocityFixed: "velocity_fixed",
     mass: "mass",
-    fixed: "fixed"
+    fixed: "fixed",
+    random: "random",
+    cluster: "cluster"
 }
 
 
@@ -81,7 +82,8 @@ export const ParticleSpriteMode = {
     circle: "circle",
     softCircle: "soft_circle",
     glow: "glow",
-    softGlow: "soft_glow"
+    softGlow: "soft_glow",
+    blured: "blured"
 }
 
 /**

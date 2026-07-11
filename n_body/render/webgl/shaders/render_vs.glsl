@@ -12,6 +12,7 @@ uniform float max_speed;
 uniform float particle_scale;
 uniform float interpolation_factor;
 uniform int sprite_mode;
+uniform vec3 fixed_color_uniform;
 
 in vec2 position;
 #if USE_INTERPOLATION
@@ -20,7 +21,7 @@ in vec2 next_position;
 #if defined(COLOR_MODE_VELOCITY)
 in vec2 velocity;
 in float mass;
-#elif defined(COLOR_MODE_VELOCITY_FIXED)
+#elif defined(COLOR_MODE_RANDOM) || defined(COLOR_MODE_CLUSTER)
 in float mass;
 in vec3 fixed_color;
 #elif defined(COLOR_MODE_MASS)
@@ -41,11 +42,11 @@ void main() {
     gl_Position = vec4(translated_pos * vec2(1, -1.0), 0, 1);
 
     float base_size = point_size;
-#if defined(COLOR_MODE_VELOCITY) || defined(COLOR_MODE_VELOCITY_FIXED) || defined(COLOR_MODE_MASS)
+#if defined(COLOR_MODE_VELOCITY) || defined(COLOR_MODE_RANDOM) || defined(COLOR_MODE_CLUSTER) || defined(COLOR_MODE_MASS)
     if (max_mass > 1.0) base_size += 2.0 * mass / max_mass;
 #endif
     float desired_size = max(0.01, base_size * particle_scale);
-    float extent = sprite_mode == 3 ? 2.5 : (sprite_mode == 4 ? 4.0 : 1.0);
+    float extent = sprite_mode == 3 ? 2.5 : (sprite_mode == 4 ? 3.2 : (sprite_mode == 5 ? 4.0 : 1.0));
     float raster_size = desired_size < 1.0 ? 1.0 : desired_size * extent;
     gl_PointSize = max(1.0, raster_size);
     sprite_radius = desired_size < 1.0 ? 0.5 : 0.5 * desired_size / gl_PointSize;
@@ -55,12 +56,12 @@ void main() {
     vec2 translated_velocity = 0.5 + velocity / max_speed * 0.5;
     float translated_mass = 0.25 + mass / max_mass * 0.25;
     color = vec3(translated_velocity.x, translated_mass, translated_velocity.y);
-#elif defined(COLOR_MODE_VELOCITY_FIXED)
+#elif defined(COLOR_MODE_RANDOM) || defined(COLOR_MODE_CLUSTER)
     color = fixed_color;
 #elif defined(COLOR_MODE_MASS)
     float translated_mass = 0.25 + mass / max_mass * 0.75;
     color = vec3(translated_mass);
 #else
-    color = vec3(0.8, 0.9, 1.0);
+    color = fixed_color_uniform;
 #endif
 }

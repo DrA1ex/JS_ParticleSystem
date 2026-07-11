@@ -507,6 +507,14 @@ button:disabled .record-icon {
     text-align: right;
 }
 
+.settings-block input[type="color"].settings-input {
+    box-sizing: border-box;
+    width: 3.5em;
+    height: 1.7em;
+    padding: 0.1em;
+    cursor: pointer;
+}
+
 .settings-block .settings-caption[data-tooltip]:after {
     content: "i";
     pointer-events: none;

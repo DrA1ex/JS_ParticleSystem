@@ -37,11 +37,11 @@ export function createProgram(gl, vertexShader, fragmentShader, transformFeedbac
 export function createVertexArray(gl, entries) {
     const vertexArray = gl.createVertexArray();
     for (let i = 0; i < entries.length; i++) {
-        const {attribute, buffer, type, size, stride, offset} = entries[i];
+        const {attribute, buffer, type, size, stride, offset, normalized = false} = entries[i];
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
         gl.bindVertexArray(vertexArray);
         gl.enableVertexAttribArray(attribute);
-        gl.vertexAttribPointer(attribute, size, type, false, stride, offset);
+        gl.vertexAttribPointer(attribute, size, type, normalized, stride, offset);
     }
 
     return vertexArray;
@@ -145,7 +145,8 @@ export function createFromConfig(gl, config, outStateConfig) {
                 type: entry.type,
                 size: entry.size,
                 stride: entry.stride || 0,
-                offset: entry.offset || 0
+                offset: entry.offset || 0,
+                normalized: !!entry.normalized
             }));
 
             vertexArrayConfig[va.name] = createVertexArray(gl, entries);

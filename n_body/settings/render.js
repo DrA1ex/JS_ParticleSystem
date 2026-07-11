@@ -6,9 +6,8 @@ const useDprEnabled = settings => !!settings.render.useDpr;
 const dfriEnabled = settings => !!settings.render.enableDFRI;
 const velocityWebglColor = settings => isWebglRenderer(settings) &&
     settings.render.colorMode === RenderColorMode.velocity;
-const velocityFixedWebglColor = settings => isWebglRenderer(settings) &&
-    settings.render.colorMode === RenderColorMode.velocityFixed;
-const velocityBasedWebglColor = settings => velocityWebglColor(settings) || velocityFixedWebglColor(settings);
+const fixedWebglColor = settings => isWebglRenderer(settings) &&
+    settings.render.colorMode === RenderColorMode.fixed;
 
 export class RenderSettings extends SettingsBase {
     static Properties = {
@@ -39,8 +38,9 @@ export class RenderSettings extends SettingsBase {
                 "point: current square WebGL point rendering.",
                 "circle: crisp procedural circle.",
                 "soft_circle: slightly transparent circle with a soft antialiased edge.",
-                "glow: bright core with a scalable radial halo.",
-                "soft_glow: a wider, dimmer halo with a softer falloff and less pronounced core. No texture is used, so all sprite modes stay smooth at every DPR and size."
+                "glow: bright core with a compact radial halo.",
+                "soft_glow: a medium, smoother halo between glow and blured.",
+                "blured: the widest and softest halo. No texture is used, so all modes stay smooth at every DPR and size."
             ].join("\n"))
             .setAffects(ComponentType.renderer)
             .setVisibleWhen(isWebglRenderer),
@@ -54,23 +54,20 @@ export class RenderSettings extends SettingsBase {
             .setAffects(ComponentType.renderer),
         colorMode: Property.enum("color_mode", RenderColorMode, RenderColorMode.velocity)
             .setName("Color mode").setDescription([
-                "Controls which attributes the WebGL renderer uploads and how particles are colored.",
-                "velocity: color depends on velocity and mass; highest visual detail, uploads position, velocity and mass.",
-                "velocity_fixed: starts with velocity colors, waits a few frames, then bakes per-particle colors and keeps them fixed.",
-                "mass: color depends only on mass; skips velocity upload and is usually faster for large particle counts.",
-                "fixed: uses one fixed color; uploads only positions and is the fastest mode."
+                "Controls how WebGL particles are colored.",
+                "velocity: color changes with velocity and mass.",
+                "mass: grayscale color depends only on mass.",
+                "fixed: uses one selected color for every particle.",
+                "random: assigns each particle a velocity-like random color once and keeps it.",
+                "cluster: creates a position-based gradient once and keeps particle colors fixed afterwards."
             ].join("\n"))
             .setAffects(ComponentType.renderer)
             .setVisibleWhen(isWebglRenderer),
-        colorFreezeFrames: Property.int("color_freeze_frames", 8)
-            .setName("Velocity color freeze frames").setDescription([
-                "Used only by velocity_fixed color mode.",
-                "The renderer shows normal velocity colors for this many render frames, then bakes the current per-particle RGB values into a GPU color buffer and stops changing them.",
-                "Higher values give velocity normalization a little more time to settle before colors are frozen."
-            ].join("\n"))
+        fixedColor: Property.color("fixed_color", "#cce6ff")
+            .setName("Fixed particle color")
+            .setDescription("Color used by fixed mode. The native browser color picker is used where available.")
             .setAffects(ComponentType.renderer)
-            .setVisibleWhen(velocityFixedWebglColor)
-            .setConstraints(0, 120),
+            .setVisibleWhen(fixedWebglColor),
         bufferUploadMode: Property.enum("upload_mode", BufferUploadMode, BufferUploadMode.stream)
             .setName("Buffer upload mode").setDescription([
                 "Controls how dynamic WebGL buffers are updated after a new physics frame arrives.",
@@ -98,7 +95,7 @@ export class RenderSettings extends SettingsBase {
                 "off: do not scan in the renderer; uses the configured/base max speed and avoids this CPU cost."
             ].join("\n"))
             .setAffects(ComponentType.renderer)
-            .setVisibleWhen(velocityBasedWebglColor),
+            .setVisibleWhen(velocityWebglColor),
         enableDFRI: Property.bool("dfri", true)
             .setName("Enable DFRI").setDescription([
                 "Enables dynamic frame rate interpolation between physics frames.",
@@ -140,7 +137,7 @@ export class RenderSettings extends SettingsBase {
     get enableFilter() {return this.config.enableFilter}
     get enableBlending() {return this.config.enableBlending}
     get colorMode() {return this.config.colorMode}
-    get colorFreezeFrames() {return this.config.colorFreezeFrames}
+    get fixedColor() {return this.config.fixedColor}
     get bufferUploadMode() {return this.config.bufferUploadMode}
     get webglLowLatency() {return this.config.webglLowLatency}
     get maxSpeedUpdateMode() {return this.config.maxSpeedUpdateMode}

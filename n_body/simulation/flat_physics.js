@@ -1,5 +1,6 @@
 import {ITEM_SIZE} from "../utils/particles.js";
 import {FlatSpatialTree} from "./flat_tree.js";
+import {COLLISION_MIN_CLOSING_SPEED_SQ, collisionMinDistanceSq, collisionDeltaScale} from "./collision_response.js";
 
 // CPU implementation of the existing approximation algorithm over an
 // interleaved Float32Array particle buffer. The algorithm is intentionally kept
@@ -198,7 +199,9 @@ export class FlatPhysicsEngine {
         const nextVelXBuffer = this._collisionVelX;
         const nextVelYBuffer = this._collisionVelY;
         const collisionSizeSq = this.settings.physics.collisionSizeSq;
-        const impulseRestitution = 1 + this.settings.physics.collisionRestitution;
+        const minCollisionDistanceSq = collisionMinDistanceSq(collisionSizeSq);
+        const restitution = this.settings.physics.collisionRestitution;
+        const impulseRestitution = 1 + restitution;
 
         for (let i = start; i < end; i++) {
             const p1Index = indices[i];
@@ -211,6 +214,7 @@ export class FlatPhysicsEngine {
             let deltaVelX = 0;
             let deltaVelY = 0;
             let contactCount = 0;
+            let maxClosingSpeedSq = 0;
 
             for (let j = start; j < end; j++) {
                 if (i === j) continue;
@@ -219,7 +223,7 @@ export class FlatPhysicsEngine {
                 const dx = p1X - particles[p2Offset];
                 const dy = p1Y - particles[p2Offset + 1];
                 const distSquare = dx * dx + dy * dy;
-                if (distSquare <= 0 || distSquare >= collisionSizeSq) continue;
+                if (distSquare <= minCollisionDistanceSq || distSquare >= collisionSizeSq) continue;
 
                 const relativeDot = (p1VelX - particles[p2Offset + 2]) * dx
                     + (p1VelY - particles[p2Offset + 3]) * dy;
@@ -227,6 +231,9 @@ export class FlatPhysicsEngine {
                 // already increasing. Applying an impulse here caused the old
                 // implementation to bounce separating particles back together.
                 if (relativeDot >= 0) continue;
+                const closingSpeedSq = relativeDot * relativeDot / distSquare;
+                if (closingSpeedSq <= COLLISION_MIN_CLOSING_SPEED_SQ) continue;
+                if (closingSpeedSq > maxClosingSpeedSq) maxClosingSpeedSq = closingSpeedSq;
 
                 const p2Mass = particles[p2Offset + 4];
                 const impulseFactor = -impulseRestitution * p2Mass / (p1Mass + p2Mass)
@@ -236,10 +243,11 @@ export class FlatPhysicsEngine {
                 contactCount += 1;
             }
 
-            const contactScale = contactCount > 1 ? 1 / Math.sqrt(contactCount) : 1;
             const localIndex = i - start;
-            nextVelXBuffer[localIndex] = p1VelX + deltaVelX * contactScale;
-            nextVelYBuffer[localIndex] = p1VelY + deltaVelY * contactScale;
+            const deltaScale = collisionDeltaScale(
+                deltaVelX, deltaVelY, contactCount, Math.sqrt(maxClosingSpeedSq), restitution);
+            nextVelXBuffer[localIndex] = p1VelX + deltaVelX * deltaScale;
+            nextVelYBuffer[localIndex] = p1VelY + deltaVelY * deltaScale;
         }
 
         for (let i = start; i < end; i++) {

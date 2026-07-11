@@ -2,6 +2,7 @@ import {AppSimulationSettings} from "../settings/app.js";
 import {FlatSpatialTree} from "../simulation/flat_tree.js";
 import {ITEM_SIZE} from "../utils/particles.js";
 import {BUILD_ID, WORKER_PROTOCOL_VERSION} from "../utils/build.js";
+import {COLLISION_MIN_CLOSING_SPEED_SQ, collisionMinDistanceSq, collisionDeltaScale} from "../simulation/collision_response.js";
 
 let settings = null;
 let particles = null;
@@ -238,7 +239,9 @@ function processCollisions(indices, start, count) {
     ensureCollisionBuffer(count);
     const end = start + count;
     const collisionSizeSq = settings.physics.collisionSizeSq;
-    const impulseRestitution = 1 + settings.physics.collisionRestitution;
+    const minCollisionDistanceSq = collisionMinDistanceSq(collisionSizeSq);
+    const restitution = settings.physics.collisionRestitution;
+    const impulseRestitution = 1 + restitution;
     const accumulateForce = !!settings.common.debugForce && forceX && forceY;
 
     for (let i = start; i < end; i++) {
@@ -252,6 +255,7 @@ function processCollisions(indices, start, count) {
         let deltaVelX = 0;
         let deltaVelY = 0;
         let contactCount = 0;
+        let maxClosingSpeedSq = 0;
 
         for (let j = start; j < end; j++) {
             if (i === j) continue;
@@ -260,11 +264,14 @@ function processCollisions(indices, start, count) {
             const dx = p1X - particles[p2Offset];
             const dy = p1Y - particles[p2Offset + 1];
             const distSquare = dx * dx + dy * dy;
-            if (distSquare <= 0 || distSquare >= collisionSizeSq) continue;
+            if (distSquare <= minCollisionDistanceSq || distSquare >= collisionSizeSq) continue;
 
             const relativeDot = (p1VelX - particles[p2Offset + 2]) * dx
                 + (p1VelY - particles[p2Offset + 3]) * dy;
             if (relativeDot >= 0) continue;
+            const closingSpeedSq = relativeDot * relativeDot / distSquare;
+            if (closingSpeedSq <= COLLISION_MIN_CLOSING_SPEED_SQ) continue;
+            if (closingSpeedSq > maxClosingSpeedSq) maxClosingSpeedSq = closingSpeedSq;
 
             const p2Mass = particles[p2Offset + 4];
             const impulseFactor = -impulseRestitution * p2Mass / (p1Mass + p2Mass)
@@ -274,10 +281,11 @@ function processCollisions(indices, start, count) {
             contactCount += 1;
         }
 
-        const contactScale = contactCount > 1 ? 1 / Math.sqrt(contactCount) : 1;
         const localIndex = i - start;
-        collisionVelX[localIndex] = p1VelX + deltaVelX * contactScale;
-        collisionVelY[localIndex] = p1VelY + deltaVelY * contactScale;
+        const deltaScale = collisionDeltaScale(
+            deltaVelX, deltaVelY, contactCount, Math.sqrt(maxClosingSpeedSq), restitution);
+        collisionVelX[localIndex] = p1VelX + deltaVelX * deltaScale;
+        collisionVelY[localIndex] = p1VelY + deltaVelY * deltaScale;
     }
 
     for (let i = start; i < end; i++) {

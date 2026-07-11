@@ -6,7 +6,8 @@ import {InputControl} from "./base.js";
 export const InputType = {
     text: 0,
     int: 1,
-    float: 2
+    float: 2,
+    color: 3
 }
 
 export class Input extends InputControl {
@@ -19,7 +20,7 @@ export class Input extends InputControl {
 
         this.type = type;
 
-        this.element.type = "text";
+        this.element.type = type === InputType.color ? "color" : "text";
         this.element.onchange = this._onChange.bind(this);
     }
 

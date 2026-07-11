@@ -99,6 +99,7 @@ export class Application {
 
         if (particles) {
             diff.affects.add(ComponentType.backend);
+            this.renderer?.resetParticleColors?.();
         }
 
         if (forceBackendRestart) {

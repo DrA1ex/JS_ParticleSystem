@@ -10,6 +10,7 @@ export const PropertyType = {
     float: "float",
     bool: "bool",
     enum: "enum",
+    color: "color",
 }
 
 /**
@@ -86,6 +87,23 @@ export class PropertyParser {
 
             return prop.defaultValue;
         }
+    }
+
+
+    static color(prop) {
+        return (param) => {
+            if (typeof param !== "string") {
+                return prop.defaultValue;
+            }
+
+            const value = param.trim().toLowerCase();
+            const short = /^#([0-9a-f]{3})$/i.exec(value);
+            if (short) {
+                return `#${short[1].split("").map(ch => ch + ch).join("")}`;
+            }
+
+            return /^#[0-9a-f]{6}$/i.test(value) ? value : prop.defaultValue;
+        };
     }
 
     static enum(prop) {
@@ -170,7 +188,7 @@ export class Property {
         }
 
         let type = null;
-        if ([PropertyType.string, PropertyType.int, PropertyType.float].includes(this.type)) {
+        if ([PropertyType.string, PropertyType.int, PropertyType.float, PropertyType.color].includes(this.type)) {
             type = `- Type: ${this.type}`;
         }
 
@@ -302,6 +320,10 @@ export class Property {
 
     static enum(key, enumType, defaultValue = null) {
         return new Property(key, PropertyType.enum, enumType, defaultValue);
+    }
+
+    static color(key, defaultValue = "#ffffff") {
+        return new Property(key, PropertyType.color, null, defaultValue);
     }
 }
 

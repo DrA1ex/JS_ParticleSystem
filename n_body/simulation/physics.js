@@ -1,4 +1,5 @@
 import {SpatialTree} from "./tree.js";
+import {COLLISION_MIN_CLOSING_SPEED_SQ, collisionMinDistanceSq, collisionDeltaScale} from "./collision_response.js";
 
 /**
  * @typedef {{x: number, y: number}} PositionVector
@@ -138,13 +139,16 @@ export class PhysicsEngine {
         const nextVelXBuffer = this._collisionVelX;
         const nextVelYBuffer = this._collisionVelY;
         const collisionSizeSq = this.settings.physics.collisionSizeSq;
-        const impulseRestitution = 1 + this.settings.physics.collisionRestitution;
+        const minCollisionDistanceSq = collisionMinDistanceSq(collisionSizeSq);
+        const restitution = this.settings.physics.collisionRestitution;
+        const impulseRestitution = 1 + restitution;
 
         for (let i = 0; i < leaf.length; i++) {
             const p1 = leaf.data[i];
             let deltaVelX = 0;
             let deltaVelY = 0;
             let contactCount = 0;
+            let maxClosingSpeedSq = 0;
 
             for (let j = 0; j < leaf.length; j++) {
                 if (i === j) continue;
@@ -152,10 +156,13 @@ export class PhysicsEngine {
                 const dx = p1.x - p2.x;
                 const dy = p1.y - p2.y;
                 const distSquare = dx * dx + dy * dy;
-                if (distSquare <= 0 || distSquare >= collisionSizeSq) continue;
+                if (distSquare <= minCollisionDistanceSq || distSquare >= collisionSizeSq) continue;
 
                 const relativeDot = (p1.velX - p2.velX) * dx + (p1.velY - p2.velY) * dy;
                 if (relativeDot >= 0) continue;
+                const closingSpeedSq = relativeDot * relativeDot / distSquare;
+                if (closingSpeedSq <= COLLISION_MIN_CLOSING_SPEED_SQ) continue;
+                if (closingSpeedSq > maxClosingSpeedSq) maxClosingSpeedSq = closingSpeedSq;
 
                 const impulseFactor = -impulseRestitution * p2.mass / (p1.mass + p2.mass)
                     * relativeDot / distSquare;
@@ -164,9 +171,10 @@ export class PhysicsEngine {
                 contactCount += 1;
             }
 
-            const contactScale = contactCount > 1 ? 1 / Math.sqrt(contactCount) : 1;
-            nextVelXBuffer[i] = p1.velX + deltaVelX * contactScale;
-            nextVelYBuffer[i] = p1.velY + deltaVelY * contactScale;
+            const deltaScale = collisionDeltaScale(
+                deltaVelX, deltaVelY, contactCount, Math.sqrt(maxClosingSpeedSq), restitution);
+            nextVelXBuffer[i] = p1.velX + deltaVelX * deltaScale;
+            nextVelYBuffer[i] = p1.velY + deltaVelY * deltaScale;
         }
 
         for (let i = 0; i < leaf.length; i++) {

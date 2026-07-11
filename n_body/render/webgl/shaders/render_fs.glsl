@@ -32,6 +32,13 @@ void main() {
         float halo = exp(-normalized_distance * normalized_distance * 1.15) * 0.62;
         alpha = max(core, halo);
         brightness = 0.72 + core * 0.55;
+    } else if (sprite_mode == 4) {
+        float normalized_distance = distance_from_center / radius;
+        float core = (1.0 - smoothstep(0.32, 0.84, normalized_distance)) * 0.42;
+        float inner_halo = exp(-normalized_distance * normalized_distance * 0.90) * 0.34;
+        float outer_halo = exp(-normalized_distance * normalized_distance * 0.34) * 0.08;
+        alpha = max(core, inner_halo + outer_halo);
+        brightness = 0.66 + core * 0.48;
     } else {
         float normalized_distance = distance_from_center / radius;
         float core = (1.0 - smoothstep(0.18, 0.72, normalized_distance)) * 0.34;

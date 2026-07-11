@@ -340,6 +340,10 @@ export class SettingsController extends ControllerBase {
                 control = this._createCheckbox(value);
                 break;
 
+            case PropertyType.color:
+                control = this._createInput(value, InputType.color);
+                break;
+
             default:
             case PropertyType.string:
                 control = this._createInput(value, InputType.text)

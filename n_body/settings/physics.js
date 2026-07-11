@@ -42,7 +42,7 @@ export class PhysicsSettings extends SettingsBase {
             .setConstraints(1e-6, 1e3),
         collisionRestitution: Property.float("collision_r", 1)
             .setExportable(true)
-            .setName("Collision restitution").setDescription("Bounciness used by the collision impulse: 0 removes normal relative velocity, 1 is elastic. Values above 1 are intentionally disallowed to avoid injecting energy.")
+            .setName("Collision restitution").setDescription("Bounciness used by the collision impulse: 0 removes normal relative velocity, 1 is elastic. Dense simultaneous contacts are averaged and capped by their measured closing speed to avoid velocity bursts. Values above 1 are disallowed to avoid injecting energy.")
             .setAffects(ComponentType.backend)
             .setVisibleWhen(collisionEnabled)
             .setConstraints(0, 1),
