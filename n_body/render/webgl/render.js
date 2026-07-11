@@ -155,8 +155,11 @@ export class Webgl2Renderer extends RendererBase {
         this._gpuTimerQuery = null;
         this.stats.gpuTimerStatus = this._gpuTimerExt ? "waiting" : "unsupported";
 
-        this._particleBufferData = new Float32Array(this.settings.physics.particleCount * ITEM_SIZE);
-        this._nextPositionBufferData = new Float32Array(this.settings.physics.particleCount * POSITION_ITEM_SIZE);
+        // Allocate CPU staging buffers lazily. The worker and recording-player
+        // fast paths upload their typed arrays directly, so eagerly reserving
+        // another 7 floats per particle can waste hundreds of megabytes.
+        this._particleBufferData = null;
+        this._nextPositionBufferData = null;
         this._particleColorBufferData = null;
 
         this._maxSpeed = this.settings.physics.gravity / 100;
@@ -167,6 +170,7 @@ export class Webgl2Renderer extends RendererBase {
         this._uploadedParticleCount = 0;
 
         this._nextParticles = null;
+        this._nextPositionFrame = null;
         this._nextParticlesDirty = true;
         this._uploadedNextParticleSource = null;
         this._uploadedNextParticleCount = 0;
@@ -300,7 +304,21 @@ export class Webgl2Renderer extends RendererBase {
     setInterpolationFrame(particles) {
         if (particles && isParticleBuffer(particles)) {
             this._nextParticles = particles;
+            this._nextPositionFrame = null;
         } else {
+            this._nextParticles = null;
+            this._nextPositionFrame = null;
+        }
+        this._nextParticlesDirty = true;
+        this._scheduleNextPositionPreload();
+    }
+
+    setInterpolationPositionFrame(positions) {
+        if (positions instanceof Float32Array) {
+            this._nextPositionFrame = positions;
+            this._nextParticles = null;
+        } else {
+            this._nextPositionFrame = null;
             this._nextParticles = null;
         }
         this._nextParticlesDirty = true;
@@ -332,7 +350,7 @@ export class Webgl2Renderer extends RendererBase {
     }
 
     _scheduleNextPositionPreload() {
-        if (!this._nextParticles || !isParticleBuffer(this._nextParticles)) {
+        if (!this._nextParticles && !this._nextPositionFrame) {
             return;
         }
 
@@ -372,7 +390,8 @@ export class Webgl2Renderer extends RendererBase {
         while (this._uploadQueue.length) {
             const job = this._uploadQueue.shift();
             if (job.type === "nextPosition") {
-                const count = this._nextParticles ? getParticleCount(this._nextParticles) : 0;
+                const count = this._nextPositionFrame ? Math.floor(this._nextPositionFrame.length / POSITION_ITEM_SIZE) :
+                    (this._nextParticles ? getParticleCount(this._nextParticles) : 0);
                 this._uploadNextPositionIfNeeded(count, false);
             }
             jobs += 1;
@@ -445,7 +464,7 @@ export class Webgl2Renderer extends RendererBase {
 
         this._ensureNextPositionBufferCapacity(count);
 
-        const needsCurrentUpload = this._particleDataDirty ||
+        const needsCurrentUpload = !canUseSourceDirectly || this._particleDataDirty ||
             this._uploadedParticleSource !== sourceData || this._uploadedParticleCount !== count;
 
         if (!canUseSourceDirectly) {
@@ -508,11 +527,14 @@ export class Webgl2Renderer extends RendererBase {
     }
 
     _hasInterpolationFrame(count = null) {
-        if (!this._nextParticles) {
+        if (!this._nextParticles && !this._nextPositionFrame) {
             return false;
         }
         if (count === null) {
             return true;
+        }
+        if (this._nextPositionFrame) {
+            return this._nextPositionFrame.length >= count * POSITION_ITEM_SIZE;
         }
         return getParticleCount(this._nextParticles) >= count;
     }
@@ -736,8 +758,11 @@ export class Webgl2Renderer extends RendererBase {
     }
 
     _uploadNextPositionIfNeeded(count, trackRenderBytes = true) {
-        const data = this._nextParticles;
-        if (!data || getParticleCount(data) < count) {
+        const directPositions = this._nextPositionFrame;
+        const data = directPositions || this._nextParticles;
+        const availableCount = directPositions ? Math.floor(directPositions.length / POSITION_ITEM_SIZE) :
+            (data ? getParticleCount(data) : 0);
+        if (!data || availableCount < count) {
             return;
         }
 
@@ -747,12 +772,17 @@ export class Webgl2Renderer extends RendererBase {
             return;
         }
 
-        const nextPosition = this._nextPositionBufferData;
-        for (let i = 0; i < count; i++) {
-            const srcOffset = i * ITEM_SIZE;
-            const dstOffset = i * POSITION_ITEM_SIZE;
-            nextPosition[dstOffset] = data[srcOffset];
-            nextPosition[dstOffset + 1] = data[srcOffset + 1];
+        let nextPosition;
+        if (directPositions) {
+            nextPosition = directPositions;
+        } else {
+            nextPosition = this._nextPositionBufferData;
+            for (let i = 0; i < count; i++) {
+                const srcOffset = i * ITEM_SIZE;
+                const dstOffset = i * POSITION_ITEM_SIZE;
+                nextPosition[dstOffset] = data[srcOffset];
+                nextPosition[dstOffset + 1] = data[srcOffset + 1];
+            }
         }
 
         this._uploadArrayBuffer("nextPosition", nextPosition, count * POSITION_ITEM_SIZE, trackRenderBytes);
@@ -951,6 +981,7 @@ export class Webgl2Renderer extends RendererBase {
         this._particleColorBufferData = null;
         this._staticColorState = null;
         this._nextParticles = null;
+        this._nextPositionFrame = null;
         this._uploadedParticleSource = null;
         this._uploadedNextParticleSource = null;
         this._bufferCapacities = null;

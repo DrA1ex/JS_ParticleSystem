@@ -223,6 +223,10 @@ export class DFRIHelperBase {
         return false;
     }
 
+    get usesGpuInterpolation() {
+        return this._gpuInterpolation;
+    }
+
     reconfigure() {}
 
     enable() {
@@ -294,24 +298,35 @@ export class DFRIHelperBase {
 
     setNextFrame(dataFn) {
         this._ensureDeltas();
+        const out = {x: 0, y: 0};
         for (let i = 0; i < this.particleCount; i++) {
-            dataFn(i, this._deltas[i]);
+            dataFn(i, out);
+            const offset = i * 2;
+            this._deltas[offset] = out.x;
+            this._deltas[offset + 1] = out.y;
         }
 
         this.reset();
     }
 
+    setNextPositionFrame(positions) {
+        if (!this._gpuInterpolation || !positions) {
+            return false;
+        }
+        this.renderer.setInterpolationPositionFrame?.(positions);
+        this.reset();
+        return true;
+    }
+
     _ensureDeltas() {
-        if (this._deltas && this._deltas.length === this.particleCount) {
+        const required = this.particleCount * 2;
+        if (this._deltas && this._deltas.length === required) {
             return;
         }
 
-        // CPU DFRI needs one mutable delta object per particle. WebGL DFRI does
-        // interpolation in the vertex shader and never allocates this array.
-        this._deltas = new Array(this.particleCount);
-        for (let i = 0; i < this.particleCount; i++) {
-            this._deltas[i] = {x: 0, y: 0};
-        }
+        // Keep CPU interpolation compact. Large recordings can contain millions
+        // of particles, so allocating one JS object per delta is prohibitive.
+        this._deltas = new Float32Array(required);
     }
 
     _getInterpolateFramesCount() {
@@ -324,8 +339,9 @@ export class DFRIHelperBase {
         // positions in the flat-buffer path. Read from whichever is available.
         const x = particle ? particle.x : out.x;
         const y = particle ? particle.y : out.y;
-        out.x = x + this._deltas[index].x * this._currentFactor;
-        out.y = y + this._deltas[index].y * this._currentFactor;
+        const offset = index * 2;
+        out.x = x + this._deltas[offset] * this._currentFactor;
+        out.y = y + this._deltas[offset + 1] * this._currentFactor;
     }
 }
 
@@ -334,6 +350,10 @@ export class SimpleDFRIHelper extends DFRIHelperBase {
         super(renderer, particlesCount);
 
         this.reconfigure(sourceFrameRate, desiredFramerate);
+    }
+
+    get preferGpuInterpolation() {
+        return true;
     }
 
     get actualTime() {

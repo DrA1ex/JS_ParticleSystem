@@ -6,6 +6,7 @@ import {SimulationSequence} from "../simulation/sequence.js";
 import {FetchDataAsyncReader, FileAsyncReader, ObservableStreamLoader} from "../utils/stream.js";
 import {InteractionHandler} from "../render/interactions.js";
 import {RendererInitializer} from "../render/init.js";
+import {ITEM_SIZE} from "../utils/particles.js";
 
 export class Application {
     _statesToRender = new Set([PlayerStateEnum.playing, PlayerStateEnum.paused, PlayerStateEnum.finished]);
@@ -83,7 +84,12 @@ export class Application {
     }
 
     _setSequence(sequence) {
+        this.dfri?.disable();
+        this.renderInteractions?.dispose();
+        this.renderer?.dispose();
+
         this.sequence = sequence;
+        this.frameIndex = -1;
 
         this.settings.physics.config.particleCount = this.sequence.particleCount;
 
@@ -97,9 +103,12 @@ export class Application {
             this.dfri.init();
         }
 
-        this.particles = new Array(this.sequence.particleCount);
+        // Keep playback data in the same compact interleaved layout as the
+        // simulation backend. Five million JS particle objects (plus five
+        // million DFRI delta objects) can freeze or exhaust the player.
+        this.particles = new Float32Array(this.sequence.particleCount * ITEM_SIZE);
         for (let i = 0; i < this.sequence.particleCount; i++) {
-            this.particles[i] = {x: 0, y: 0, velX: 0, velY: 0, mass: 1};
+            this.particles[i * ITEM_SIZE + 4] = 1;
         }
 
         this.playerCtrl.setupSequence(this.sequence.length, 1 + (this.dfri?.interpolateFrames ?? 0));
@@ -144,23 +153,29 @@ export class Application {
         }
 
         const prevFrame = this.sequence.getFrame(this.frameIndex - 1);
-        for (let i = 0; i < this.particles.length; i++) {
-            const x = frame[i * this.sequence.componentsCount];
-            const y = frame[i * this.sequence.componentsCount + 1];
+        const components = this.sequence.componentsCount;
+        for (let i = 0, dst = 0; i < this.sequence.particleCount; i++, dst += ITEM_SIZE) {
+            const src = i * components;
+            const x = frame[src];
+            const y = frame[src + 1];
 
-            this.particles[i].x = x;
-            this.particles[i].y = y;
-
-            this.particles[i].velX = prevFrame ? x - prevFrame[i * this.sequence.componentsCount] : 0;
-            this.particles[i].velY = prevFrame ? y - prevFrame[i * this.sequence.componentsCount + 1] : 0;
+            this.particles[dst] = x;
+            this.particles[dst + 1] = y;
+            this.particles[dst + 2] = prevFrame ? x - prevFrame[src] : 0;
+            this.particles[dst + 3] = prevFrame ? y - prevFrame[src + 1] : 0;
         }
+        this.renderer.markParticlesDirty?.();
 
         if (this.dfri) {
             const nextFrame = this.sequence.getFrame(this.frameIndex + 1);
-            this.dfri.setNextFrame((i, out) => {
-                out.x = nextFrame ? nextFrame[i * this.sequence.componentsCount] - this.particles[i].x : this.particles[i].velX;
-                out.y = nextFrame ? nextFrame[i * this.sequence.componentsCount + 1] - this.particles[i].y : this.particles[i].velY;
-            });
+            if (!this.dfri.setNextPositionFrame(nextFrame)) {
+                this.dfri.setNextFrame((i, out) => {
+                    const src = i * components;
+                    const dst = i * ITEM_SIZE;
+                    out.x = nextFrame ? nextFrame[src] - this.particles[dst] : this.particles[dst + 2];
+                    out.y = nextFrame ? nextFrame[src + 1] - this.particles[dst + 1] : this.particles[dst + 3];
+                });
+            }
         }
     }
 

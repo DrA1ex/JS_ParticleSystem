@@ -113,6 +113,8 @@ export class RendererBase {
 
     setInterpolationFrame(_particles) {}
 
+    setInterpolationPositionFrame(_positions) {}
+
     setInterpolationFactor(_factor) {}
 
     markParticlesDirty() {}

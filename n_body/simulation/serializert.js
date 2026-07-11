@@ -7,7 +7,7 @@ export class SimulationSerializer {
      * @param {ChunkedArrayBuffer} buffer
      * @returns {{frames: Float32Array[], meta: {framesCount: number, metaLength: number, componentsCount: number, recordedRate: number, particleCount: number}}}
      */
-    static loadData(buffer) {
+    static loadData(buffer, {lazy = false} = {}) {
         const meta = SimulationSerializer._parseMeta(buffer);
 
         if (meta.framesCount < 1) {
@@ -25,8 +25,17 @@ export class SimulationSerializer {
             throw new Error(`Invalid size. Expected: ${expectedBytes} got: ${buffer.byteLength}`);
         }
 
-        const frames = new Array(meta.framesCount);
         const framesView = buffer.slice(metaBytes, totalDataBytes);
+        if (lazy) {
+            return {
+                frames: null,
+                framesView,
+                frameSize,
+                meta,
+            };
+        }
+
+        const frames = new Array(meta.framesCount);
         for (let i = 0; i < meta.framesCount; i++) {
             const offset = i * frameSize;
             const frame = framesView.createTypedArray(
