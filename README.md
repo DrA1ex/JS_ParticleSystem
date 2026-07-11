@@ -66,7 +66,7 @@ To change parameter just add it to url as query parameter, e.g.: [`/?particle_co
 
 _Collision:_
 - Enabled collisions with the default CPU backend: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?particle_count=50000&collision=1)
-Collision impulses are applied only to approaching particles. Restitution is part of the normal impulse, and simultaneous contacts are normalized to avoid artificial energy bursts in dense leaves.
+Collision impulses are applied only to approaching particles and restitution is part of the normal impulse. Dense-contact stabilization is configurable: `collision_average=0` keeps stronger multi-contact dispersal, `collision_cap=0` removes the accumulated impulse cap, and `collision_micro=0` keeps very slow contacts active. The defaults keep all three safeguards enabled.
 - Enabled collisions with gpgpu simulation: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?collision=1&backend=gpgpu&particle_count=16384&segment_max_count=128)
 - Enabled collisions with gpgpu simulation and `min_distance=3`: [link](https://dra1ex.github.io/JS_ParticleSystem/n_body/?collision=1&backend=gpgpu&particle_count=16384&segment_max_count=128&min_distance=3)
 

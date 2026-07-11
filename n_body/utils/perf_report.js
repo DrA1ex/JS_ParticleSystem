@@ -403,6 +403,9 @@ function snapshotSettings(app) {
             enableCollision: settings.physics.enableCollision,
             collisionSizeSq: settings.physics.collisionSizeSq,
             collisionRestitution: settings.physics.collisionRestitution,
+            collisionAverageContacts: settings.physics.collisionAverageContacts,
+            collisionLimitImpulse: settings.physics.collisionLimitImpulse,
+            collisionIgnoreMicro: settings.physics.collisionIgnoreMicro,
             particleMass: settings.physics.particleMass,
         },
         render: {

@@ -241,6 +241,11 @@ function processCollisions(indices, start, count) {
     const collisionSizeSq = settings.physics.collisionSizeSq;
     const minCollisionDistanceSq = collisionMinDistanceSq(collisionSizeSq);
     const restitution = settings.physics.collisionRestitution;
+    const averageContacts = settings.physics.collisionAverageContacts;
+    const limitImpulse = settings.physics.collisionLimitImpulse;
+    const minClosingSpeedSq = settings.physics.collisionIgnoreMicro
+        ? COLLISION_MIN_CLOSING_SPEED_SQ
+        : 0;
     const impulseRestitution = 1 + restitution;
     const accumulateForce = !!settings.common.debugForce && forceX && forceY;
 
@@ -270,7 +275,7 @@ function processCollisions(indices, start, count) {
                 + (p1VelY - particles[p2Offset + 3]) * dy;
             if (relativeDot >= 0) continue;
             const closingSpeedSq = relativeDot * relativeDot / distSquare;
-            if (closingSpeedSq <= COLLISION_MIN_CLOSING_SPEED_SQ) continue;
+            if (closingSpeedSq <= minClosingSpeedSq) continue;
             if (closingSpeedSq > maxClosingSpeedSq) maxClosingSpeedSq = closingSpeedSq;
 
             const p2Mass = particles[p2Offset + 4];
@@ -283,7 +288,8 @@ function processCollisions(indices, start, count) {
 
         const localIndex = i - start;
         const deltaScale = collisionDeltaScale(
-            deltaVelX, deltaVelY, contactCount, Math.sqrt(maxClosingSpeedSq), restitution);
+            deltaVelX, deltaVelY, contactCount, Math.sqrt(maxClosingSpeedSq), restitution,
+            averageContacts, limitImpulse);
         collisionVelX[localIndex] = p1VelX + deltaVelX * deltaScale;
         collisionVelY[localIndex] = p1VelY + deltaVelY * deltaScale;
     }

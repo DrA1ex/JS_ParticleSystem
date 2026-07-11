@@ -42,10 +42,25 @@ export class PhysicsSettings extends SettingsBase {
             .setConstraints(1e-6, 1e3),
         collisionRestitution: Property.float("collision_r", 1)
             .setExportable(true)
-            .setName("Collision restitution").setDescription("Bounciness used by the collision impulse: 0 removes normal relative velocity, 1 is elastic. Dense simultaneous contacts are averaged and capped by their measured closing speed to avoid velocity bursts. Values above 1 are disallowed to avoid injecting energy.")
+            .setName("Collision restitution").setDescription("Bounciness used by the collision impulse: 0 removes normal relative velocity, 1 is elastic. Values above 1 are disallowed to avoid injecting energy.")
             .setAffects(ComponentType.backend)
             .setVisibleWhen(collisionEnabled)
             .setConstraints(0, 1),
+        collisionAverageContacts: Property.bool("collision_average", true)
+            .setExportable(true)
+            .setName("Average dense contacts").setDescription("Divide the accumulated collision response by the number of simultaneous contacts. This is the strongest anti-explosion stabilization, but it can make dense clusters feel sticky. Disable it for stronger dispersal while keeping the impulse cap enabled.")
+            .setAffects(ComponentType.backend)
+            .setVisibleWhen(collisionEnabled),
+        collisionLimitImpulse: Property.bool("collision_cap", true)
+            .setExportable(true)
+            .setName("Limit collision impulse").setDescription("Cap the accumulated response by the fastest measured closing contact. Disabling it allows more energetic dense collisions, but can reintroduce large velocity bursts.")
+            .setAffects(ComponentType.backend)
+            .setVisibleWhen(collisionEnabled),
+        collisionIgnoreMicro: Property.bool("collision_micro", true)
+            .setExportable(true)
+            .setName("Ignore micro-collisions").setDescription("Ignore extremely small closing speeds to suppress jitter in resting dense clusters. Disable it when very slow contacts should still separate particles.")
+            .setAffects(ComponentType.backend)
+            .setVisibleWhen(collisionEnabled),
         minInteractionDistance: Property.float("min_distance", 0.01)
             .setExportable(true)
             .setName("Min interaction distance").setDescription("Minimal distance (pixels) to process interactions")
@@ -60,7 +75,13 @@ export class PhysicsSettings extends SettingsBase {
     }
 
     static PropertiesDependencies = new Map([
-        [this.Properties.enableCollision, [this.Properties.collisionSize, this.Properties.collisionRestitution]],
+        [this.Properties.enableCollision, [
+            this.Properties.collisionSize,
+            this.Properties.collisionRestitution,
+            this.Properties.collisionAverageContacts,
+            this.Properties.collisionLimitImpulse,
+            this.Properties.collisionIgnoreMicro,
+        ]],
         [this.Properties.gravity, [this.ReadOnlyProperties.particleGravity]],
         [this.Properties.particleMassFactor, [this.ReadOnlyProperties.particleMass]],
     ]);
@@ -74,6 +95,9 @@ export class PhysicsSettings extends SettingsBase {
     get enableCollision() {return this.config.enableCollision;}
     get collisionSize() {return this.config.collisionSize;}
     get collisionRestitution() {return this.config.collisionRestitution;}
+    get collisionAverageContacts() {return this.config.collisionAverageContacts;}
+    get collisionLimitImpulse() {return this.config.collisionLimitImpulse;}
+    get collisionIgnoreMicro() {return this.config.collisionIgnoreMicro;}
     get minInteractionDistance() {return this.config.minInteractionDistance;}
 
     particleGravity;

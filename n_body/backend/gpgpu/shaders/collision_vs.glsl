@@ -6,6 +6,9 @@ precision highp int;
 uniform float min_dist_square;
 uniform int count;
 uniform float restitution;
+uniform int average_contacts;
+uniform int limit_impulse;
+uniform int ignore_micro;
 
 uniform sampler2D particle_pos_mass_tex;
 uniform sampler2D particle_velocity_tex;
@@ -39,7 +42,7 @@ void main() {
         if (relative_dot >= 0.0) continue;
 
         float closing_speed_square = relative_dot * relative_dot / dist_square;
-        if (closing_speed_square <= 1e-10) continue;
+        if (ignore_micro != 0 && closing_speed_square <= 1e-10) continue;
         max_closing_speed_square = max(max_closing_speed_square, closing_speed_square);
 
         float impulse_factor = -(1.0 + restitution) * other.z / (mass + other.z)
@@ -49,11 +52,15 @@ void main() {
     }
 
     if (contact_count > 0) {
-        velocity_delta /= float(contact_count);
-        float max_delta = (1.0 + restitution) * sqrt(max_closing_speed_square);
-        float delta_length = length(velocity_delta);
-        if (max_delta > 0.0 && delta_length > max_delta) {
-            velocity_delta *= max_delta / delta_length;
+        if (average_contacts != 0) {
+            velocity_delta /= float(contact_count);
+        }
+        if (limit_impulse != 0) {
+            float max_delta = (1.0 + restitution) * sqrt(max_closing_speed_square);
+            float delta_length = length(velocity_delta);
+            if (max_delta > 0.0 && delta_length > max_delta) {
+                velocity_delta *= max_delta / delta_length;
+            }
         }
     }
 

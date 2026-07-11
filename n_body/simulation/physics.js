@@ -141,6 +141,11 @@ export class PhysicsEngine {
         const collisionSizeSq = this.settings.physics.collisionSizeSq;
         const minCollisionDistanceSq = collisionMinDistanceSq(collisionSizeSq);
         const restitution = this.settings.physics.collisionRestitution;
+        const averageContacts = this.settings.physics.collisionAverageContacts;
+        const limitImpulse = this.settings.physics.collisionLimitImpulse;
+        const minClosingSpeedSq = this.settings.physics.collisionIgnoreMicro
+            ? COLLISION_MIN_CLOSING_SPEED_SQ
+            : 0;
         const impulseRestitution = 1 + restitution;
 
         for (let i = 0; i < leaf.length; i++) {
@@ -161,7 +166,7 @@ export class PhysicsEngine {
                 const relativeDot = (p1.velX - p2.velX) * dx + (p1.velY - p2.velY) * dy;
                 if (relativeDot >= 0) continue;
                 const closingSpeedSq = relativeDot * relativeDot / distSquare;
-                if (closingSpeedSq <= COLLISION_MIN_CLOSING_SPEED_SQ) continue;
+                if (closingSpeedSq <= minClosingSpeedSq) continue;
                 if (closingSpeedSq > maxClosingSpeedSq) maxClosingSpeedSq = closingSpeedSq;
 
                 const impulseFactor = -impulseRestitution * p2.mass / (p1.mass + p2.mass)
@@ -172,7 +177,8 @@ export class PhysicsEngine {
             }
 
             const deltaScale = collisionDeltaScale(
-                deltaVelX, deltaVelY, contactCount, Math.sqrt(maxClosingSpeedSq), restitution);
+                deltaVelX, deltaVelY, contactCount, Math.sqrt(maxClosingSpeedSq), restitution,
+                averageContacts, limitImpulse);
             nextVelXBuffer[i] = p1.velX + deltaVelX * deltaScale;
             nextVelYBuffer[i] = p1.velY + deltaVelY * deltaScale;
         }

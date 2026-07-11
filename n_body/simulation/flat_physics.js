@@ -201,6 +201,11 @@ export class FlatPhysicsEngine {
         const collisionSizeSq = this.settings.physics.collisionSizeSq;
         const minCollisionDistanceSq = collisionMinDistanceSq(collisionSizeSq);
         const restitution = this.settings.physics.collisionRestitution;
+        const averageContacts = this.settings.physics.collisionAverageContacts;
+        const limitImpulse = this.settings.physics.collisionLimitImpulse;
+        const minClosingSpeedSq = this.settings.physics.collisionIgnoreMicro
+            ? COLLISION_MIN_CLOSING_SPEED_SQ
+            : 0;
         const impulseRestitution = 1 + restitution;
 
         for (let i = start; i < end; i++) {
@@ -232,7 +237,7 @@ export class FlatPhysicsEngine {
                 // implementation to bounce separating particles back together.
                 if (relativeDot >= 0) continue;
                 const closingSpeedSq = relativeDot * relativeDot / distSquare;
-                if (closingSpeedSq <= COLLISION_MIN_CLOSING_SPEED_SQ) continue;
+                if (closingSpeedSq <= minClosingSpeedSq) continue;
                 if (closingSpeedSq > maxClosingSpeedSq) maxClosingSpeedSq = closingSpeedSq;
 
                 const p2Mass = particles[p2Offset + 4];
@@ -245,7 +250,8 @@ export class FlatPhysicsEngine {
 
             const localIndex = i - start;
             const deltaScale = collisionDeltaScale(
-                deltaVelX, deltaVelY, contactCount, Math.sqrt(maxClosingSpeedSq), restitution);
+                deltaVelX, deltaVelY, contactCount, Math.sqrt(maxClosingSpeedSq), restitution,
+                averageContacts, limitImpulse);
             nextVelXBuffer[localIndex] = p1VelX + deltaVelX * deltaScale;
             nextVelYBuffer[localIndex] = p1VelY + deltaVelY * deltaScale;
         }

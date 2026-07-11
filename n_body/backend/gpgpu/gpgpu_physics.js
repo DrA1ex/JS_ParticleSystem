@@ -62,6 +62,9 @@ const CONFIGURATION1 = [{
     uniforms: [
         {name: "min_dist_square", type: "uniform1f"},
         {name: "restitution", type: "uniform1f"},
+        {name: "average_contacts", type: "uniform1i"},
+        {name: "limit_impulse", type: "uniform1i"},
+        {name: "ignore_micro", type: "uniform1i"},
         {name: "count", type: "uniform1i"},
     ],
     vertexArrays: [{
@@ -172,6 +175,9 @@ export class GPUPhysicsEngine extends PhysicsEngine {
             uniforms: [
                 {name: "min_dist_square", values: [this.settings.physics.collisionSizeSq]},
                 {name: "restitution", values: [this.settings.physics.collisionRestitution]},
+                {name: "average_contacts", values: [this.settings.physics.collisionAverageContacts ? 1 : 0]},
+                {name: "limit_impulse", values: [this.settings.physics.collisionLimitImpulse ? 1 : 0]},
+                {name: "ignore_micro", values: [this.settings.physics.collisionIgnoreMicro ? 1 : 0]},
             ],
             buffers: [
                 {name: "index", data: this._indexBufferData},
@@ -200,6 +206,9 @@ export class GPUPhysicsEngine extends PhysicsEngine {
             uniforms: [
                 {name: "min_dist_square", values: [this.settings.physics.collisionSizeSq]},
                 {name: "restitution", values: [this.settings.physics.collisionRestitution]},
+                {name: "average_contacts", values: [this.settings.physics.collisionAverageContacts ? 1 : 0]},
+                {name: "limit_impulse", values: [this.settings.physics.collisionLimitImpulse ? 1 : 0]},
+                {name: "ignore_micro", values: [this.settings.physics.collisionIgnoreMicro ? 1 : 0]},
             ]
         }]);
     }
