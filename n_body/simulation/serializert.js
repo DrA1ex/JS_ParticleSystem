@@ -10,11 +10,18 @@ export class SimulationSerializer {
     static loadData(buffer) {
         const meta = SimulationSerializer._parseMeta(buffer);
 
-        const metaBytes = meta.metaLength * Uint32Array.BYTES_PER_ELEMENT
+        if (meta.framesCount < 1) {
+            throw new Error("Recording contains no frames");
+        }
+        if (meta.particleCount < 1 || meta.componentsCount < 2) {
+            throw new Error("Recording header contains invalid particle or component counts");
+        }
+
+        const metaBytes = meta.metaLength * Uint32Array.BYTES_PER_ELEMENT;
         const frameSize = meta.particleCount * meta.componentsCount;
         const totalDataBytes = meta.framesCount * frameSize * Float32Array.BYTES_PER_ELEMENT;
         const expectedBytes = totalDataBytes + metaBytes;
-        if (expectedBytes > buffer.byteLength) {
+        if (!Number.isSafeInteger(expectedBytes) || expectedBytes > buffer.byteLength) {
             throw new Error(`Invalid size. Expected: ${expectedBytes} got: ${buffer.byteLength}`);
         }
 
@@ -22,7 +29,15 @@ export class SimulationSerializer {
         const framesView = buffer.slice(metaBytes, totalDataBytes);
         for (let i = 0; i < meta.framesCount; i++) {
             const offset = i * frameSize;
-            frames[i] = framesView.createTypedArray(Float32Array, offset * Float32Array.BYTES_PER_ELEMENT, frameSize);
+            const frame = framesView.createTypedArray(
+                Float32Array,
+                offset * Float32Array.BYTES_PER_ELEMENT,
+                frameSize
+            );
+            if (frame.length !== frameSize) {
+                throw new Error(`Invalid frame ${i}. Expected ${frameSize} values, got ${frame.length}`);
+            }
+            frames[i] = frame;
         }
 
         return {
@@ -45,6 +60,10 @@ export class SimulationSerializer {
         const framesCount = metaBuffer[idx++];
         const particleCount = metaBuffer[idx++];
         const componentsCount = metaBuffer[idx++];
+
+        if (recordedRate < 1) {
+            throw new Error(`Invalid recording frame rate: ${recordedRate}`);
+        }
 
         return {
             metaLength,

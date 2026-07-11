@@ -65,15 +65,5 @@ export function saveFile(content, fileName, contentType) {
  * @param {string} contentType
  */
 export function saveFileParts(parts, fileName, contentType) {
-    const a = document.createElement("a");
-    const file = new Blob(parts, {type: contentType});
-    const url = URL.createObjectURL(file);
-    a.href = url;
-    a.download = fileName;
-    a.click();
-
-    setTimeout(() => {
-        URL.revokeObjectURL(url);
-        a.remove();
-    }, 0);
+    return saveBlob(new Blob(parts, {type: contentType}), fileName);
 }

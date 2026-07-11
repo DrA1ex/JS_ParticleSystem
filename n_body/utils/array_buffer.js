@@ -19,9 +19,10 @@ export class ChunkedArrayBuffer {
             this._addChunk(chunk);
         }
 
-        byteLength = byteLength > 0 ? byteLength : this.byteLength;
-        this.bytesOffset = Math.max(0, Math.min(bytesOffset, this.byteLength));
-        this.byteLength = Math.max(0, Math.min(this.byteLength - this.bytesOffset, byteLength));
+        const totalBytes = this.byteLength;
+        this.bytesOffset = Math.max(0, Math.min(bytesOffset, totalBytes));
+        const requestedLength = byteLength >= 0 ? byteLength : totalBytes - this.bytesOffset;
+        this.byteLength = Math.max(0, Math.min(totalBytes - this.bytesOffset, requestedLength));
     }
 
     /**
@@ -49,12 +50,23 @@ export class ChunkedArrayBuffer {
      * @return {ChunkedArrayBuffer}
      */
     slice(bytesOffset, byteLength) {
-        const startBorder = this.bytesOffset + bytesOffset;
-        const endBorder = Math.min(bytesOffset + byteLength, this.byteLength);
-        const chunks = this.chunks.filter(c => startBorder < c.end && endBorder >= c.start);
+        const relativeStart = Math.max(0, Math.min(bytesOffset, this.byteLength));
+        const requestedLength = Math.max(0, byteLength);
+        const length = Math.min(requestedLength, this.byteLength - relativeStart);
+        if (length === 0) {
+            return new ChunkedArrayBuffer([], 0, 0);
+        }
+
+        const startBorder = this.bytesOffset + relativeStart;
+        const endBorder = startBorder + length;
+        const chunks = this.chunks.filter(c => startBorder < c.end && endBorder > c.start);
 
         if (chunks.length > 0) {
-            return new ChunkedArrayBuffer(chunks.map(c => c.buffer), this.bytesOffset + bytesOffset - chunks[0].start, byteLength)
+            return new ChunkedArrayBuffer(
+                chunks.map(c => c.buffer),
+                startBorder - chunks[0].start,
+                length
+            );
         }
 
         return new ChunkedArrayBuffer([], 0, 0);
@@ -87,7 +99,7 @@ export class ChunkedArrayBuffer {
         }
 
         const itemsCount = Math.floor(this.byteLength / itemSize);
-        if (this.chunks.length === 1) {
+        if (this.chunks.length === 1 && this.bytesOffset % itemSize === 0) {
             const {buffer} = this.chunks[0];
             return new type(buffer, this.bytesOffset, itemsCount);
         }

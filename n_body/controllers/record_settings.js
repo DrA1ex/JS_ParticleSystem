@@ -85,7 +85,7 @@ export class RecordSettingsController extends ControllerBase {
     }
 
     _update() {
-        this._fpsRatio = Math.round(this.fps / this.frameRate);
+        this._fpsRatio = Math.max(1, Math.round(this.fps / this.frameRate));
         this._totalFrames = this.duration > 0 ? this.frameRate * this.duration : -1;
 
         if (this.totalFrames > 0) {

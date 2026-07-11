@@ -127,7 +127,13 @@ export class SimulationController extends StateControllerBase {
         }
 
         if (this._exportFrameNumber % this.recordSettingsCtrl.frameRateRatio === 0) {
-            this._exportSequence.addFrame(this._transformBuffer(buffer));
+            try {
+                this._exportSequence.addFrame(this._transformBuffer(buffer));
+            } catch (error) {
+                this.setState(SimulationStateEnum.active);
+                alert(`Recording stopped: ${error.message}`);
+                return;
+            }
             this.recordBar.onSequenceUpdated(this._exportSequence, this.recordSettingsCtrl.frameRateRatio, this.recordSettingsCtrl.totalFrames, this.app.debug.frameLatency);
         }
 
@@ -139,6 +145,11 @@ export class SimulationController extends StateControllerBase {
     }
 
     _transformBuffer(buffer) {
+        const requiredValues = this._exportSequence.particleCount * ITEM_SIZE;
+        if (!(buffer instanceof Float32Array) || buffer.length < requiredValues) {
+            throw new Error(`Invalid physics buffer while recording. Expected at least ${requiredValues} values, got ${buffer?.length ?? 0}`);
+        }
+
         const frame = new Float32Array(this._exportSequence.particleCount * this._exportSequence.componentsCount);
 
         for (let i = 0; i < this._exportSequence.particleCount; i++) {
@@ -185,10 +196,16 @@ export class SimulationController extends StateControllerBase {
             return;
         }
 
+        if (!this._exportSequence || this._exportSequence.length === 0) {
+            this.setState(SimulationStateEnum.active);
+            alert("No completed physics frames were recorded");
+            return;
+        }
+
         const meta = SimulationSerializer.formatMeta(this._exportSequence);
         FileUtils.saveFileParts(
             [meta, ...this._exportSequence.frames],
-            `sequence_${this.app.settings.physics.particleCount}_${this._exportSequence.length}_${new Date().toISOString()}.bin`,
+            `sequence_${this._exportSequence.particleCount}_${this._exportSequence.length}_${new Date().toISOString()}.bin`,
             "application/octet-stream"
         );
 

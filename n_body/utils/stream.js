@@ -45,9 +45,12 @@ export class ObservableStreamLoader {
         let read = 0;
         let readChunks = [];
         for await (const chunk of this.stream) {
-            readChunks.push(chunk.buffer)
-            read += chunk.length;
-            totalRead += chunk.length;
+            const exactBuffer = chunk.byteOffset === 0 && chunk.byteLength === chunk.buffer.byteLength
+                ? chunk.buffer
+                : chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
+            readChunks.push(exactBuffer);
+            read += chunk.byteLength;
+            totalRead += chunk.byteLength;
             if (read >= chunkSize) {
                 bigChunks.push(new ChunkedArrayBuffer(readChunks).toTypedArray(Uint8Array).buffer);
                 readChunks = [];
