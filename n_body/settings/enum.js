@@ -62,6 +62,27 @@ export const RenderColorMode = {
     fixed: "fixed"
 }
 
+
+/**
+ * @enum(string)
+ */
+export const StatsLevel = {
+    off: "off",
+    default: "default",
+    extended: "extended",
+    verbose: "verbose"
+}
+
+/**
+ * @enum(string)
+ */
+export const ParticleSpriteMode = {
+    point: "point",
+    circle: "circle",
+    softCircle: "soft_circle",
+    glow: "glow"
+}
+
 /**
  * @enum(string)
  */

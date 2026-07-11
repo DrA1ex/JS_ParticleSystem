@@ -1,6 +1,6 @@
 import {RendererBase} from "../base.js";
 import * as WebglUtils from "../../utils/webgl.js";
-import {BufferUploadMode, MaxSpeedUpdateMode, RenderColorMode} from "../../settings/enum.js";
+import {BufferUploadMode, MaxSpeedUpdateMode, ParticleSpriteMode, RenderColorMode} from "../../settings/enum.js";
 import {ITEM_SIZE, getParticleCount, isParticleBuffer} from "../../utils/particles.js";
 
 const RenderVertexShaderSource = await fetch(new URL("./shaders/render_vs.glsl", import.meta.url))
@@ -15,6 +15,12 @@ const VELOCITY_ITEM_SIZE = 2;
 const MASS_ITEM_SIZE = 1;
 const COLOR_ITEM_SIZE = 3;
 const RENDER_BUFFER_PROGRAM = "renderBuffers";
+const PARTICLE_SPRITE_IDS = {
+    [ParticleSpriteMode.point]: 0,
+    [ParticleSpriteMode.circle]: 1,
+    [ParticleSpriteMode.softCircle]: 2,
+    [ParticleSpriteMode.glow]: 3,
+};
 const PROGRAM_NAMES = {
     [RenderColorMode.velocity]: {
         plain: "renderVelocity",
@@ -84,6 +90,7 @@ function makeProgramConfig(colorMode, interpolated) {
             {type: "uniform1f", name: "max_mass"},
             {type: "uniform1f", name: "max_speed"},
             {type: "uniform1f", name: "particle_scale"},
+            {type: "uniform1i", name: "sprite_mode"},
             {type: "uniform1f", name: "interpolation_factor"},
             {type: "uniform1f", name: "filter_enabled"},
             {type: "uniform1f", name: "hue_angle"},
@@ -192,6 +199,7 @@ export class Webgl2Renderer extends RendererBase {
             offset: [this.xOffset, this.yOffset],
             resolution: [this.canvasWidth, this.canvasHeight],
             particle_scale: this.settings.render.particleSizeScale,
+            sprite_mode: this._particleSpriteId,
             interpolation_factor: 0,
             filter_enabled: 0,
             hue_angle: 0,
@@ -401,6 +409,8 @@ export class Webgl2Renderer extends RendererBase {
         this.stats.webglLowLatency = !!this.settings.render.webglLowLatency;
         this.stats.gpuInterpolation = this._getGpuInterpolationStatus(count);
         this.stats.filterMode = this.settings.render.enableFilter ? "shader" : "off";
+        this.stats.particleSprite = this.settings.render.particleSprite || ParticleSpriteMode.point;
+        this.stats.particleSizeScale = this.settings.render.particleSizeScale;
     }
 
     _updateData(particles) {
@@ -447,6 +457,7 @@ export class Webgl2Renderer extends RendererBase {
             max_speed: this._maxSpeed,
             offset: [this.xOffset, this.yOffset],
             particle_scale: particleScale,
+            sprite_mode: this._particleSpriteId,
             interpolation_factor: interpolationEnabled ? this._interpolationFactor : 0,
             filter_enabled: this.settings.render.enableFilter ? 1 : 0,
             hue_angle: this.settings.render.enableFilter ? this._hueAngle * Math.PI / 180 : 0,
@@ -464,6 +475,10 @@ export class Webgl2Renderer extends RendererBase {
         const uploadTime = performance.now() - uploadStart;
 
         return {count, prepareDataTime, uploadTime, programName};
+    }
+
+    get _particleSpriteId() {
+        return PARTICLE_SPRITE_IDS[this.settings.render.particleSprite] ?? PARTICLE_SPRITE_IDS[ParticleSpriteMode.point];
     }
 
     get _colorMode() {
@@ -768,6 +783,7 @@ export class Webgl2Renderer extends RendererBase {
         if (values.max_mass !== undefined) uniforms.push({name: "max_mass", values: [values.max_mass]});
         if (values.max_speed !== undefined) uniforms.push({name: "max_speed", values: [values.max_speed]});
         if (values.particle_scale !== undefined) uniforms.push({name: "particle_scale", values: [values.particle_scale]});
+        if (values.sprite_mode !== undefined) uniforms.push({name: "sprite_mode", values: [values.sprite_mode]});
         if (values.interpolation_factor !== undefined) {
             uniforms.push({name: "interpolation_factor", values: [values.interpolation_factor]});
         }
@@ -803,7 +819,8 @@ export class Webgl2Renderer extends RendererBase {
     _applyBlendMode() {
         if (this.settings.render.enableBlending) {
             this.gl.enable(GL.BLEND);
-            this.gl.blendFunc(GL.SRC_COLOR, GL.ONE);
+            const sprite = this.settings.render.particleSprite || ParticleSpriteMode.point;
+            this.gl.blendFunc(sprite === ParticleSpriteMode.point ? GL.SRC_COLOR : GL.SRC_ALPHA, GL.ONE);
         } else {
             this.gl.disable(GL.BLEND);
         }

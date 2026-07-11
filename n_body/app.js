@@ -442,6 +442,9 @@ export class Application {
             if (this.settings.render.enableDFRI) {
                 this.mainStats.noAheadBufferCount += 1;
                 this.mainStats.missedAheadFrames += 1;
+                if (this.hasCurrentFrame && this.dfriHelper.frame > this.dfriHelper.interpolateFrames) {
+                    this.dfriHelper.reportAheadBufferMiss?.();
+                }
                 this._warnNoAheadBufferIfNeeded();
             }
             return;
@@ -576,6 +579,7 @@ export class Application {
             this.debug.renderTime = this.renderer.stats.renderTime;
             this.debug.bufferCount = this.aheadBuffers.length;
             this.debug.interpolateFrames = this.dfriHelper.interpolateFrames;
+            this.debug.dfriPacing = this.dfriHelper.pacingDiagnostics ?? null;
             this.debug.importMainStats(this.mainStats);
             statsDomTime = this.debug.drawStats();
             this.mainStats.statsDomTime = statsDomTime;

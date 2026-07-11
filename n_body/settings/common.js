@@ -1,7 +1,8 @@
 import {ComponentType, Property, SettingsBase} from "./base.js";
+import {StatsLevel} from "./enum.js";
 
 const debugEnabled = settings => !!settings.common.debug;
-const statsEnabled = settings => !!settings.common.stats;
+const verboseStatsEnabled = settings => settings.common.statsLevel === StatsLevel.verbose;
 
 export class CommonSettings extends SettingsBase {
     static Properties = {
@@ -23,51 +24,64 @@ export class CommonSettings extends SettingsBase {
             .setBreaks(ComponentType.backend)
             .setAffects(ComponentType.debug)
             .setVisibleWhen(debugEnabled),
-        stats: Property.bool("stats", true)
-            .setName("Show statistics")
-            .setDescription("Show compact runtime statistics overlay with FPS, physics, render and backend summary.")
-            .setBreaks(ComponentType.debug),
-        verboseStats: Property.bool("verbose_stats", false)
-            .setName("Verbose statistics")
+        statsLevel: Property.enum("stats", StatsLevel, StatsLevel.default)
+            .setName("Statistics")
             .setDescription([
-                "Show detailed diagnostic timing in the statistics overlay.",
-                "Disabled by default to keep the overlay stable and readable during normal use.",
-                "Enable it when profiling frame pacing, main-thread work, WebGL upload, GPU timing, auto-tune state or other performance details."
+                "off: hide the statistics overlay.",
+                "default: compact runtime overview with the most useful timings.",
+                "extended: broader performance overview without low-level diagnostics.",
+                "verbose: full diagnostics, filtered by the group switches below."
             ].join("\n"))
+            .setBreaks(ComponentType.debug),
+        statsFrame: Property.bool("stats_frame", true)
+            .setName("Verbose: frame & DFRI")
             .setBreaks(ComponentType.debug)
-            .setVisibleWhen(statsEnabled),
+            .setVisibleWhen(verboseStatsEnabled),
+        statsTree: Property.bool("stats_tree", true)
+            .setName("Verbose: tree")
+            .setBreaks(ComponentType.debug)
+            .setVisibleWhen(verboseStatsEnabled),
+        statsPhysics: Property.bool("stats_physics", true)
+            .setName("Verbose: physics")
+            .setBreaks(ComponentType.debug)
+            .setVisibleWhen(verboseStatsEnabled),
+        statsRender: Property.bool("stats_render", true)
+            .setName("Verbose: render")
+            .setBreaks(ComponentType.debug)
+            .setVisibleWhen(verboseStatsEnabled),
+        statsRuntime: Property.bool("stats_runtime", true)
+            .setName("Verbose: backend & runtime")
+            .setBreaks(ComponentType.debug)
+            .setVisibleWhen(verboseStatsEnabled),
     }
 
     static PropertiesDependencies = new Map([
         [this.Properties.debug, [this.Properties.debugTree, this.Properties.debugVelocity, this.Properties.debugForce]],
-        [this.Properties.stats, [this.Properties.verboseStats]],
     ]);
 
     get debug() {return this.config.debug};
     get debugTree() {return this.config.debugTree;}
     get debugVelocity() {return this.config.debugVelocity;}
     get debugForce() {return this.config.debugForce;}
-    get stats() {return this.config.stats;}
-    get verboseStats() {return this.config.verboseStats;}
+    get statsLevel() {return this.config.statsLevel;}
+    get stats() {return this.config.statsLevel !== StatsLevel.off;}
+    get verboseStats() {return this.config.statsLevel === StatsLevel.verbose;}
+    get statsFrame() {return this.config.statsFrame;}
+    get statsTree() {return this.config.statsTree;}
+    get statsPhysics() {return this.config.statsPhysics;}
+    get statsRender() {return this.config.statsRender;}
+    get statsRuntime() {return this.config.statsRuntime;}
 
     constructor(values) {
         super(values);
-
-        if (this.stats === false) {
-            this.config.verboseStats = false;
-        }
 
         if (this.debug === false) {
             this.config.debugTree = false;
             this.config.debugVelocity = false;
             this.config.debugForce = false;
         } else {
-            if (this.debugTree === null) {
-                this.config.debugTree = this.debug;
-            }
-            if (this.debugForce === null) {
-                this.config.debugForce = this.debugVelocity;
-            }
+            if (this.debugTree === null) this.config.debugTree = this.debug;
+            if (this.debugForce === null) this.config.debugForce = this.debugVelocity;
         }
     }
 }

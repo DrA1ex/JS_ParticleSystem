@@ -347,6 +347,16 @@ const BLOCK_METRICS = {
     "dfri.targetFrame": "dfri.targetFrame",
     "dfri.actualStep": "dfri.actualStep",
     "dfri.desiredFrame": "dfri.desiredFrame",
+    "dfri.pacingSelected": "dfri.pacing.selectedFrames",
+    "dfri.pacingNominal": "dfri.pacing.nominalTarget",
+    "dfri.pacingUpper": "dfri.pacing.upperTarget",
+    "dfri.pacingRobust": "dfri.pacing.robustTarget",
+    "dfri.pacingDistrust": "dfri.pacing.distrust",
+    "dfri.pacingPressure": "dfri.pacing.pressure",
+    "dfri.pacingShortages": "dfri.pacing.shortages",
+    "dfri.pacingIncreases": "dfri.pacing.increases",
+    "dfri.pacingDecreases": "dfri.pacing.decreases",
+    "dfri.pacingFailedProbes": "dfri.pacing.failedProbes",
     "queue.aheadBuffers": "queue.aheadBuffers",
     "queue.pendingBuffers": "queue.pendingBuffers",
 };
@@ -356,7 +366,15 @@ function snapshotSettings(app) {
     return {
         common: {
             stats: settings.common.stats,
+            statsLevel: settings.common.statsLevel,
             verboseStats: settings.common.verboseStats,
+            statsGroups: {
+                frame: settings.common.statsFrame,
+                tree: settings.common.statsTree,
+                physics: settings.common.statsPhysics,
+                render: settings.common.statsRender,
+                runtime: settings.common.statsRuntime,
+            },
             debug: settings.common.debug,
             debugTree: settings.common.debugTree,
             debugVelocity: settings.common.debugVelocity,
@@ -388,6 +406,8 @@ function snapshotSettings(app) {
         render: {
             render: settings.render.render,
             colorMode: settings.render.colorMode,
+            particleSprite: settings.render.particleSprite,
+            particleSizeScale: settings.render.particleSizeScale,
             colorFreezeFrames: settings.render.colorFreezeFrames,
             bufferUploadMode: settings.render.bufferUploadMode,
             webglLowLatency: settings.render.webglLowLatency,
@@ -400,7 +420,6 @@ function snapshotSettings(app) {
             useDpr: settings.render.useDpr,
             dprRate: settings.render.dprRate,
             fixedParticleSize: settings.render.fixedParticleSize,
-            particleSizeScale: settings.render.particleSizeScale,
         },
     };
 }
@@ -520,6 +539,7 @@ function snapshotApp(app, collectorRafInterval, collectorTimestamp) {
             interpolationFactor: finite(renderer?._interpolationFactor),
             gpuInterpolationInternal: !!dfri?._gpuInterpolation,
             hasNextParticles: !!renderer?._nextParticles,
+            pacing: dfri?.pacingDiagnostics ? {...dfri.pacingDiagnostics} : null,
         },
         queue: {
             aheadBuffers: finite(app.aheadBuffers?.length),

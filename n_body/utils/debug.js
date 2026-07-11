@@ -1,6 +1,7 @@
 import {DataSmoother} from "./smoother.js";
 import * as CommonUtils from "./common.js";
 import {getCrossOriginIsolationStatus} from "./coi.js";
+import {StatsLevel} from "../settings/enum.js";
 
 function getDisplayName(instance, fallback = "n/a") {
     return instance?.displayName || instance?.constructor?.displayName || instance?.constructor?.name || fallback;
@@ -12,6 +13,7 @@ export class Debug {
     segmentCount = 0;
     bufferCount = 0;
     interpolateFrames = 0;
+    dfriPacing = null;
 
     treeTime = 0;
     physicsTime = 0;
@@ -71,7 +73,7 @@ export class Debug {
         this._maxDebugVectors = 1000;
 
         this._longTaskObserver = null;
-        if (this.settings.common.verboseStats && typeof PerformanceObserver !== "undefined") {
+        if (this.settings.common.verboseStats && this.settings.common.statsFrame && typeof PerformanceObserver !== "undefined") {
             try {
                 this._longTaskObserver = new PerformanceObserver((list) => {
                     for (const entry of list.getEntries()) {
@@ -114,109 +116,146 @@ export class Debug {
 
     drawStats() {
         const now = performance.now();
-        if (now - this._lastStatsDrawTime < this._statsDrawInterval) {
-            return 0;
-        }
+        if (now - this._lastStatsDrawTime < this._statsDrawInterval) return 0;
         const drawStart = performance.now();
         this._lastStatsDrawTime = now;
 
-        const lines = this.settings.common.verboseStats ? this._buildVerboseStatsLines() : this._buildCompactStatsLines();
+        let lines;
+        switch (this.settings.common.statsLevel) {
+            case StatsLevel.extended:
+                lines = this._buildExtendedStatsLines();
+                break;
+            case StatsLevel.verbose:
+                lines = this._buildVerboseStatsLines();
+                break;
+            case StatsLevel.default:
+            default:
+                lines = this._buildDefaultStatsLines();
+                break;
+        }
         this.infoElem.innerText = lines.join("\n");
-
         return performance.now() - drawStart;
     }
 
-    _buildCompactStatsLines() {
-        const flops = CommonUtils.formatUnit(this.flops, "FLOPS");
+    _buildDefaultStatsLines() {
         const profile = this.profile || {};
-        const rendererStats = this.renderer.stats || {};
         const actualSegmentSize = this.actualSegmentSize ?? this.settings.simulation.segmentMaxCount;
         const physicsTotal = this._sumFinite(this.treeTime, this.physicsTime, profile.exportTime, profile.statsTime);
 
         return [
             `fps: ${(1000 / this.elapsed || 0).toFixed(1)}`,
-            `interpolated: ${this.settings.render.enableDFRI ? `${this.interpolateFrames} frames` : "off"}`,
-            `ahead buffers: ${this.bufferCount}`,
+            `interpolated: ${this.settings.render.enableDFRI ? `${this.interpolateFrames} frames` : "off"}, ahead: ${this.bufferCount}`,
             `particles: ${this.settings.physics.particleCount}`,
-            `segments: ${this.segmentCount}, depth: ${this.depth}`,
+            `physics: ${this._formatMs(physicsTotal)} (tree ${this._formatMs(this.treeTime)}, force ${this._formatMs(profile.forceTime)})`,
+            `render: ${this._formatMs(this.renderTime)}`,
+            `backend: ${getDisplayName(this.backend, "Backend")}, block size: ${actualSegmentSize}`,
+        ];
+    }
+
+    _buildExtendedStatsLines() {
+        const flops = CommonUtils.formatUnit(this.flops, "FLOPS");
+        const profile = this.profile || {};
+        const rendererStats = this.renderer.stats || {};
+        const main = this.mainStats || {};
+        const actualSegmentSize = this.actualSegmentSize ?? this.settings.simulation.segmentMaxCount;
+        const physicsTotal = this._sumFinite(this.treeTime, this.physicsTime, profile.exportTime, profile.statsTime);
+        const rawFrameTime = this.rawFrameRateSmoother?.smoothedValue;
+        const rawFps = rawFrameTime > 0 ? 1000 / rawFrameTime : 0;
+
+        return [
+            `fps: ${(1000 / this.elapsed || 0).toFixed(1)}, raw: ${rawFps ? rawFps.toFixed(1) : "n/a"}, raf: ${this._formatMs(main.rafInterval)}`,
+            `interpolated: ${this.settings.render.enableDFRI ? `${this.interpolateFrames} frames` : "off"}, ahead buffers: ${this.bufferCount}`,
+            `pacing: span ${this.dfriPacing?.selectedFrames ?? this.interpolateFrames}, shortages ${main.noAheadBufferCount ?? 0}, missed ${main.missedAheadFrames ?? 0}`,
+            `particles: ${this.settings.physics.particleCount}, segments: ${this.segmentCount}, depth: ${this.depth}`,
             `complexity: ${flops}`,
             `- physics: ${this._formatMs(physicsTotal)}`,
             `  - tree: ${this._formatMs(this.treeTime)} (${this._formatPercent(this._ratio(this.treeTime, physicsTotal))})`,
-            `  - force: ${this._formatMs(profile.forceTime)}`,
+            `  - force: ${this._formatMs(profile.forceTime)}, integrate: ${this._formatMs(profile.integrateTime)}`,
             `- render: ${this._formatMs(this.renderTime)}`,
+            `  - prepare: ${this._formatMs(rendererStats.prepareDataTime)}, upload: ${this._formatMs(rendererStats.uploadTime)}`,
             `  - gpu draw: ${this._formatMs(rendererStats.gpuDrawTime)} (${rendererStats.gpuTimerStatus || "n/a"})`,
             `backend: ${getDisplayName(this.backend, "Backend")}, block size: ${actualSegmentSize}${this._formatWorkerMT(profile.mt)}`,
             `renderer: ${getDisplayName(this.renderer, "Renderer")} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
+            `sprite: ${rendererStats.particleSprite || "n/a"}, size: ${this._formatNumber(rendererStats.particleSizeScale, 2)}`,
         ];
     }
 
     _buildVerboseStatsLines() {
-        const flops = CommonUtils.formatUnit(this.flops, "FLOPS");
-        const profile = this.profile || {};
-        const rendererStats = this.renderer.stats || {};
-        const actualSegmentSize = this.actualSegmentSize ?? this.settings.simulation.segmentMaxCount;
+        const lines = [];
+        if (this.settings.common.statsFrame) lines.push(...this._buildFrameStatsGroup());
+        if (this.settings.common.statsTree) lines.push(...this._buildTreeStatsGroup());
+        if (this.settings.common.statsPhysics) lines.push(...this._buildPhysicsStatsGroup());
+        if (this.settings.common.statsRender) lines.push(...this._buildRenderStatsGroup());
+        if (this.settings.common.statsRuntime) lines.push(...this._buildRuntimeStatsGroup());
+        return lines.length ? lines : ["verbose statistics: no groups selected"];
+    }
+
+    _buildFrameStatsGroup() {
         const main = this.mainStats || {};
         const rawFrameTime = this.rawFrameRateSmoother?.smoothedValue;
         const rawFps = rawFrameTime > 0 ? 1000 / rawFrameTime : 0;
-
-        // Keep the verbose stats layout stable: fields that may be temporarily
-        // unknown are rendered as n/a instead of being added/removed between frames.
         return [
-            `max depth: ${this.depth}`,
-            `segments: ${this.segmentCount}`,
-            `complexity: ${flops}`,
-            `ahead buffers: ${this.bufferCount}`,
-            `interpolated: ${this.settings.render.enableDFRI ? `${this.interpolateFrames} frames` : "off"}`,
-            `fps: ${(1000 / this.elapsed || 0).toFixed(1)}`,
-            `raw fps: ${rawFps ? rawFps.toFixed(1) : "n/a"}, raf: ${this._formatMs(main.rafInterval)}`,
+            `[frame & DFRI]`,
+            `fps: ${(1000 / this.elapsed || 0).toFixed(1)}, raw: ${rawFps ? rawFps.toFixed(1) : "n/a"}, raf: ${this._formatMs(main.rafInterval)}`,
+            `interpolated: ${this.settings.render.enableDFRI ? `${this.interpolateFrames} frames` : "off"}, ahead buffers: ${this.bufferCount}`,
             `- main frame: ${this._formatMs(main.callbackTime)}`,
-            `  - prepare step: ${this._formatMs(main.prepareStepTime)}`,
-            `  - buffer switch: ${this._formatMs(main.bufferSwitchTime)}`,
-            `  - on data: ${this._formatMs(main.onDataTime)}`,
-            `  - debug overlay: ${this._formatMs(main.debugOverlayTime)}`,
-            `  - stats dom: ${this._formatMs(main.statsDomTime)}`,
-            `  - max raf: ${this._formatMs(main.maxRafInterval)}`,
-            `  - dropped raf frames: ${main.droppedRafFrames ?? 0}`,
-            `  - long tasks: ${this.longTaskCount} / ${this._formatMs(this.longTaskTime)}`,
-            `  - last long task: ${this._formatMs(this.lastLongTaskTime)}`,
-            `- DFRI pacing`,
-            `  - target frame: ${this._formatMs(main.dfriTargetFrameTime)}`,
-            `  - no ahead buffer: ${main.noAheadBufferCount ?? 0}`,
-            `  - missed ahead frames: ${main.missedAheadFrames ?? 0}`,
-            `- tree building: ${this._formatMs(this.treeTime)} (${this._formatPercent(this._ratio(this.treeTime, this._sumFinite(this.treeTime, this.physicsTime, profile.exportTime, profile.statsTime)))})`,
-            `  - reset: ${this._formatMs(this.treeProfile?.resetTime)}`,
-            `  - root bounds: ${this._formatMs(this.treeProfile?.rootBoundsTime)}`,
-            `  - populate: ${this._formatMs(this.treeProfile?.populateTime)}`,
-            `  - aggregate: ${this._formatMs(this.treeProfile?.aggregateTime)}`,
-            `  - partition particles: ${this.treeProfile?.partitionCountParticles ?? 0} counted / ${this.treeProfile?.partitionScatterParticles ?? 0} scattered`,
-            `  - partition time: count ${this._formatMs(this.treeProfile?.partitionCountTime)}, scatter ${this._formatMs(this.treeProfile?.partitionScatterTime)}, samples ${this.treeProfile?.partitionTimingSamples ?? 0}`,
-            `  - node init: ${this.treeProfile?.nodeInitCount ?? 0}, leaf collect: ${this._formatMs(this.treeProfile?.leafCollectTime)}`,
-            `  - fast buckets: ${this.treeProfile?.fastBucketPath ? "on" : "off"}`,
-            `  - parallel hybrid tree: ${this.treeProfile?.parallel ? "on" : "off"}`,
-            `  - target jobs: ${this.treeProfile?.targetJobs ?? "n/a"}, actual jobs: ${this.treeProfile?.parallelTreeJobs ?? "n/a"}, seed split levels: ${this.treeProfile?.splitLevels ?? "n/a"}`,
-            `  - parallel seed bootstrap: bounds ${this._formatMs(this.treeProfile?.seedBoundsTime)}, count ${this._formatMs(this.treeProfile?.seedCountTime)}, scatter ${this._formatMs(this.treeProfile?.seedScatterTime)}`,
-            `  - top populate: ${this._formatMs(this.treeProfile?.topPopulateTime)}`,
-            `  - parallel wait: ${this._formatMs(this.treeProfile?.parallelTreeWaitTime)}`,
-            `  - dispatch: ${this._formatMs(this.treeProfile?.dispatchTime)}`,
-            `- physics calc: ${this._formatMs(this.physicsTime)}`,
-            `  - force solve: ${this._formatMs(profile.forceTime)}`,
-            `  - integrate: ${this._formatMs(profile.integrateTime)}`,
-            `  - export buffer: ${this._formatMs(profile.exportTime)}`,
-            `  - stats: ${this._formatMs(profile.statsTime)}`,
-            `- render: ${this._formatMs(this.renderTime)}`,
-            `  - prepare data: ${this._formatMs(rendererStats.prepareDataTime)}`,
-            `  - upload: ${this._formatMs(rendererStats.uploadTime)}`,
-            `  - uploaded: ${this._formatBytes(rendererStats.uploadedBytes)}`,
-            `  - preload: ${this._formatMs(rendererStats.preloadTime)} / ${this._formatBytes(rendererStats.preloadedBytes)}`,
-            `  - upload queue: ${rendererStats.uploadQueue ?? 0}`,
-            `  - draw call: ${this._formatMs(rendererStats.drawTime)}`,
-            `  - gpu draw: ${this._formatMs(rendererStats.gpuDrawTime)} (${rendererStats.gpuTimerStatus || "n/a"})`,
-            `  - color mode: ${rendererStats.colorMode || "n/a"}${rendererStats.effectiveColorMode && rendererStats.effectiveColorMode !== rendererStats.colorMode ? ` (${rendererStats.effectiveColorMode})` : ""}`,
-            `  - color freeze: ${rendererStats.colorFreezeStatus || "off"}${Number.isFinite(rendererStats.colorFreezeFramesLeft) ? `, left: ${rendererStats.colorFreezeFramesLeft}` : ""}`,
-            `  - upload mode: ${rendererStats.uploadMode || "n/a"}`,
-            `  - low latency ctx: ${rendererStats.webglLowLatency ? "on" : "off"}`,
-            `  - gpu interpolation: ${rendererStats.gpuInterpolation || "off"}`,
-            `  - filter mode: ${rendererStats.filterMode || "off"}`,
+            `  - prepare: ${this._formatMs(main.prepareStepTime)}, switch: ${this._formatMs(main.bufferSwitchTime)}, on data: ${this._formatMs(main.onDataTime)}`,
+            `  - debug: ${this._formatMs(main.debugOverlayTime)}, stats DOM: ${this._formatMs(main.statsDomTime)}`,
+            `  - max raf: ${this._formatMs(main.maxRafInterval)}, dropped: ${main.droppedRafFrames ?? 0}`,
+            `  - long tasks: ${this.longTaskCount} / ${this._formatMs(this.longTaskTime)}, last: ${this._formatMs(this.lastLongTaskTime)}`,
+            `- pacing target: ${this._formatMs(main.dfriTargetFrameTime)}, shortages: ${main.noAheadBufferCount ?? 0}, missed: ${main.missedAheadFrames ?? 0}`,
+            `  - stable span: ${this.dfriPacing?.selectedFrames ?? this.interpolateFrames}, nominal: ${this._formatNumber(this.dfriPacing?.nominalTarget, 2)}, p85: ${this._formatNumber(this.dfriPacing?.upperTarget, 2)}`,
+            `  - pressure: ${this._formatNumber(this.dfriPacing?.pressure, 2)}, distrust: ${this._formatNumber(this.dfriPacing?.distrust, 2)}, safe: ${this.dfriPacing?.safeSamples ?? 0}`,
+            `  - changes: +${this.dfriPacing?.increases ?? 0} / -${this.dfriPacing?.decreases ?? 0}, failed probes: ${this.dfriPacing?.failedProbes ?? 0}`,
+        ];
+    }
+
+    _buildTreeStatsGroup() {
+        const profile = this.profile || {};
+        const total = this._sumFinite(this.treeTime, this.physicsTime, profile.exportTime, profile.statsTime);
+        return [
+            `[tree]`,
+            `depth: ${this.depth}, segments: ${this.segmentCount}, tree: ${this._formatMs(this.treeTime)} (${this._formatPercent(this._ratio(this.treeTime, total))})`,
+            `- reset: ${this._formatMs(this.treeProfile?.resetTime)}, bounds: ${this._formatMs(this.treeProfile?.rootBoundsTime)}`,
+            `- populate: ${this._formatMs(this.treeProfile?.populateTime)}, aggregate: ${this._formatMs(this.treeProfile?.aggregateTime)}`,
+            `- partition: ${this.treeProfile?.partitionCountParticles ?? 0} counted / ${this.treeProfile?.partitionScatterParticles ?? 0} scattered`,
+            `  - count ${this._formatMs(this.treeProfile?.partitionCountTime)}, scatter ${this._formatMs(this.treeProfile?.partitionScatterTime)}, samples ${this.treeProfile?.partitionTimingSamples ?? 0}`,
+            `- node init: ${this.treeProfile?.nodeInitCount ?? 0}, leaf collect: ${this._formatMs(this.treeProfile?.leafCollectTime)}`,
+            `- seed bootstrap: bounds ${this._formatMs(this.treeProfile?.seedBoundsTime)}, count ${this._formatMs(this.treeProfile?.seedCountTime)}, scatter ${this._formatMs(this.treeProfile?.seedScatterTime)}`,
+            `- jobs: ${this.treeProfile?.parallelTreeJobs ?? "n/a"}, seed levels: ${this.treeProfile?.splitLevels ?? "n/a"}, top: ${this._formatMs(this.treeProfile?.topPopulateTime)}`,
+            `- wait: ${this._formatMs(this.treeProfile?.parallelTreeWaitTime)}, dispatch: ${this._formatMs(this.treeProfile?.dispatchTime)}`,
+        ];
+    }
+
+    _buildPhysicsStatsGroup() {
+        const profile = this.profile || {};
+        return [
+            `[physics]`,
+            `particles: ${this.settings.physics.particleCount}, complexity: ${CommonUtils.formatUnit(this.flops, "FLOPS")}`,
+            `physics calc: ${this._formatMs(this.physicsTime)}`,
+            `- force: ${this._formatMs(profile.forceTime)}, integrate: ${this._formatMs(profile.integrateTime)}`,
+            `- export: ${this._formatMs(profile.exportTime)}, stats: ${this._formatMs(profile.statsTime)}`,
+        ];
+    }
+
+    _buildRenderStatsGroup() {
+        const r = this.renderer.stats || {};
+        return [
+            `[render]`,
+            `render: ${this._formatMs(this.renderTime)}, prepare: ${this._formatMs(r.prepareDataTime)}, upload: ${this._formatMs(r.uploadTime)}`,
+            `- uploaded: ${this._formatBytes(r.uploadedBytes)}, preload: ${this._formatMs(r.preloadTime)} / ${this._formatBytes(r.preloadedBytes)}, queue: ${r.uploadQueue ?? 0}`,
+            `- draw: ${this._formatMs(r.drawTime)}, gpu: ${this._formatMs(r.gpuDrawTime)} (${r.gpuTimerStatus || "n/a"})`,
+            `- color: ${r.colorMode || "n/a"}${r.effectiveColorMode && r.effectiveColorMode !== r.colorMode ? ` (${r.effectiveColorMode})` : ""}, freeze: ${r.colorFreezeStatus || "off"}`,
+            `- sprite: ${r.particleSprite || "n/a"}, size: ${this._formatNumber(r.particleSizeScale, 2)}`,
+            `- upload mode: ${r.uploadMode || "n/a"}, low latency: ${r.webglLowLatency ? "on" : "off"}, interpolation: ${r.gpuInterpolation || "off"}`,
+        ];
+    }
+
+    _buildRuntimeStatsGroup() {
+        const actualSegmentSize = this.actualSegmentSize ?? this.settings.simulation.segmentMaxCount;
+        const profile = this.profile || {};
+        return [
+            `[backend & runtime]`,
             `renderer: ${getDisplayName(this.renderer, "Renderer")} @ ${this.renderer.canvasWidth} × ${this.renderer.canvasHeight}`,
             `backend: ${getDisplayName(this.backend, "Backend")}, block size: ${actualSegmentSize}`,
             `worker mt: ${this._formatWorkerMTVerbose(profile.mt)}`,
@@ -246,6 +285,10 @@ export class Debug {
 
     _formatPercent(value) {
         return Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : "n/a";
+    }
+
+    _formatNumber(value, digits = 1) {
+        return Number.isFinite(value) ? value.toFixed(digits) : "n/a";
     }
 
     _formatMs(value) {

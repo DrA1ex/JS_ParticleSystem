@@ -8,6 +8,7 @@ uniform float max_mass;
 uniform float max_speed;
 uniform float particle_scale;
 uniform float interpolation_factor;
+uniform int sprite_mode;
 
 in vec2 position;
 #if USE_INTERPOLATION
@@ -24,6 +25,8 @@ in float mass;
 #endif
 
 out vec3 color;
+out float sprite_radius;
+out float sprite_coverage;
 
 void main() {
 #if USE_INTERPOLATION
@@ -34,13 +37,16 @@ void main() {
     vec2 translated_pos = ((render_position * scale + offset) / resolution * 2.0 - 1.0);
     gl_Position = vec4(translated_pos * vec2(1, -1.0), 0, 1);
 
-    gl_PointSize = point_size;
+    float base_size = point_size;
 #if defined(COLOR_MODE_VELOCITY) || defined(COLOR_MODE_VELOCITY_FIXED) || defined(COLOR_MODE_MASS)
-    if (max_mass > 1.0) {
-        gl_PointSize += 2.0 * mass / max_mass;
-    }
+    if (max_mass > 1.0) base_size += 2.0 * mass / max_mass;
 #endif
-    gl_PointSize *= particle_scale;
+    float desired_size = max(0.01, base_size * particle_scale);
+    float extent = sprite_mode == 3 ? 2.5 : 1.0;
+    float raster_size = desired_size < 1.0 ? 1.0 : desired_size * extent;
+    gl_PointSize = max(1.0, raster_size);
+    sprite_radius = desired_size < 1.0 ? 0.5 : 0.5 * desired_size / gl_PointSize;
+    sprite_coverage = desired_size < 1.0 ? desired_size * desired_size : 1.0;
 
 #if defined(COLOR_MODE_VELOCITY)
     vec2 translated_velocity = 0.5 + velocity / max_speed * 0.5;

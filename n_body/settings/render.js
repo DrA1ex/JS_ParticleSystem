@@ -1,5 +1,5 @@
 import {ComponentType, Property, SettingsBase} from "./base.js";
-import {BufferUploadMode, MaxSpeedUpdateMode, RenderColorMode, RenderType} from "./enum.js";
+import {BufferUploadMode, MaxSpeedUpdateMode, ParticleSpriteMode, RenderColorMode, RenderType} from "./enum.js";
 
 const isWebglRenderer = settings => settings.render.render === RenderType.webgl2;
 const useDprEnabled = settings => !!settings.render.useDpr;
@@ -25,11 +25,24 @@ export class RenderSettings extends SettingsBase {
             .setConstraints(0, 10),
         fixedParticleSize: Property.bool("fixed_size", true)
             .setName("Fixed particle size").setDescription("Don't change particle size when scale")
-            .setAffects(ComponentType.renderer),
-        particleSizeScale: Property.float("particle_scale", 1)
-            .setName("Particle size scale")
             .setAffects(ComponentType.renderer)
-            .setConstraints(1e-2, 10),
+            .setVisibleWhen(isWebglRenderer),
+        particleSizeScale: Property.float("particle_scale", 1)
+            .setName("Particle size")
+            .setDescription("Scale particle size in both directions. Values below 1 reduce apparent sub-pixel coverage; values above 1 enlarge particles.")
+            .setAffects(ComponentType.renderer)
+            .setVisibleWhen(isWebglRenderer)
+            .setConstraints(1e-2, 20),
+        particleSprite: Property.enum("particle_sprite", ParticleSpriteMode, ParticleSpriteMode.point)
+            .setName("Particle sprite")
+            .setDescription([
+                "point: current square WebGL point rendering.",
+                "circle: crisp procedural circle.",
+                "soft_circle: slightly transparent circle with a soft antialiased edge.",
+                "glow: bright core with a scalable radial halo. No texture is used, so it stays sharp at every DPR and size."
+            ].join("\n"))
+            .setAffects(ComponentType.renderer)
+            .setVisibleWhen(isWebglRenderer),
         enableFilter: Property.bool("filter", false)
             .setExportable(true)
             .setName("Enable filters").setDescription("Make image brighter and change color over time")
@@ -121,6 +134,7 @@ export class RenderSettings extends SettingsBase {
     get render() {return this.config.render}
     get useDpr() {return this.config.useDpr}
     get particleSizeScale() {return this.config.particleSizeScale}
+    get particleSprite() {return this.config.particleSprite}
     get fixedParticleSize() {return this.config.fixedParticleSize}
     get enableFilter() {return this.config.enableFilter}
     get enableBlending() {return this.config.enableBlending}

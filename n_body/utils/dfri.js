@@ -1,4 +1,184 @@
 import {DataSmoother} from "./smoother.js";
+
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+/**
+ * Chooses a stable, minimal DFRI span. The controller intentionally uses
+ * asymmetric hysteresis: recurring shortages raise the span quickly, while a
+ * lower value is only probed after a long safe period. A failed probe is
+ * reverted immediately and makes the controller rely more on the upper tail
+ * of recent step times instead of only the smoothed mean.
+ */
+export class AdaptiveDFRIPacingController {
+    constructor({maxCount = Number.MAX_SAFE_INTEGER, initialTarget = 0} = {}) {
+        this.maxCount = maxCount;
+        this._samples = new Array(64);
+        this._sampleIndex = 0;
+        this._sampleCount = 0;
+        this._selected = clamp(Math.ceil(Math.max(0, initialTarget) - 0.02), 0, maxCount);
+        this._hasInitialEstimate = Number.isFinite(initialTarget) && initialTarget > 0;
+        this._nominalTarget = Math.max(0, initialTarget);
+        this._upperTarget = this._nominalTarget;
+        this._robustTarget = this._nominalTarget;
+        this._pressure = 0;
+        this._safeSamples = 0;
+        this._cooldownSamples = 0;
+        this._probePrevious = null;
+        this._probeSamplesLeft = 0;
+        this._distrust = 0;
+        this._shortageReported = false;
+        this._shortages = 0;
+        this._increases = 0;
+        this._decreases = 0;
+        this._failedProbes = 0;
+    }
+
+    get selectedFrames() { return this._selected; }
+
+    beginCycle() {
+        this._shortageReported = false;
+    }
+
+    reconfigure({maxCount = this.maxCount, initialTarget = this._nominalTarget} = {}) {
+        this.maxCount = maxCount;
+        this._selected = clamp(this._selected, 0, maxCount);
+        this._nominalTarget = Math.max(0, initialTarget);
+        this._recomputeTargets();
+    }
+
+    observe(rawTarget, nominalTarget) {
+        if (!Number.isFinite(rawTarget) || !Number.isFinite(nominalTarget)) return;
+
+        rawTarget = clamp(Math.max(0, rawTarget), 0, this.maxCount);
+        this._nominalTarget = clamp(Math.max(0, nominalTarget), 0, this.maxCount);
+        const firstSample = this._sampleCount === 0;
+        this._samples[this._sampleIndex] = rawTarget;
+        this._sampleIndex = (this._sampleIndex + 1) % this._samples.length;
+        this._sampleCount = Math.min(this._samples.length, this._sampleCount + 1);
+        this._recomputeTargets();
+
+        if (firstSample && !this._hasInitialEstimate) {
+            this._selected = clamp(Math.ceil(this._nominalTarget - 0.02), 0, this.maxCount);
+            this._hasInitialEstimate = true;
+        }
+
+        const exceedsCurrent = rawTarget > this._selected + 0.10 || this._robustTarget > this._selected + 0.10;
+        const safelyBelow = rawTarget < this._selected - 0.40 && this._robustTarget < this._selected - 0.25;
+
+        if (exceedsCurrent) {
+            this._pressure += rawTarget > this._selected + 1.1 ? 1.5 : 1;
+            this._safeSamples = 0;
+            this._distrust = clamp(this._distrust + 0.025, 0, 1);
+        } else {
+            this._pressure = Math.max(0, this._pressure - 0.75);
+            this._safeSamples = safelyBelow ? this._safeSamples + 1 : Math.max(0, this._safeSamples - 1);
+            if (this._safeSamples > 0 && this._safeSamples % 60 === 0) {
+                this._distrust = Math.max(0, this._distrust - 0.05);
+                this._recomputeTargets();
+            }
+        }
+
+        if (this._cooldownSamples > 0) this._cooldownSamples -= 1;
+        if (this._probeSamplesLeft > 0) {
+            this._probeSamplesLeft -= 1;
+            if (this._probeSamplesLeft === 0) {
+                this._probePrevious = null;
+                this._cooldownSamples = Math.max(this._cooldownSamples, 30);
+            }
+        }
+
+        if (this._pressure >= 3) {
+            this._raise();
+            return;
+        }
+
+        const lowerCandidate = clamp(Math.ceil(this._robustTarget - 0.02), 0, this.maxCount);
+        if (this._cooldownSamples === 0 && this._probePrevious === null &&
+            this._safeSamples >= 30 && lowerCandidate < this._selected) {
+            this._probePrevious = this._selected;
+            this._selected -= 1;
+            this._probeSamplesLeft = 10;
+            this._safeSamples = 0;
+            this._decreases += 1;
+        }
+    }
+
+    reportShortage() {
+        if (this._shortageReported) return false;
+        this._shortageReported = true;
+        this._shortages += 1;
+        this._safeSamples = 0;
+        this._distrust = clamp(this._distrust + 0.22, 0, 1);
+        this._pressure += 2;
+        this._recomputeTargets();
+
+        if (this._probePrevious !== null) {
+            this._selected = clamp(this._probePrevious, 0, this.maxCount);
+            this._probePrevious = null;
+            this._probeSamplesLeft = 0;
+            this._pressure = 0;
+            this._cooldownSamples = 60;
+            this._failedProbes += 1;
+            this._increases += 1;
+            return true;
+        }
+
+        if (this._pressure >= 3) {
+            this._raise();
+            return true;
+        }
+        return false;
+    }
+
+    diagnostics() {
+        return {
+            selectedFrames: this._selected,
+            nominalTarget: this._nominalTarget,
+            upperTarget: this._upperTarget,
+            robustTarget: this._robustTarget,
+            distrust: this._distrust,
+            pressure: this._pressure,
+            safeSamples: this._safeSamples,
+            cooldownSamples: this._cooldownSamples,
+            probingLower: this._probePrevious !== null,
+            shortages: this._shortages,
+            increases: this._increases,
+            decreases: this._decreases,
+            failedProbes: this._failedProbes,
+            sampleCount: this._sampleCount,
+        };
+    }
+
+    _raise() {
+        const target = clamp(Math.ceil(this._robustTarget - 0.02), 0, this.maxCount);
+        const next = Math.max(this._selected + 1, target);
+        if (next > this._selected) {
+            this._selected = clamp(next, 0, this.maxCount);
+            this._increases += 1;
+        }
+        this._probePrevious = null;
+        this._probeSamplesLeft = 0;
+        this._pressure = 0;
+        this._safeSamples = 0;
+        this._cooldownSamples = 24;
+    }
+
+    _recomputeTargets() {
+        if (this._sampleCount === 0) {
+            this._upperTarget = this._nominalTarget;
+            this._robustTarget = this._nominalTarget;
+            return;
+        }
+        const values = this._samples.slice(0, this._sampleCount).sort((a, b) => a - b);
+        const index = Math.min(values.length - 1, Math.floor((values.length - 1) * 0.85));
+        this._upperTarget = values[index];
+        this._robustTarget = clamp(
+            this._nominalTarget + this._distrust * Math.max(0, this._upperTarget - this._nominalTarget),
+            0,
+            this.maxCount,
+        );
+    }
+}
 import {ITEM_SIZE, getParticleVelX, getParticleVelY, getParticleX, getParticleY} from "./particles.js";
 
 export class DFRIHelperBase {
@@ -75,16 +255,6 @@ export class DFRIHelperBase {
     render(particles, pause = false) {
         if (!this._initialized) {
             this.init();
-        }
-
-        // Recalculate interpolation length while waiting for the next physics
-        // frame. When the browser temporarily drops RAF callbacks, using only
-        // the delayed average render interval creates a feedback loop: DFRI
-        // asks for the next physics frame too early, misses it, and may drop
-        // more visual frames. The recent-best refresh interval keeps pacing
-        // aligned with the display's real capability when it is observed.
-        if (!pause && !this.needNextFrame()) {
-            this.interpolateFrames = this._getInterpolateFramesCount();
         }
 
         this._currentFactor = this.getFactor();
@@ -194,7 +364,11 @@ export class DFRIHelper extends DFRIHelperBase {
         this.renderTimeSmoother = new DataSmoother(this.settings.world.fps * 2, 5, true);
         this.renderTimeSmoother.postValue(1000 / this.settings.world.fps, true);
 
-        this.interpolateFramesSmoother = new DataSmoother(this.settings.world.fps);
+        const initialTarget = this._getContinuousTarget();
+        this.pacingController = new AdaptiveDFRIPacingController({
+            maxCount: this.maxCount,
+            initialTarget,
+        });
     }
 
     get preferGpuInterpolation() {
@@ -251,6 +425,17 @@ export class DFRIHelper extends DFRIHelperBase {
 
     postStepTime(time, force = false) {
         this.stepTimeSmoother.postValue(time, force);
+        const rawTarget = this._getContinuousTarget(time);
+        const nominalTarget = this._getContinuousTarget(this.actualTime);
+        this.pacingController.observe(rawTarget, nominalTarget);
+    }
+
+    reportAheadBufferMiss() {
+        return this.pacingController.reportShortage();
+    }
+
+    get pacingDiagnostics() {
+        return this.pacingController.diagnostics();
     }
 
     postRenderTime(time) {
@@ -293,13 +478,27 @@ export class DFRIHelper extends DFRIHelperBase {
         this._recentRenderTimeIndex = 0;
         this._recentRenderTimeCount = 0;
         this._recentBestRenderTime = 0;
+        this.pacingController = new AdaptiveDFRIPacingController({
+            maxCount: this.maxCount,
+            initialTarget: this._getContinuousTarget(),
+        });
+    }
+
+    reset() {
+        this.pacingController.beginCycle();
+        super.reset();
+    }
+
+    _getContinuousTarget(stepTime = this.actualTime) {
+        const desired = this.desiredTime;
+        if (!Number.isFinite(stepTime) || stepTime <= 0 || !Number.isFinite(desired) || desired <= 0) {
+            return 0;
+        }
+        return Math.max(0, stepTime / desired / this.settings.render.slowMotionRate - 1);
     }
 
     _getInterpolateFramesCount() {
-        const value = super._getInterpolateFramesCount();
-        this.interpolateFramesSmoother.postValue(Math.ceil(value));
-        const count = (this.interpolateFramesSmoother.smoothedValue + 1) / this.settings.render.slowMotionRate - 1;
-        return Math.round(count);
+        return clamp(this.pacingController?.selectedFrames ?? Math.ceil(this._getContinuousTarget() - 0.02), 0, this.maxCount);
     }
 
     dispose() {
