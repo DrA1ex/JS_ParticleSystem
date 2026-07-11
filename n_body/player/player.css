@@ -85,7 +85,7 @@
 .settings {
     display: grid;
     grid-template-columns: auto auto;
-    grid-template-rows: repeat(3, 2em);
+    grid-auto-rows: minmax(2em, auto);
     gap: 0.5em 1em;
     align-items: center;
     justify-items: stretch;
@@ -94,4 +94,19 @@
     padding: 0.5em;
     background: #1f1f1f;
     color: white;
+}
+
+.settings #playback-pacing {
+    max-width: 24em;
+    color: rgb(190, 190, 190);
+    font-size: 0.85em;
+    line-height: 1.25;
+}
+
+.settings input[type="color"] {
+    width: 100%;
+    min-width: 5em;
+    height: 2em;
+    padding: 0.1em;
+    box-sizing: border-box;
 }

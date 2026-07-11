@@ -261,15 +261,33 @@ export class DFRIHelperBase {
             this.init();
         }
 
-        this._currentFactor = this.getFactor();
-        if (this._gpuInterpolation) {
-            this.renderer.setInterpolationFactor(this._currentFactor);
-        }
-        this.renderer.render(particles);
+        this.renderAtFactor(particles, this.getFactor());
 
         if (!pause) {
             this.frame += 1;
         }
+    }
+
+    /**
+     * Render an externally paced interpolation frame. The recording player
+     * advances through source time using a wall-clock timeline rather than
+     * assuming that requestAnimationFrame runs at the configured target FPS.
+     * Keeping the interpolation itself in DFRI preserves the compact GPU path
+     * for recordings with millions of particles.
+     *
+     * @param {Float32Array|Array} particles
+     * @param {number} factor value in the [0, 1] range
+     */
+    renderAtFactor(particles, factor) {
+        if (!this._initialized) {
+            this.init();
+        }
+
+        this._currentFactor = Number.isFinite(factor) ? Math.max(0, Math.min(1, factor)) : 0;
+        if (this._gpuInterpolation) {
+            this.renderer.setInterpolationFactor(this._currentFactor);
+        }
+        this.renderer.render(particles);
     }
 
     getFactor() {
@@ -296,7 +314,7 @@ export class DFRIHelperBase {
         return this.desiredTime;
     }
 
-    setNextFrame(dataFn) {
+    setNextFrame(dataFn, reset = true) {
         this._ensureDeltas();
         const out = {x: 0, y: 0};
         for (let i = 0; i < this.particleCount; i++) {
@@ -306,15 +324,19 @@ export class DFRIHelperBase {
             this._deltas[offset + 1] = out.y;
         }
 
-        this.reset();
+        if (reset) {
+            this.reset();
+        }
     }
 
-    setNextPositionFrame(positions) {
+    setNextPositionFrame(positions, reset = true) {
         if (!this._gpuInterpolation || !positions) {
             return false;
         }
         this.renderer.setInterpolationPositionFrame?.(positions);
-        this.reset();
+        if (reset) {
+            this.reset();
+        }
         return true;
     }
 

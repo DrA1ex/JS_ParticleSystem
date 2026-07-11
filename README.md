@@ -50,6 +50,13 @@ More links you can find below.
 ### Simulation Player
 You can use [Simulation Player](https://dra1ex.github.io/JS_ParticleSystem/n_body/player) to watch recorded simulations.
 
+Playback is paced from recording time rather than from the browser's raw
+`requestAnimationFrame` count. The player presents at the configured target FPS,
+uses DFRI to interpolate between adjacent recorded frames, and skips source
+frames when a high playback speed requires more than one recorded frame per
+target frame. The settings popup also exposes the WebGL particle sprite, color
+mode and fixed-color picker used by the live simulation.
+
 _Note:_ Please be patient, files may be very large, so loading may take a while. Pay attention to the package size written in brackets.
 
 _Demo links_:

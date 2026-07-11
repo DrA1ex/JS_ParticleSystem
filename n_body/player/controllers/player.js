@@ -27,6 +27,9 @@ export class PlayerController extends StateControllerBase {
     static SPEED_EVENT = "player_speed";
     static PARTICLE_FIXED_SIZE_EVENT = "player_particle_fixed_size";
     static PARTICLE_SCALE_EVENT = "player_particle_scale";
+    static PARTICLE_SPRITE_EVENT = "player_particle_sprite";
+    static COLOR_MODE_EVENT = "player_color_mode";
+    static FIXED_COLOR_EVENT = "player_fixed_color";
 
     static MOUSE_INACTIVE_DELAY = 2000;
 
@@ -53,6 +56,9 @@ export class PlayerController extends StateControllerBase {
         this.settingsCtrl.subscribe(this, SettingsController.SPEED_EVENT, (_, speed) => this.emitEvent(PlayerController.SPEED_EVENT, speed));
         this.settingsCtrl.subscribe(this, SettingsController.PARTICLE_FIXED_SIZE_EVENT, (_, value) => this.emitEvent(PlayerController.PARTICLE_FIXED_SIZE_EVENT, value));
         this.settingsCtrl.subscribe(this, SettingsController.PARTICLE_SCALE_EVENT, (_, value) => this.emitEvent(PlayerController.PARTICLE_SCALE_EVENT, value));
+        this.settingsCtrl.subscribe(this, SettingsController.PARTICLE_SPRITE_EVENT, (_, value) => this.emitEvent(PlayerController.PARTICLE_SPRITE_EVENT, value));
+        this.settingsCtrl.subscribe(this, SettingsController.COLOR_MODE_EVENT, (_, value) => this.emitEvent(PlayerController.COLOR_MODE_EVENT, value));
+        this.settingsCtrl.subscribe(this, SettingsController.FIXED_COLOR_EVENT, (_, value) => this.emitEvent(PlayerController.FIXED_COLOR_EVENT, value));
 
         this.settingsPopup = Popup.byId("settings-popup", this.settingsCtrl.root);
         this.settingsPopup.offsetY = 0.4;
@@ -76,7 +82,14 @@ export class PlayerController extends StateControllerBase {
     }
 
     configure(settings) {
-        this.controlBarCtrl.settingsControl.setVisibility(settings.render.enableDFRI);
+        // Playback, particle size, sprite and color controls remain useful even
+        // when DFRI is disabled, so the settings button must always be present.
+        this.controlBarCtrl.settingsControl.setVisibility(true);
+        this.settingsCtrl.configure(settings);
+    }
+
+    setPlaybackPacing(data) {
+        this.settingsCtrl.setPlaybackPacing(data);
     }
 
     _getSizeLabel(size) {
