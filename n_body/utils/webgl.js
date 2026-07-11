@@ -5,7 +5,9 @@ export function createShader(gl, type, source) {
 
     const success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
     if (!success) {
-        console.error(gl.getShaderInfoLog(shader));
+        const log = gl.getShaderInfoLog(shader) || "Unknown WebGL shader compilation error";
+        gl.deleteShader(shader);
+        throw new Error(log);
     }
 
     return shader;
@@ -24,7 +26,9 @@ export function createProgram(gl, vertexShader, fragmentShader, transformFeedbac
 
     const success = gl.getProgramParameter(program, gl.LINK_STATUS);
     if (!success) {
-        console.error(gl.getProgramInfoLog(program));
+        const log = gl.getProgramInfoLog(program) || "Unknown WebGL program linking error";
+        gl.deleteProgram(program);
+        throw new Error(log);
     }
 
     return program;

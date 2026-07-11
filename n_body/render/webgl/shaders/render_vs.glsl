@@ -1,5 +1,8 @@
 #version 300 es
 
+precision highp float;
+precision highp int;
+
 uniform vec2 resolution;
 uniform vec2 offset;
 uniform float scale;
