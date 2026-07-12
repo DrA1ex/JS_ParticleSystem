@@ -309,5 +309,6 @@ await window.nBodyRunBenchmark({
 Each case restores the same captured universe. The regular summary already
 includes `uploadMode`, average and p95 `render`/`upload` times, uploaded MiB per
 frame, draw-call time and GPU draw time. Upload-mode performance is
-driver-dependent, so the default remains `stream` until measurements on the
-target machine show a consistent advantage for another mode.
+driver-dependent. Measurements on the target 120 Hz system showed a consistent
+advantage for `bufferSubData`, so it is now the default; `stream` and
+`bufferData` remain available as compatibility alternatives.

@@ -162,8 +162,18 @@ test("render and app player settings preserve contextual defaults and visibility
     assert.equal(render.useDpr, true);
     assert.equal(render.particleSprite, ParticleSpriteMode.glow);
     assert.equal(render.fixedColor, "#123456");
-    assert.equal(render.bufferUploadMode, BufferUploadMode.stream);
+    assert.equal(render.bufferUploadMode, BufferUploadMode.bufferSubData);
+    assert.equal(render.toQueryParams().some(item => item.key === "upload_mode"), false);
     assert.equal(render.webglLowLatency, true);
+
+    const streamUpload = RenderSettings.deserialize({
+        render: RenderType.webgl2,
+        bufferUploadMode: BufferUploadMode.stream,
+    });
+    assert.deepEqual(streamUpload.toQueryParams().find(item => item.key === "upload_mode"), {
+        key: "upload_mode",
+        value: BufferUploadMode.stream,
+    });
 
     const fakeApp = {render};
     assert.equal(RenderSettings.Properties.fixedColor.isVisible(fakeApp, render), true);
@@ -174,7 +184,7 @@ test("render and app player settings preserve contextual defaults and visibility
     const app = AppPlayerSettings.fromQueryParams();
     assert.equal(app.render.particleSprite, ParticleSpriteMode.softGlow);
     assert.equal(app.render.colorMode, RenderColorMode.cluster);
-    assert.equal(app.render.bufferUploadMode, BufferUploadMode.stream);
+    assert.equal(app.render.bufferUploadMode, BufferUploadMode.bufferSubData);
     assert.equal(app.render.webglLowLatency, true);
     const serialized = app.serialize();
     const restored = AppPlayerSettings.deserialize(serialized);

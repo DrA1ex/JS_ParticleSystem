@@ -68,7 +68,7 @@ export class RenderSettings extends SettingsBase {
             .setDescription("Color used by fixed mode. The native browser color picker is used where available.")
             .setAffects(ComponentType.renderer)
             .setVisibleWhen(fixedWebglColor),
-        bufferUploadMode: Property.enum("upload_mode", BufferUploadMode, BufferUploadMode.stream)
+        bufferUploadMode: Property.enum("upload_mode", BufferUploadMode, BufferUploadMode.bufferSubData)
             .setName("Buffer upload mode").setDescription([
                 "Controls how dynamic WebGL buffers are updated after a new physics frame arrives.",
                 "bufferData: replaces buffer storage with the provided data each upload; can be faster on some drivers.",
