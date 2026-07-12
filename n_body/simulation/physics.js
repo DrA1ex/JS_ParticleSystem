@@ -22,8 +22,10 @@ export class PhysicsEngine {
                 segmentCount: 0
             }
         };
-        this._collisionVelX = new Float32Array(0);
-        this._collisionVelY = new Float32Array(0);
+        this._collisionVelX = new Float64Array(0);
+        this._collisionVelY = new Float64Array(0);
+        this._collisionContactCount = new Uint32Array(0);
+        this._collisionImpulseSq = new Float64Array(0);
     }
 
     reconfigure(settings) {
@@ -93,14 +95,14 @@ export class PhysicsEngine {
     _calculateLeafBlock(leaf, pForce) {
         const blocks = leaf.children;
         for (let i = 0; i < blocks.length; i++) {
-            const blockCenter = blocks[i].boundaryRect.center();
+            const blockCenter = blocks[i];
             const iForce = pForce.slice();
 
             for (let j = 0; j < blocks.length; j++) {
                 if (i === j) continue;
 
                 const g = this.settings.physics.particleGravity * blocks[j].mass;
-                this._calculateForce(blockCenter, blocks[j].boundaryRect.center(), g, iForce);
+                this._calculateForce(blockCenter, blocks[j], g, iForce);
             }
 
             this._calculateLeaf(blocks[i], iForce);
@@ -114,21 +116,49 @@ export class PhysicsEngine {
      * @protected
      */
     _calculateLeafData(leaf, pForce) {
+        // Apply the inherited block force once, then solve every exact pair a
+        // single time and update both particles. The old directed i/j loop
+        // evaluated each pair twice and repeated all distance math.
         const accumulateForce = this.settings.common.debugForce;
+        const particleGravity = this.settings.physics.particleGravity;
+        const minInteractionDistanceSq = this.settings.physics.minInteractionDistanceSq;
+
         for (let i = 0; i < leaf.length; i++) {
-            const attractor = leaf.data[i];
-            attractor.velX += pForce[0];
-            attractor.velY += pForce[1];
+            const particle = leaf.data[i];
+            particle.velX += pForce[0];
+            particle.velY += pForce[1];
             if (accumulateForce) {
-                attractor.forceX += pForce[0];
-                attractor.forceY += pForce[1];
+                particle.forceX += pForce[0];
+                particle.forceY += pForce[1];
             }
+        }
 
-            for (let j = 0; j < leaf.length; j++) {
-                if (i === j) continue;
+        for (let i = 0; i < leaf.length - 1; i++) {
+            const p1 = leaf.data[i];
+            for (let j = i + 1; j < leaf.length; j++) {
+                const p2 = leaf.data[j];
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const distSquare = dx * dx + dy * dy;
+                if (distSquare < minInteractionDistanceSq) continue;
 
-                const particle = leaf.data[j];
-                this._calculateForce(particle, attractor, this.settings.physics.particleGravity * attractor.mass, particle, accumulateForce);
+                const scale = particleGravity / distSquare;
+                const dv1X = dx * scale * p2.mass;
+                const dv1Y = dy * scale * p2.mass;
+                const dv2X = -dx * scale * p1.mass;
+                const dv2Y = -dy * scale * p1.mass;
+
+                p1.velX += dv1X;
+                p1.velY += dv1Y;
+                p2.velX += dv2X;
+                p2.velY += dv2Y;
+
+                if (accumulateForce) {
+                    p1.forceX += dv1X;
+                    p1.forceY += dv1Y;
+                    p2.forceX += dv2X;
+                    p2.forceY += dv2Y;
+                }
             }
         }
     }
@@ -136,8 +166,10 @@ export class PhysicsEngine {
     _processCollisions(leaf) {
         this._ensureCollisionBuffer(leaf.length);
 
-        const nextVelXBuffer = this._collisionVelX;
-        const nextVelYBuffer = this._collisionVelY;
+        const deltaVelXBuffer = this._collisionVelX;
+        const deltaVelYBuffer = this._collisionVelY;
+        const contactCountBuffer = this._collisionContactCount;
+        const impulseSquareBuffer = this._collisionImpulseSq;
         const collisionSize = this.settings.physics.collisionSize;
         const collisionSizeSq = this.settings.physics.collisionSizeSq;
         const minCollisionDistanceSq = collisionMinDistanceSq(collisionSizeSq);
@@ -150,15 +182,14 @@ export class PhysicsEngine {
             : 0;
         const impulseRestitution = 1 + restitution;
 
-        for (let i = 0; i < leaf.length; i++) {
-            const p1 = leaf.data[i];
-            let deltaVelX = 0;
-            let deltaVelY = 0;
-            let contactCount = 0;
-            let impulseSquareSum = 0;
+        deltaVelXBuffer.fill(0, 0, leaf.length);
+        deltaVelYBuffer.fill(0, 0, leaf.length);
+        contactCountBuffer.fill(0, 0, leaf.length);
+        impulseSquareBuffer.fill(0, 0, leaf.length);
 
-            for (let j = 0; j < leaf.length; j++) {
-                if (i === j) continue;
+        for (let i = 0; i < leaf.length - 1; i++) {
+            const p1 = leaf.data[i];
+            for (let j = i + 1; j < leaf.length; j++) {
                 const p2 = leaf.data[j];
                 const dx = p1.x - p2.x;
                 const dy = p1.y - p2.y;
@@ -189,40 +220,55 @@ export class PhysicsEngine {
                 const desiredRelativeChange = impulseRestitution * closingSpeed + separationSpeed;
                 if (desiredRelativeChange <= 0) continue;
 
-                const deltaSpeed = desiredRelativeChange * p2.mass / (p1.mass + p2.mass);
-                const pairDeltaX = deltaSpeed * normalX;
-                const pairDeltaY = deltaSpeed * normalY;
-                deltaVelX += pairDeltaX;
-                deltaVelY += pairDeltaY;
-                impulseSquareSum += pairDeltaX * pairDeltaX + pairDeltaY * pairDeltaY;
-                contactCount += 1;
-            }
+                const massSum = p1.mass + p2.mass;
+                if (!(massSum > 0) || !Number.isFinite(massSum)) continue;
 
-            const deltaScale = collisionDeltaScale(
-                deltaVelX, deltaVelY, contactCount, impulseSquareSum, contactMode, limitImpulse);
-            nextVelXBuffer[i] = p1.velX + deltaVelX * deltaScale;
-            nextVelYBuffer[i] = p1.velY + deltaVelY * deltaScale;
+                const deltaSpeedI = desiredRelativeChange * p2.mass / massSum;
+                const deltaSpeedJ = desiredRelativeChange * p1.mass / massSum;
+                const deltaIX = deltaSpeedI * normalX;
+                const deltaIY = deltaSpeedI * normalY;
+                const deltaJX = -deltaSpeedJ * normalX;
+                const deltaJY = -deltaSpeedJ * normalY;
+
+                deltaVelXBuffer[i] += deltaIX;
+                deltaVelYBuffer[i] += deltaIY;
+                deltaVelXBuffer[j] += deltaJX;
+                deltaVelYBuffer[j] += deltaJY;
+                impulseSquareBuffer[i] += deltaIX * deltaIX + deltaIY * deltaIY;
+                impulseSquareBuffer[j] += deltaJX * deltaJX + deltaJY * deltaJY;
+                contactCountBuffer[i] += 1;
+                contactCountBuffer[j] += 1;
+            }
         }
 
         for (let i = 0; i < leaf.length; i++) {
-            const p = leaf.data[i];
-            const nextVelX = nextVelXBuffer[i];
-            const nextVelY = nextVelYBuffer[i];
+            const particle = leaf.data[i];
+            const deltaScale = collisionDeltaScale(
+                deltaVelXBuffer[i],
+                deltaVelYBuffer[i],
+                contactCountBuffer[i],
+                impulseSquareBuffer[i],
+                contactMode,
+                limitImpulse,
+            );
+            const deltaVelX = deltaVelXBuffer[i] * deltaScale;
+            const deltaVelY = deltaVelYBuffer[i] * deltaScale;
+            particle.velX += deltaVelX;
+            particle.velY += deltaVelY;
 
             if (this.settings.common.debugForce) {
-                p.forceX += nextVelX - p.velX;
-                p.forceY += nextVelY - p.velY;
+                particle.forceX += deltaVelX;
+                particle.forceY += deltaVelY;
             }
-
-            p.velX = nextVelX;
-            p.velY = nextVelY;
         }
     }
 
     _ensureCollisionBuffer(length) {
         if (this._collisionVelX.length < length) {
-            this._collisionVelX = new Float32Array(length);
-            this._collisionVelY = new Float32Array(length);
+            this._collisionVelX = new Float64Array(length);
+            this._collisionVelY = new Float64Array(length);
+            this._collisionContactCount = new Uint32Array(length);
+            this._collisionImpulseSq = new Float64Array(length);
         }
     }
 
@@ -276,7 +322,7 @@ export class PhysicsEngine {
 
         function _processLeaf(parent) {
             if (parent.children.length === 0) {
-                flops += Math.pow(parent.data.length, 2) * flopsPerOp;
+                flops += parent.data.length * Math.max(0, parent.data.length - 1) / 2 * flopsPerOp;
                 return;
             }
 
@@ -284,7 +330,7 @@ export class PhysicsEngine {
                 _processLeaf(parent.children[i]);
             }
 
-            flops += Math.pow(parent.children.length, 2) * flopsPerOp;
+            flops += parent.children.length * Math.max(0, parent.children.length - 1) * flopsPerOp;
         }
 
         _processLeaf(tree.root);
@@ -299,5 +345,7 @@ export class PhysicsEngine {
         this.stats = null;
         this._collisionVelX = null;
         this._collisionVelY = null;
+        this._collisionContactCount = null;
+        this._collisionImpulseSq = null;
     }
 }

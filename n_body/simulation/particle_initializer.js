@@ -192,29 +192,75 @@ export class Particle_initializer {
      */
     static _uniformCircleInitializerBase(particles, {offset, count, centerX, centerY, minRadius, maxRadius, step, transformer}) {
         const PI_2 = Math.PI * 2;
-        const n = (maxRadius - minRadius) / step;
-        const density = PI_2 * (maxRadius * (n - 1) - step / 2 * (n * n - n)) / count;
+        const availableCount = Math.max(0, Math.min(count, particles.length - offset));
+        if (availableCount === 0 || !(step > 0) || !(maxRadius > minRadius)) {
+            return;
+        }
 
-        let i = offset;
-        for (let r = minRadius; r < maxRadius; r += step) {
-            let segmentCount;
-            if (r + step < maxRadius) {
-                segmentCount = 1 + Math.floor(PI_2 * r / density);
-            } else {
-                segmentCount = count - (i - offset);
+        const radii = [];
+        for (let radius = minRadius; radius < maxRadius; radius += step) {
+            radii.push(radius);
+        }
+        if (radii.length === 0) {
+            radii.push(minRadius);
+        }
+
+        // A zero-radius ring can contain only one distinct point. Distribute
+        // the remaining particles between rings proportionally to their
+        // circumferences, using cumulative rounding so the final total is
+        // always exactly `availableCount` instead of occasionally overrunning
+        // the particle array.
+        const ringCounts = new Uint32Array(radii.length);
+        let assigned = 0;
+        let firstWeightedRing = 0;
+        if (Math.abs(radii[0]) <= Number.EPSILON) {
+            ringCounts[0] = 1;
+            assigned = 1;
+            firstWeightedRing = 1;
+        }
+
+        const remaining = availableCount - assigned;
+        if (remaining > 0) {
+            let totalWeight = 0;
+            for (let ring = firstWeightedRing; ring < radii.length; ring++) {
+                totalWeight += Math.max(radii[ring], step / 2);
             }
 
+            if (totalWeight <= 0) {
+                ringCounts[radii.length - 1] += remaining;
+            } else {
+                let cumulativeWeight = 0;
+                let distributed = 0;
+                for (let ring = firstWeightedRing; ring < radii.length; ring++) {
+                    cumulativeWeight += Math.max(radii[ring], step / 2);
+                    const cumulativeTarget = ring + 1 === radii.length
+                        ? remaining
+                        : Math.round(remaining * cumulativeWeight / totalWeight);
+                    const ringCount = Math.max(0, cumulativeTarget - distributed);
+                    ringCounts[ring] = ringCount;
+                    distributed += ringCount;
+                }
+            }
+        }
+
+        let particleIndex = offset;
+        for (let ring = 0; ring < radii.length && particleIndex < offset + availableCount; ring++) {
+            const segmentCount = ringCounts[ring];
+            if (segmentCount === 0) continue;
+
+            const radius = radii[ring];
             const angleStep = PI_2 / segmentCount;
-            for (let j = 0; j < segmentCount; j++) {
-                const angle = j * angleStep;
-                particles[i].x = centerX + Math.cos(angle) * r;
-                particles[i].y = centerY + Math.sin(angle) * r;
+            for (let segment = 0; segment < segmentCount && particleIndex < offset + availableCount; segment++) {
+                const angle = segment * angleStep;
+                const particle = particles[particleIndex];
+                particle.x = centerX + Math.cos(angle) * radius;
+                particle.y = centerY + Math.sin(angle) * radius;
 
                 if (transformer) {
-                    transformer(particles[i], angle, r);
+                    transformer(particle, angle, radius);
                 }
 
-                i += 1;
+                particleIndex += 1;
             }
         }
     }

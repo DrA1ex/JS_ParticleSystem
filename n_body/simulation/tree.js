@@ -68,7 +68,27 @@ class Leaf {
         this.length = data.length;
         this.children = [];
         this.boundaryRect = rect || BoundaryRect.fromData(data);
-        this.mass = data.reduce((p, c) => p + c.mass, 0);
+        let mass = 0;
+        let momentX = 0;
+        let momentY = 0;
+        for (let i = 0; i < data.length; i++) {
+            const particle = data[i];
+            mass += particle.mass;
+            momentX += particle.x * particle.mass;
+            momentY += particle.y * particle.mass;
+        }
+        this.mass = mass;
+        const geometricCenter = this.boundaryRect.center();
+        this.centerX = mass !== 0 && Number.isFinite(momentX / mass)
+            ? momentX / mass
+            : geometricCenter.x;
+        this.centerY = mass !== 0 && Number.isFinite(momentY / mass)
+            ? momentY / mass
+            : geometricCenter.y;
+        // Keep the aggregate compatible with force helpers that consume an
+        // x/y position object, avoiding temporary allocations during traversal.
+        this.x = this.centerX;
+        this.y = this.centerY;
 
         this.index = this.tree._getIndex();
     }

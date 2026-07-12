@@ -17,6 +17,31 @@ function migrateLegacyCollisionValues(values) {
     };
 }
 
+function countMultiplesFromZero(count, divisor) {
+    if (count <= 0 || divisor <= 0) return 0;
+    return Math.floor((count - 1) / divisor) + 1;
+}
+
+/**
+ * Calculate the exact initialized particle mass without iterating over every
+ * particle. Mass tiers are evaluated in priority order by the initializer;
+ * the built-in distribution is a nested divisor chain, so each broader tier
+ * only owns indices not already claimed by a previous tier.
+ */
+export function calculateInitializedTotalMass(particleCount, massDistribution) {
+    let totalMass = particleCount;
+    let claimedCount = 0;
+
+    for (const [divisor, mass] of massDistribution) {
+        const matchingCount = countMultiplesFromZero(particleCount, divisor);
+        const tierCount = Math.max(0, matchingCount - claimedCount);
+        totalMass += tierCount * mass;
+        claimedCount += tierCount;
+    }
+
+    return totalMass;
+}
+
 export class PhysicsSettings extends SettingsBase {
     static Properties = {
         particleInitType: Property.enum("particle_init", ParticleInitType, ParticleInitType.circle)
@@ -92,7 +117,7 @@ export class PhysicsSettings extends SettingsBase {
     static ReadOnlyProperties = {
         particleGravity: ReadOnlyProperty.float().setName("Particle Gravity")
             .setFormatter(value => value.toExponential(2)),
-        particleMass: ReadOnlyProperty.bool().setName("Max particle mass")
+        particleMass: ReadOnlyProperty.float().setName("Max particle mass")
     }
 
     static PropertiesDependencies = new Map([
@@ -163,7 +188,6 @@ export class PhysicsSettings extends SettingsBase {
             this.config.particleCount = this.isMobile() ? 10000 : 20000;
         }
 
-        let totalMass = this.particleCount;
         if (this.particleMassFactor > 0) {
             this.particleMass = Math.pow(2, this.particleMassFactor);
             this.massDistribution = [
@@ -172,13 +196,9 @@ export class PhysicsSettings extends SettingsBase {
                 [Math.floor(1 / 0.01), this.particleMass / 9],
                 [Math.floor(1 / 0.05), this.particleMass / 20],
             ]
-
-            for (let i = 0; i < this.massDistribution.length; i++) {
-                const [k, mass] = this.massDistribution[i];
-                totalMass += Math.floor(this.particleCount / k) * mass;
-            }
         }
 
+        const totalMass = calculateInitializedTotalMass(this.particleCount, this.massDistribution);
         this.particleGravity = this.gravity / totalMass;
         this.minInteractionDistanceSq = Math.pow(this.minInteractionDistance, 2);
         this.collisionSizeSq = Math.pow(this.collisionSize, 2);

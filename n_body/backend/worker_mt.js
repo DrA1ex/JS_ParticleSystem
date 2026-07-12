@@ -831,9 +831,18 @@ class WorkerMTBackendImpl {
         t = performance.now();
         await this._pool.processHybridSeedScatter(ranges, xMid, yMid, bucketOffsets);
         profile.seedScatterTime = performance.now() - t;
-        const jobs = this._createParallelChildrenFromBuckets(root, BUFFER_B, xMid, yMid, bucketData.counts, bucketData.mass);
+        const jobs = this._createParallelChildrenFromBuckets(
+            root,
+            BUFFER_B,
+            xMid,
+            yMid,
+            bucketData.counts,
+            bucketData.mass,
+            bucketData.momentX,
+            bucketData.momentY,
+        );
         if (debugData) debugData.push(this._createTreeDebugEntry(root));
-        stats.flops += Math.pow(jobs.length, 2) * TREE_FLOPS_PER_OP;
+        stats.flops += jobs.length * Math.max(0, jobs.length - 1) * TREE_FLOPS_PER_OP;
         stats.depth = Math.max(stats.depth, ...jobs.map(item => item.depth));
         profile.populateTime = profile.seedCountTime + profile.seedScatterTime;
         return {jobs, profile, stats: {...stats, segmentCount: 1}, targetJobs, splitLevels: 1, debugData};
@@ -869,6 +878,8 @@ class WorkerMTBackendImpl {
     _mergeHybridSeedBucketData(results) {
         const counts = new Int32Array(4);
         const mass = new Float64Array(4);
+        const momentX = new Float64Array(4);
+        const momentY = new Float64Array(4);
         const countsByWorker = new Array(this._threadCount).fill(null).map(() => new Int32Array(4));
         for (const result of results) {
             const workerIndex = Number.isFinite(result.workerIndex) ? result.workerIndex : 0;
@@ -879,9 +890,11 @@ class WorkerMTBackendImpl {
                 workerCounts[bucket] = count;
                 counts[bucket] += count;
                 mass[bucket] += bucketMass;
+                momentX[bucket] += result.bucketMomentX?.[bucket] || 0;
+                momentY[bucket] += result.bucketMomentY?.[bucket] || 0;
             }
         }
-        return {counts, mass, countsByWorker};
+        return {counts, mass, momentX, momentY, countsByWorker};
     }
 
     _buildHybridSeedWorkerOffsets(countsByWorker, counts) {
@@ -914,7 +927,7 @@ class WorkerMTBackendImpl {
         };
     }
 
-    _createParallelChildrenFromBuckets(node, targetBufferId, xMid, yMid, bucketCounts, bucketMass) {
+    _createParallelChildrenFromBuckets(node, targetBufferId, xMid, yMid, bucketCounts, bucketMass, bucketMomentX, bucketMomentY) {
         const bucketStarts = new Int32Array(4);
         let writeStart = node.start;
         for (let i = 0; i < 4; i++) {
@@ -934,6 +947,9 @@ class WorkerMTBackendImpl {
             const childRight = x === 0 ? xMid : node.right + EPSILON;
             const childTop = y === 0 ? node.top : yMid;
             const childBottom = y === 0 ? yMid : node.bottom + EPSILON;
+            const mass = bucketMass[bucketIndex];
+            const massCenterX = mass !== 0 ? bucketMomentX[bucketIndex] / mass : NaN;
+            const massCenterY = mass !== 0 ? bucketMomentY[bucketIndex] / mass : NaN;
             children.push({
                 start: bucketStarts[bucketIndex],
                 count: bucketCount,
@@ -943,9 +959,9 @@ class WorkerMTBackendImpl {
                 top: childTop,
                 right: childRight,
                 bottom: childBottom,
-                centerX: childLeft + (childRight - childLeft) / 2,
-                centerY: childTop + (childBottom - childTop) / 2,
-                mass: bucketMass[bucketIndex],
+                centerX: Number.isFinite(massCenterX) ? massCenterX : childLeft + (childRight - childLeft) / 2,
+                centerY: Number.isFinite(massCenterY) ? massCenterY : childTop + (childBottom - childTop) / 2,
+                mass,
                 parentForceX: node.parentForceX,
                 parentForceY: node.parentForceY,
             });
@@ -1366,14 +1382,14 @@ class WorkerMTBackendImpl {
             const childId = firstChild + i;
             let forceX = pForceX;
             let forceY = pForceY;
-            const childCenterX = tree.nodeCenterX[childId];
-            const childCenterY = tree.nodeCenterY[childId];
+            const childCenterX = tree.nodeMassCenterX[childId];
+            const childCenterY = tree.nodeMassCenterY[childId];
 
             for (let j = 0; j < childCount; j++) {
                 if (i === j) continue;
                 const otherId = firstChild + j;
-                const dx = childCenterX - tree.nodeCenterX[otherId];
-                const dy = childCenterY - tree.nodeCenterY[otherId];
+                const dx = childCenterX - tree.nodeMassCenterX[otherId];
+                const dy = childCenterY - tree.nodeMassCenterY[otherId];
                 const distSquare = dx * dx + dy * dy;
                 if (distSquare >= minInteractionDistanceSq) {
                     const force = -(particleGravity * tree.nodeMass[otherId]) / distSquare;
@@ -1444,9 +1460,10 @@ class WorkerMTBackendImpl {
         for (let nodeId = 0; nodeId < tree.nodeCount; nodeId++) {
             const childCount = tree.nodeChildCount[nodeId];
             if (childCount === 0) {
-                flops += Math.pow(tree.nodeParticleCount[nodeId], 2) * flopsPerOp;
+                const particleCount = tree.nodeParticleCount[nodeId];
+                flops += particleCount * Math.max(0, particleCount - 1) / 2 * flopsPerOp;
             } else {
-                flops += Math.pow(childCount, 2) * flopsPerOp;
+                flops += childCount * Math.max(0, childCount - 1) * flopsPerOp;
             }
         }
 

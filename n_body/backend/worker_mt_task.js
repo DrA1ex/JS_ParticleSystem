@@ -8,8 +8,10 @@ let settings = null;
 let particles = null;
 let forceX = null;
 let forceY = null;
-let collisionVelX = new Float32Array(0);
-let collisionVelY = new Float32Array(0);
+let collisionVelX = new Float64Array(0);
+let collisionVelY = new Float64Array(0);
+let collisionContactCount = new Uint32Array(0);
+let collisionImpulseSq = new Float64Array(0);
 let indexBuffers = null;
 let treeWorkspace = null;
 let recursiveBucketIds = new Int32Array(0);
@@ -127,12 +129,19 @@ function processHybridSeedCount(data) {
     const yMid = data.yMid;
     const bucketCounts = [0, 0, 0, 0];
     const bucketMass = [0, 0, 0, 0];
+    const bucketMomentX = [0, 0, 0, 0];
+    const bucketMomentY = [0, 0, 0, 0];
 
     for (let particleIndex = start; particleIndex < end; particleIndex++) {
         const offset = particleIndex * ITEM_SIZE;
-        const bucketIndex = (particles[offset] < xMid ? 0 : 2) + (particles[offset + 1] < yMid ? 0 : 1);
+        const x = particles[offset];
+        const y = particles[offset + 1];
+        const mass = particles[offset + 4];
+        const bucketIndex = (x < xMid ? 0 : 2) + (y < yMid ? 0 : 1);
         bucketCounts[bucketIndex] += 1;
-        bucketMass[bucketIndex] += particles[offset + 4];
+        bucketMass[bucketIndex] += mass;
+        bucketMomentX[bucketIndex] += x * mass;
+        bucketMomentY[bucketIndex] += y * mass;
     }
 
     postMessage({
@@ -140,6 +149,8 @@ function processHybridSeedCount(data) {
         requestId: data.requestId,
         bucketCounts,
         bucketMass,
+        bucketMomentX,
+        bucketMomentY,
         particleCount: end - start,
     });
 }
@@ -167,8 +178,10 @@ function processHybridSeedScatter(data) {
 
 function ensureCollisionBuffer(length) {
     if (collisionVelX.length < length) {
-        collisionVelX = new Float32Array(length);
-        collisionVelY = new Float32Array(length);
+        collisionVelX = new Float64Array(length);
+        collisionVelY = new Float64Array(length);
+        collisionContactCount = new Uint32Array(length);
+        collisionImpulseSq = new Float64Array(length);
     }
 }
 
@@ -251,7 +264,13 @@ function processCollisions(indices, start, count) {
     const impulseRestitution = 1 + restitution;
     const accumulateForce = !!settings.common.debugForce && forceX && forceY;
 
-    for (let i = start; i < end; i++) {
+    collisionVelX.fill(0, 0, count);
+    collisionVelY.fill(0, 0, count);
+    collisionContactCount.fill(0, 0, count);
+    collisionImpulseSq.fill(0, 0, count);
+
+    for (let i = start; i < end - 1; i++) {
+        const localI = i - start;
         const p1Index = indices[i];
         const p1Offset = p1Index * ITEM_SIZE;
         const p1X = particles[p1Offset];
@@ -259,13 +278,9 @@ function processCollisions(indices, start, count) {
         const p1VelX = particles[p1Offset + 2];
         const p1VelY = particles[p1Offset + 3];
         const p1Mass = particles[p1Offset + 4];
-        let deltaVelX = 0;
-        let deltaVelY = 0;
-        let contactCount = 0;
-        let impulseSquareSum = 0;
 
-        for (let j = start; j < end; j++) {
-            if (i === j) continue;
+        for (let j = i + 1; j < end; j++) {
+            const localJ = j - start;
             const p2Index = indices[j];
             const p2Offset = p2Index * ITEM_SIZE;
             const dx = p1X - particles[p2Offset];
@@ -298,36 +313,49 @@ function processCollisions(indices, start, count) {
             if (desiredRelativeChange <= 0) continue;
 
             const p2Mass = particles[p2Offset + 4];
-            const deltaSpeed = desiredRelativeChange * p2Mass / (p1Mass + p2Mass);
-            const pairDeltaX = deltaSpeed * normalX;
-            const pairDeltaY = deltaSpeed * normalY;
-            deltaVelX += pairDeltaX;
-            deltaVelY += pairDeltaY;
-            impulseSquareSum += pairDeltaX * pairDeltaX + pairDeltaY * pairDeltaY;
-            contactCount += 1;
-        }
+            const massSum = p1Mass + p2Mass;
+            if (!(massSum > 0) || !Number.isFinite(massSum)) continue;
 
-        const localIndex = i - start;
-        const deltaScale = collisionDeltaScale(
-            deltaVelX, deltaVelY, contactCount, impulseSquareSum, contactMode, limitImpulse);
-        collisionVelX[localIndex] = p1VelX + deltaVelX * deltaScale;
-        collisionVelY[localIndex] = p1VelY + deltaVelY * deltaScale;
+            const deltaSpeedI = desiredRelativeChange * p2Mass / massSum;
+            const deltaSpeedJ = desiredRelativeChange * p1Mass / massSum;
+            const deltaIX = deltaSpeedI * normalX;
+            const deltaIY = deltaSpeedI * normalY;
+            const deltaJX = -deltaSpeedJ * normalX;
+            const deltaJY = -deltaSpeedJ * normalY;
+
+            collisionVelX[localI] += deltaIX;
+            collisionVelY[localI] += deltaIY;
+            collisionVelX[localJ] += deltaJX;
+            collisionVelY[localJ] += deltaJY;
+            collisionImpulseSq[localI] += deltaIX * deltaIX + deltaIY * deltaIY;
+            collisionImpulseSq[localJ] += deltaJX * deltaJX + deltaJY * deltaJY;
+            collisionContactCount[localI] += 1;
+            collisionContactCount[localJ] += 1;
+        }
     }
 
     for (let i = start; i < end; i++) {
+        const localIndex = i - start;
         const particleIndex = indices[i];
         const particleOffset = particleIndex * ITEM_SIZE;
-        const localIndex = i - start;
-        const nextVelX = collisionVelX[localIndex];
-        const nextVelY = collisionVelY[localIndex];
+        const deltaScale = collisionDeltaScale(
+            collisionVelX[localIndex],
+            collisionVelY[localIndex],
+            collisionContactCount[localIndex],
+            collisionImpulseSq[localIndex],
+            contactMode,
+            limitImpulse,
+        );
+        const deltaVelX = collisionVelX[localIndex] * deltaScale;
+        const deltaVelY = collisionVelY[localIndex] * deltaScale;
 
         if (accumulateForce) {
-            forceX[particleIndex] += nextVelX - particles[particleOffset + 2];
-            forceY[particleIndex] += nextVelY - particles[particleOffset + 3];
+            forceX[particleIndex] += deltaVelX;
+            forceY[particleIndex] += deltaVelY;
         }
 
-        particles[particleOffset + 2] = nextVelX;
-        particles[particleOffset + 3] = nextVelY;
+        particles[particleOffset + 2] += deltaVelX;
+        particles[particleOffset + 3] += deltaVelY;
     }
 }
 
@@ -352,9 +380,10 @@ function buildTreeStats(tree) {
     for (let nodeId = 0; nodeId < tree.nodeCount; nodeId++) {
         const childCount = tree.nodeChildCount[nodeId];
         if (childCount === 0) {
-            flops += Math.pow(tree.nodeParticleCount[nodeId], 2) * flopsPerOp;
+            const particleCount = tree.nodeParticleCount[nodeId];
+            flops += particleCount * Math.max(0, particleCount - 1) / 2 * flopsPerOp;
         } else {
-            flops += Math.pow(childCount, 2) * flopsPerOp;
+            flops += childCount * Math.max(0, childCount - 1) * flopsPerOp;
         }
     }
 
@@ -403,14 +432,14 @@ function collectLeafTasks(tree, nodeId, pForceX, pForceY, tasks) {
         const childId = firstChild + i;
         let forceX = pForceX;
         let forceY = pForceY;
-        const childCenterX = tree.nodeCenterX[childId];
-        const childCenterY = tree.nodeCenterY[childId];
+        const childCenterX = tree.nodeMassCenterX[childId];
+        const childCenterY = tree.nodeMassCenterY[childId];
 
         for (let j = 0; j < childCount; j++) {
             if (i === j) continue;
             const otherId = firstChild + j;
-            const dx = childCenterX - tree.nodeCenterX[otherId];
-            const dy = childCenterY - tree.nodeCenterY[otherId];
+            const dx = childCenterX - tree.nodeMassCenterX[otherId];
+            const dy = childCenterY - tree.nodeMassCenterY[otherId];
             const distSquare = dx * dx + dy * dy;
             if (distSquare >= minInteractionDistanceSq) {
                 const force = -(particleGravity * tree.nodeMass[otherId]) / distSquare;
@@ -532,6 +561,8 @@ function splitRecursiveNode(node) {
     const end = start + node.count;
     const bucketCounts = new Int32Array(4);
     const bucketMass = new Float64Array(4);
+    const bucketMomentX = new Float64Array(4);
+    const bucketMomentY = new Float64Array(4);
     ensureRecursiveBucketIds(node.count);
     let usedBuckets = 0;
 
@@ -540,11 +571,16 @@ function splitRecursiveNode(node) {
     for (let i = start; i < end; i++) {
         const particleIndex = sourceIndices[i];
         const offset = particleIndex * ITEM_SIZE;
-        const bucketIndex = (particles[offset] < xMid ? 0 : 2) + (particles[offset + 1] < yMid ? 0 : 1);
+        const particleX = particles[offset];
+        const particleY = particles[offset + 1];
+        const particleMass = particles[offset + 4];
+        const bucketIndex = (particleX < xMid ? 0 : 2) + (particleY < yMid ? 0 : 1);
         recursiveBucketIds[i - start] = bucketIndex;
         if (bucketCounts[bucketIndex] === 0) usedBuckets += 1;
         bucketCounts[bucketIndex] += 1;
-        bucketMass[bucketIndex] += particles[offset + 4];
+        bucketMass[bucketIndex] += particleMass;
+        bucketMomentX[bucketIndex] += particleX * particleMass;
+        bucketMomentY[bucketIndex] += particleY * particleMass;
     }
     recursivePartitionCountParticles += node.count;
     if (measurePartitionTiming) {
@@ -587,6 +623,9 @@ function splitRecursiveNode(node) {
         const childRight = x === 0 ? xMid : right + EPSILON;
         const childTop = y === 0 ? top : yMid;
         const childBottom = y === 0 ? yMid : bottom + EPSILON;
+        const mass = bucketMass[bucketIndex];
+        const massCenterX = mass !== 0 ? bucketMomentX[bucketIndex] / mass : NaN;
+        const massCenterY = mass !== 0 ? bucketMomentY[bucketIndex] / mass : NaN;
         children.push({
             start: bucketStarts[bucketIndex],
             count,
@@ -596,9 +635,9 @@ function splitRecursiveNode(node) {
             top: childTop,
             right: childRight,
             bottom: childBottom,
-            centerX: childLeft + (childRight - childLeft) / 2,
-            centerY: childTop + (childBottom - childTop) / 2,
-            mass: bucketMass[bucketIndex],
+            centerX: Number.isFinite(massCenterX) ? massCenterX : childLeft + (childRight - childLeft) / 2,
+            centerY: Number.isFinite(massCenterY) ? massCenterY : childTop + (childBottom - childTop) / 2,
+            mass,
             parentForceX: node.parentForceX,
             parentForceY: node.parentForceY,
         });

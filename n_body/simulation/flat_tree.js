@@ -95,6 +95,8 @@ export class FlatSpatialTree {
         this.nodeCenterX = workspace.nodeCenterX;
         this.nodeCenterY = workspace.nodeCenterY;
         this.nodeMass = workspace.nodeMass;
+        this.nodeMassCenterX = workspace.nodeMassCenterX;
+        this.nodeMassCenterY = workspace.nodeMassCenterY;
 
         if (this.count === 0) {
             this.root = this._createNode(0, 0, BUFFER_A, 1, 0, 0, 0, 0);
@@ -193,6 +195,8 @@ export class FlatSpatialTree {
         workspace.nodeCenterX = growArray(Float64Array, workspace.nodeCenterX, capacity);
         workspace.nodeCenterY = growArray(Float64Array, workspace.nodeCenterY, capacity);
         workspace.nodeMass = growArray(Float64Array, workspace.nodeMass, capacity);
+        workspace.nodeMassCenterX = growArray(Float64Array, workspace.nodeMassCenterX, capacity);
+        workspace.nodeMassCenterY = growArray(Float64Array, workspace.nodeMassCenterY, capacity);
         workspace.nodeCapacity = capacity;
 
         // If arrays are grown after the tree object has already cached them,
@@ -212,6 +216,8 @@ export class FlatSpatialTree {
             this.nodeCenterX = workspace.nodeCenterX;
             this.nodeCenterY = workspace.nodeCenterY;
             this.nodeMass = workspace.nodeMass;
+            this.nodeMassCenterX = workspace.nodeMassCenterX;
+            this.nodeMassCenterY = workspace.nodeMassCenterY;
         }
     }
 
@@ -233,6 +239,8 @@ export class FlatSpatialTree {
         this.nodeCenterX[nodeId] = left + (right - left) / 2;
         this.nodeCenterY[nodeId] = top + (bottom - top) / 2;
         this.nodeMass[nodeId] = 0;
+        this.nodeMassCenterX[nodeId] = this.nodeCenterX[nodeId];
+        this.nodeMassCenterY[nodeId] = this.nodeCenterY[nodeId];
 
         return nodeId;
     }
@@ -407,6 +415,8 @@ export class FlatSpatialTree {
     _aggregateMassBottomUp() {
         const particles = this.particles;
         const nodeMass = this.nodeMass;
+        const nodeMassCenterX = this.nodeMassCenterX;
+        const nodeMassCenterY = this.nodeMassCenterY;
 
         // Leaves aggregate particle masses directly. Internal node mass is then
         // calculated bottom-up from child nodes, avoiding one full particle-range
@@ -414,22 +424,41 @@ export class FlatSpatialTree {
         for (let nodeId = this.nodeCount - 1; nodeId >= 0; nodeId--) {
             const childCount = this.nodeChildCount[nodeId];
             let mass = 0;
+            let momentX = 0;
+            let momentY = 0;
 
             if (childCount === 0) {
                 const indices = this.indexBuffers[this.nodeIndexBuffer[nodeId]];
                 const start = this.nodeStart[nodeId];
                 const end = start + this.nodeParticleCount[nodeId];
                 for (let i = start; i < end; i++) {
-                    mass += particles[indices[i] * ITEM_SIZE + 4];
+                    const offset = indices[i] * ITEM_SIZE;
+                    const particleMass = particles[offset + 4];
+                    mass += particleMass;
+                    momentX += particles[offset] * particleMass;
+                    momentY += particles[offset + 1] * particleMass;
                 }
             } else {
                 const firstChild = this.nodeFirstChild[nodeId];
                 for (let i = 0; i < childCount; i++) {
-                    mass += nodeMass[firstChild + i];
+                    const childId = firstChild + i;
+                    const childMass = nodeMass[childId];
+                    mass += childMass;
+                    momentX += nodeMassCenterX[childId] * childMass;
+                    momentY += nodeMassCenterY[childId] * childMass;
                 }
             }
 
             nodeMass[nodeId] = mass;
+            if (mass !== 0) {
+                const centerX = momentX / mass;
+                const centerY = momentY / mass;
+                nodeMassCenterX[nodeId] = Number.isFinite(centerX) ? centerX : this.nodeCenterX[nodeId];
+                nodeMassCenterY[nodeId] = Number.isFinite(centerY) ? centerY : this.nodeCenterY[nodeId];
+            } else {
+                nodeMassCenterX[nodeId] = this.nodeCenterX[nodeId];
+                nodeMassCenterY[nodeId] = this.nodeCenterY[nodeId];
+            }
         }
     }
 
