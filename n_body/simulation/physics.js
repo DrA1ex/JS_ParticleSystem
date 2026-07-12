@@ -39,7 +39,10 @@ export class PhysicsEngine {
         let t = performance.now();
 
         const tree = new SpatialTree(particles,
-            this.settings.simulation.segmentMaxCount, this.settings.simulation.segmentDivider, this.settings.simulation.segmentRandomness);
+            this.settings.simulation.segmentMaxCount,
+            this.settings.simulation.segmentDivider,
+            this.settings.simulation.segmentRandomness,
+            this.settings.simulation.massCenteredTree);
         if (this.settings.common.stats) {
             this.stats.treeTime = performance.now() - t;
         }
@@ -116,67 +119,45 @@ export class PhysicsEngine {
      * @protected
      */
     _calculateLeafData(leaf, pForce) {
-        if (this.settings.physics.symmetricForce) {
-            this._calculateLeafDataSymmetric(leaf, pForce);
-        } else {
-            this._calculateLeafDataLegacy(leaf, pForce);
-        }
-    }
-
-    _calculateLeafDataLegacy(leaf, pForce) {
-        const accumulateForce = this.settings.common.debugForce;
-        const particleGravity = this.settings.physics.particleGravity;
-
-        for (let i = 0; i < leaf.length; i++) {
-            const attractor = leaf.data[i];
-            attractor.velX += pForce[0];
-            attractor.velY += pForce[1];
-            if (accumulateForce) {
-                attractor.forceX += pForce[0];
-                attractor.forceY += pForce[1];
-            }
-
-            const g = particleGravity * attractor.mass;
-            for (let j = 0; j < leaf.length; j++) {
-                if (i === j) continue;
-                const particle = leaf.data[j];
-                this._calculateForce(particle, attractor, g, particle, accumulateForce);
-            }
-        }
-    }
-
-    _calculateLeafDataSymmetric(leaf, pForce) {
-        // Apply the inherited block force once, then solve every exact pair a
-        // single time and update both particles. The legacy directed i/j loop
-        // evaluates each pair twice and preserves the historical accumulation.
+        // Preserve the historical directed-kernel result while evaluating each
+        // exact pair only once. For every particle, contributions are still
+        // accumulated in the same attractor-index order as before, including
+        // the inherited parent force at the same point in that sequence.
         const accumulateForce = this.settings.common.debugForce;
         const particleGravity = this.settings.physics.particleGravity;
         const minInteractionDistanceSq = this.settings.physics.minInteractionDistanceSq;
 
-        for (let i = 0; i < leaf.length; i++) {
-            const particle = leaf.data[i];
-            particle.velX += pForce[0];
-            particle.velY += pForce[1];
-            if (accumulateForce) {
-                particle.forceX += pForce[0];
-                particle.forceY += pForce[1];
-            }
-        }
-
         for (let i = 0; i < leaf.length - 1; i++) {
             const p1 = leaf.data[i];
+            p1.velX += pForce[0];
+            p1.velY += pForce[1];
+            if (accumulateForce) {
+                p1.forceX += pForce[0];
+                p1.forceY += pForce[1];
+            }
+
+            const g1 = particleGravity * p1.mass;
             for (let j = i + 1; j < leaf.length; j++) {
                 const p2 = leaf.data[j];
-                const dx = p2.x - p1.x;
-                const dy = p2.y - p1.y;
-                const distSquare = dx * dx + dy * dy;
+                const dx12 = p2.x - p1.x;
+                const dy12 = p2.y - p1.y;
+                const distSquare = dx12 * dx12 + dy12 * dy12;
                 if (distSquare < minInteractionDistanceSq) continue;
 
-                const scale = particleGravity / distSquare;
-                const dv1X = dx * scale * p2.mass;
-                const dv1Y = dy * scale * p2.mass;
-                const dv2X = -dx * scale * p1.mass;
-                const dv2Y = -dy * scale * p1.mass;
+                // p1 attracts p2 using the exact arithmetic grouping from the
+                // legacy directed pass.
+                const force12 = -g1 / distSquare;
+                const dv2X = dx12 * force12;
+                const dv2Y = dy12 * force12;
+
+                // p2 attracts p1. Compute the reverse deltas explicitly so the
+                // operation order matches the old j -> i calculation.
+                const dx21 = p1.x - p2.x;
+                const dy21 = p1.y - p2.y;
+                const g2 = particleGravity * p2.mass;
+                const force21 = -g2 / distSquare;
+                const dv1X = dx21 * force21;
+                const dv1Y = dy21 * force21;
 
                 p1.velX += dv1X;
                 p1.velY += dv1Y;
@@ -189,6 +170,16 @@ export class PhysicsEngine {
                     p2.forceX += dv2X;
                     p2.forceY += dv2Y;
                 }
+            }
+        }
+
+        if (leaf.length > 0) {
+            const last = leaf.data[leaf.length - 1];
+            last.velX += pForce[0];
+            last.velY += pForce[1];
+            if (accumulateForce) {
+                last.forceX += pForce[0];
+                last.forceY += pForce[1];
             }
         }
     }
@@ -352,7 +343,7 @@ export class PhysicsEngine {
 
         function _processLeaf(parent) {
             if (parent.children.length === 0) {
-                const pairMultiplier = this.settings.physics.symmetricForce ? 0.5 : 1;
+                const pairMultiplier = 0.5;
                 flops += parent.data.length * Math.max(0, parent.data.length - 1) * pairMultiplier * flopsPerOp;
                 return;
             }

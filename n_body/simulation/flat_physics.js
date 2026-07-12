@@ -53,7 +53,8 @@ export class FlatPhysicsEngine {
                 this.settings.simulation.segmentMaxCount,
                 this.settings.simulation.segmentDivider,
                 this.settings.simulation.segmentRandomness,
-                this._treeWorkspace);
+                this._treeWorkspace,
+                {massCentered: this.settings.simulation.massCenteredTree});
             this._calculateTree(tree);
             this._physicsStep(particles);
             return tree;
@@ -67,7 +68,8 @@ export class FlatPhysicsEngine {
             this.settings.simulation.segmentMaxCount,
             this.settings.simulation.segmentDivider,
             this.settings.simulation.segmentRandomness,
-            this._treeWorkspace);
+            this._treeWorkspace,
+            {massCentered: this.settings.simulation.massCenteredTree});
         this.stats.treeTime = performance.now() - t;
         this.stats.treeProfile = tree.profile ? {...tree.profile} : null;
 
@@ -137,14 +139,8 @@ export class FlatPhysicsEngine {
     }
 
     _calculateLeafData(tree, nodeId, pForceX, pForceY) {
-        if (this.settings.physics.symmetricForce) {
-            this._calculateLeafDataSymmetric(tree, nodeId, pForceX, pForceY);
-        } else {
-            this._calculateLeafDataLegacy(tree, nodeId, pForceX, pForceY);
-        }
-    }
-
-    _calculateLeafDataLegacy(tree, nodeId, pForceX, pForceY) {
+        // Evaluate each exact pair once while preserving the historical
+        // directed-kernel accumulation order for every Float32 velocity.
         const particles = tree.particles;
         const indices = tree.indexBuffers[tree.nodeIndexBuffer[nodeId]];
         const start = tree.nodeStart[nodeId];
@@ -154,89 +150,41 @@ export class FlatPhysicsEngine {
         const accumulateForce = this.settings.common.debugForce;
         const forceXBuffer = this._forceX;
         const forceYBuffer = this._forceY;
-
-        for (let i = start; i < end; i++) {
-            const attractorIndex = indices[i];
-            const attractorOffset = attractorIndex * ITEM_SIZE;
-            const attractorX = particles[attractorOffset];
-            const attractorY = particles[attractorOffset + 1];
-            const g = particleGravity * particles[attractorOffset + 4];
-
-            particles[attractorOffset + 2] += pForceX;
-            particles[attractorOffset + 3] += pForceY;
-            if (accumulateForce) {
-                forceXBuffer[attractorIndex] += pForceX;
-                forceYBuffer[attractorIndex] += pForceY;
-            }
-
-            for (let j = start; j < end; j++) {
-                if (i === j) continue;
-                const particleIndex = indices[j];
-                const particleOffset = particleIndex * ITEM_SIZE;
-                const dx = particles[particleOffset] - attractorX;
-                const dy = particles[particleOffset + 1] - attractorY;
-                const distSquare = dx * dx + dy * dy;
-                if (distSquare < minInteractionDistanceSq) continue;
-
-                const force = -g / distSquare;
-                const vx = dx * force;
-                const vy = dy * force;
-                particles[particleOffset + 2] += vx;
-                particles[particleOffset + 3] += vy;
-
-                if (accumulateForce) {
-                    forceXBuffer[particleIndex] += vx;
-                    forceYBuffer[particleIndex] += vy;
-                }
-            }
-        }
-    }
-
-    _calculateLeafDataSymmetric(tree, nodeId, pForceX, pForceY) {
-        // Apply the inherited block force once per particle, then evaluate each
-        // exact pair once and update both endpoints.
-        const particles = tree.particles;
-        const indices = tree.indexBuffers[tree.nodeIndexBuffer[nodeId]];
-        const start = tree.nodeStart[nodeId];
-        const end = start + tree.nodeParticleCount[nodeId];
-        const particleGravity = this.settings.physics.particleGravity;
-        const minInteractionDistanceSq = this.settings.physics.minInteractionDistanceSq;
-        const accumulateForce = this.settings.common.debugForce;
-        const forceXBuffer = this._forceX;
-        const forceYBuffer = this._forceY;
-
-        for (let i = start; i < end; i++) {
-            const particleIndex = indices[i];
-            const offset = particleIndex * ITEM_SIZE;
-            particles[offset + 2] += pForceX;
-            particles[offset + 3] += pForceY;
-            if (accumulateForce) {
-                forceXBuffer[particleIndex] += pForceX;
-                forceYBuffer[particleIndex] += pForceY;
-            }
-        }
 
         for (let i = start; i < end - 1; i++) {
             const indexI = indices[i];
             const offsetI = indexI * ITEM_SIZE;
+            particles[offsetI + 2] += pForceX;
+            particles[offsetI + 3] += pForceY;
+            if (accumulateForce) {
+                forceXBuffer[indexI] += pForceX;
+                forceYBuffer[indexI] += pForceY;
+            }
+
             const xI = particles[offsetI];
             const yI = particles[offsetI + 1];
-            const massI = particles[offsetI + 4];
+            const gI = particleGravity * particles[offsetI + 4];
 
             for (let j = i + 1; j < end; j++) {
                 const indexJ = indices[j];
                 const offsetJ = indexJ * ITEM_SIZE;
-                const dx = particles[offsetJ] - xI;
-                const dy = particles[offsetJ + 1] - yI;
-                const distSquare = dx * dx + dy * dy;
+                const xJ = particles[offsetJ];
+                const yJ = particles[offsetJ + 1];
+                const dxIJ = xJ - xI;
+                const dyIJ = yJ - yI;
+                const distSquare = dxIJ * dxIJ + dyIJ * dyIJ;
                 if (distSquare < minInteractionDistanceSq) continue;
 
-                const scale = particleGravity / distSquare;
-                const massJ = particles[offsetJ + 4];
-                const dvIX = dx * scale * massJ;
-                const dvIY = dy * scale * massJ;
-                const dvJX = -dx * scale * massI;
-                const dvJY = -dy * scale * massI;
+                const forceIJ = -gI / distSquare;
+                const dvJX = dxIJ * forceIJ;
+                const dvJY = dyIJ * forceIJ;
+
+                const dxJI = xI - xJ;
+                const dyJI = yI - yJ;
+                const gJ = particleGravity * particles[offsetJ + 4];
+                const forceJI = -gJ / distSquare;
+                const dvIX = dxJI * forceJI;
+                const dvIY = dyJI * forceJI;
 
                 particles[offsetI + 2] += dvIX;
                 particles[offsetI + 3] += dvIY;
@@ -249,6 +197,17 @@ export class FlatPhysicsEngine {
                     forceXBuffer[indexJ] += dvJX;
                     forceYBuffer[indexJ] += dvJY;
                 }
+            }
+        }
+
+        if (end > start) {
+            const lastIndex = indices[end - 1];
+            const lastOffset = lastIndex * ITEM_SIZE;
+            particles[lastOffset + 2] += pForceX;
+            particles[lastOffset + 3] += pForceY;
+            if (accumulateForce) {
+                forceXBuffer[lastIndex] += pForceX;
+                forceYBuffer[lastIndex] += pForceY;
             }
         }
     }
@@ -414,7 +373,7 @@ export class FlatPhysicsEngine {
             const childCount = tree.nodeChildCount[nodeId];
             if (childCount === 0) {
                 const particleCount = tree.nodeParticleCount[nodeId];
-                const pairMultiplier = this.settings.physics.symmetricForce ? 0.5 : 1;
+                const pairMultiplier = 0.5;
                 flops += particleCount * Math.max(0, particleCount - 1) * pairMultiplier * flopsPerOp;
             } else {
                 flops += childCount * Math.max(0, childCount - 1) * flopsPerOp;

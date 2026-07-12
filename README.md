@@ -221,6 +221,8 @@ The historical `static`, `dynamic`, `recursive` and configurable `hybrid` varian
 
 `segment_random` remains available because randomized split positions soften persistent grid-aligned artifacts caused by the spatial-tree approximation. Set it to `0` when you need clearly visible deterministic segmentation for debugging.
 
+`tree_mass_center` controls where an approximated tree block places its aggregate mass. It defaults to `1` (center of mass); set it to `0` to reproduce the legacy geometric cell-center model.
+
 ### Reproducible performance benchmark suites
 
 The browser console exposes `window.nBodyRunBenchmark(...)` for comparing settings against the exact same live universe state. The runner captures one in-memory particle snapshot at the start, restores it before every case, restarts the physics pipeline, waits for warm-up physics steps and a stabilization delay, and then calls the regular performance report collector.

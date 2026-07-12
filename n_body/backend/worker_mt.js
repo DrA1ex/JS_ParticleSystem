@@ -14,8 +14,8 @@ const HYBRID_SEED_TARGET_JOBS = 4;
 const HYBRID_SPLIT_BUDGET = 1;
 const HYBRID_MIN_JOB_PARTICLES = 32768;
 const HYBRID_SEGMENT_MULTIPLIER = 256;
-function forceKernelName(settings) {
-    return settings.physics.symmetricForce ? "symmetric" : "legacy";
+function forceKernelName() {
+    return "pair-once-legacy-equivalent";
 }
 const TREE_FLOPS_PER_OP = 14;
 const EPSILON = 0.1e-6;
@@ -497,7 +497,8 @@ class WorkerMTBackendImpl {
             this.settings.simulation.segmentMaxCount,
             this.settings.simulation.segmentDivider,
             this.settings.simulation.segmentRandomness,
-            this._treeWorkspace);
+            this._treeWorkspace,
+            {massCentered: this.settings.simulation.massCenteredTree});
         const treeTime = performance.now() - t;
 
         if (this.settings.common.debugForce && this.forceX && this.forceY) {
@@ -540,11 +541,11 @@ class WorkerMTBackendImpl {
             integrateTimeMax: integrateTime,
             forceTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceTime || 0), 0),
             integrateTimeTotal: workerResults.reduce((sum, item) => sum + (item.integrateTime || 0), 0),
-            forceKernel: forceKernelName(this.settings),
+            forceKernel: forceKernelName(),
             forceKernelApplied: [...new Set(workerResults.map(item => item.forceKernel).filter(Boolean))],
             forceKernelConsistent: workerResults.some(item => item.forceKernel) && workerResults
                 .filter(item => item.forceKernel)
-                .every(item => item.forceKernel === forceKernelName(this.settings)),
+                .every(item => item.forceKernel === forceKernelName()),
             forcePairChecks: workerResults.reduce((sum, item) => sum + (item.forcePairChecks || 0), 0),
             forceKernelTimeMax: Math.max(0, ...workerResults.map(item => item.forceKernelTime || 0)),
             forceKernelTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceKernelTime || 0), 0),
@@ -671,9 +672,9 @@ class WorkerMTBackendImpl {
             integrateTimeMax: integrateTime,
             forceTimeTotal: workerTiming.forceTimeTotal,
             integrateTimeTotal: workerTiming.integrateTimeTotal,
-            forceKernel: forceKernelName(this.settings),
+            forceKernel: forceKernelName(),
             forceKernelApplied: [...new Set(workerResults.map(item => item.forceKernel).filter(Boolean))],
-            forceKernelConsistent: workerResults.some(item => item.forceKernel) && workerResults.filter(item => item.forceKernel).every(item => item.forceKernel === forceKernelName(this.settings)),
+            forceKernelConsistent: workerResults.some(item => item.forceKernel) && workerResults.filter(item => item.forceKernel).every(item => item.forceKernel === forceKernelName()),
             forcePairChecks: workerResults.reduce((sum, item) => sum + (item.forcePairChecks || 0), 0),
             forceKernelTimeMax: Math.max(0, ...workerResults.map(item => item.forceKernelTime || 0)),
             forceKernelTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceKernelTime || 0), 0),
@@ -950,8 +951,11 @@ class WorkerMTBackendImpl {
             const childTop = y === 0 ? node.top : yMid;
             const childBottom = y === 0 ? yMid : node.bottom + EPSILON;
             const mass = bucketMass[bucketIndex];
+            const geometricCenterX = childLeft + (childRight - childLeft) / 2;
+            const geometricCenterY = childTop + (childBottom - childTop) / 2;
             const massCenterX = mass !== 0 ? bucketMomentX[bucketIndex] / mass : NaN;
             const massCenterY = mass !== 0 ? bucketMomentY[bucketIndex] / mass : NaN;
+            const useMassCenter = this.settings.simulation.massCenteredTree;
             children.push({
                 start: bucketStarts[bucketIndex],
                 count: bucketCount,
@@ -961,8 +965,8 @@ class WorkerMTBackendImpl {
                 top: childTop,
                 right: childRight,
                 bottom: childBottom,
-                centerX: Number.isFinite(massCenterX) ? massCenterX : childLeft + (childRight - childLeft) / 2,
-                centerY: Number.isFinite(massCenterY) ? massCenterY : childTop + (childBottom - childTop) / 2,
+                centerX: useMassCenter && Number.isFinite(massCenterX) ? massCenterX : geometricCenterX,
+                centerY: useMassCenter && Number.isFinite(massCenterY) ? massCenterY : geometricCenterY,
                 mass,
                 parentForceX: node.parentForceX,
                 parentForceY: node.parentForceY,
@@ -1463,7 +1467,7 @@ class WorkerMTBackendImpl {
             const childCount = tree.nodeChildCount[nodeId];
             if (childCount === 0) {
                 const particleCount = tree.nodeParticleCount[nodeId];
-                const pairMultiplier = this.settings.physics.symmetricForce ? 0.5 : 1;
+                const pairMultiplier = 0.5;
                 flops += particleCount * Math.max(0, particleCount - 1) * pairMultiplier * flopsPerOp;
             } else {
                 flops += childCount * Math.max(0, childCount - 1) * flopsPerOp;

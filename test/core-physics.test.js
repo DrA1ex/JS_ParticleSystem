@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {PhysicsSettings, calculateInitializedTotalMass} from "../n_body/settings/physics.js";
 import {Particle_initializer} from "../n_body/simulation/particle_initializer.js";
 import {FlatSpatialTree} from "../n_body/simulation/flat_tree.js";
+import {SpatialTree} from "../n_body/simulation/tree.js";
 import {FlatPhysicsEngine} from "../n_body/simulation/flat_physics.js";
 import {PhysicsEngine} from "../n_body/simulation/physics.js";
 import {ITEM_SIZE} from "../n_body/utils/particles.js";
@@ -27,10 +28,10 @@ function createEngineSettings() {
             segmentMaxCount: 2,
             segmentDivider: 2,
             segmentRandomness: 0,
+            massCenteredTree: true,
         },
         physics: {
             particleGravity: 1,
-            symmetricForce: false,
             minInteractionDistanceSq: 1e-12,
             enableCollision: false,
             resistance: 1,
@@ -90,6 +91,72 @@ test("flat spatial tree aggregates mass-weighted centers", () => {
     assert.ok(Math.abs(tree.nodeMassCenterX[tree.root] - 9) < 1e-12);
 });
 
+test("tree approximation can reproduce legacy geometric subdivision centers", () => {
+    const source = asymmetricParticleBuffer();
+    const massTree = new FlatSpatialTree(source, 2, 2, 0, {}, {massCentered: true});
+    const legacyTree = new FlatSpatialTree(source, 2, 2, 0, {}, {massCentered: false});
+
+    const firstChild = legacyTree.nodeFirstChild[legacyTree.root];
+    const childCount = legacyTree.nodeChildCount[legacyTree.root];
+    let legacyRight = -1;
+    let massRight = -1;
+    for (let i = 0; i < childCount; i++) {
+        const legacyChild = firstChild + i;
+        if (legacyTree.nodeCenterX[legacyChild] > 5) legacyRight = legacyChild;
+        const massChild = massTree.nodeFirstChild[massTree.root] + i;
+        if (massTree.nodeCenterX[massChild] > 5) massRight = massChild;
+    }
+
+    assert.notEqual(legacyRight, -1);
+    assert.notEqual(massRight, -1);
+    assert.equal(legacyTree.nodeMassCenterX[legacyRight], legacyTree.nodeCenterX[legacyRight]);
+    assert.ok(Math.abs(massTree.nodeMassCenterX[massRight] - 9.9) < 1e-12);
+    assert.notEqual(legacyTree.nodeMassCenterX[legacyRight], massTree.nodeMassCenterX[massRight]);
+
+    const objectParticles = [
+        {x: 0, y: 0, velX: 0, velY: 0, mass: 1},
+        {x: 9, y: 0, velX: 0, velY: 0, mass: 1},
+        {x: 10, y: 0, velX: 0, velY: 0, mass: 9},
+    ];
+    const objectMassTree = new SpatialTree(objectParticles, 2, 2, 0, true);
+    const objectLegacyTree = new SpatialTree(objectParticles, 2, 2, 0, false);
+    const objectMassRight = objectMassTree.root.children.find(child => child.boundaryRect.left > 0);
+    const objectLegacyRight = objectLegacyTree.root.children.find(child => child.boundaryRect.left > 0);
+    assert.ok(Math.abs(objectMassRight.centerX - 9.9) < 1e-12);
+    assert.equal(objectLegacyRight.centerX, objectLegacyRight.boundaryRect.center().x);
+});
+
+test("legacy and mass-centered modes stay aligned across object and flat physics", () => {
+    const run = massCenteredTree => {
+        const settings = createEngineSettings();
+        settings.simulation.massCenteredTree = massCenteredTree;
+
+        const flatParticles = asymmetricParticleBuffer();
+        new FlatPhysicsEngine(settings).step(flatParticles);
+
+        const objectParticles = [];
+        const source = asymmetricParticleBuffer();
+        for (let i = 0; i < source.length / ITEM_SIZE; i++) {
+            const offset = i * ITEM_SIZE;
+            objectParticles.push({
+                x: source[offset],
+                y: source[offset + 1],
+                velX: source[offset + 2],
+                velY: source[offset + 3],
+                mass: source[offset + 4],
+            });
+        }
+        new PhysicsEngine(settings).step(objectParticles);
+        return {flatVelocity: flatParticles[2], objectVelocity: objectParticles[0].velX};
+    };
+
+    const centered = run(true);
+    const legacy = run(false);
+    assert.ok(Math.abs(centered.flatVelocity - centered.objectVelocity) < 1e-6);
+    assert.ok(Math.abs(legacy.flatVelocity - legacy.objectVelocity) < 1e-6);
+    assert.ok(Math.abs(centered.flatVelocity - legacy.flatVelocity) > 0.5);
+});
+
 test("object and flat physics use center of mass for block approximation", () => {
     const settings = createEngineSettings();
     const expectedLeftVelocity = 10 / (9.9 * 9.9) * 9.9;
@@ -116,54 +183,119 @@ test("object and flat physics use center of mass for block approximation", () =>
     assert.ok(Math.abs(objectParticles[0].velX - expectedLeftVelocity) < 1e-10);
 });
 
-test("legacy directed force calculation remains the default", () => {
-    const settings = createEngineSettings();
-    settings.simulation.segmentMaxCount = 8;
-    settings.physics.particleGravity = 0.25;
+function applyLegacyDirectedFlat(particles, indices, pForceX, pForceY, settings) {
+    for (let i = 0; i < indices.length; i++) {
+        const attractorIndex = indices[i];
+        const attractorOffset = attractorIndex * ITEM_SIZE;
+        const attractorX = particles[attractorOffset];
+        const attractorY = particles[attractorOffset + 1];
+        const g = settings.physics.particleGravity * particles[attractorOffset + 4];
 
-    const source = new Float32Array([
-        0, 0, 0, 0, 2,
-        3, 4, 0, 0, 5,
-        -7, 2, 0, 0, 3,
-    ]);
-    const expected = new Float32Array(source);
-    const count = expected.length / ITEM_SIZE;
+        particles[attractorOffset + 2] += pForceX;
+        particles[attractorOffset + 3] += pForceY;
 
-    // Historical directed kernel: every particle acts as an attractor and
-    // updates all other particles in a separate pass.
-    for (let i = 0; i < count; i++) {
-        const attractorOffset = i * ITEM_SIZE;
-        const attractorX = expected[attractorOffset];
-        const attractorY = expected[attractorOffset + 1];
-        const g = settings.physics.particleGravity * expected[attractorOffset + 4];
-        for (let j = 0; j < count; j++) {
+        for (let j = 0; j < indices.length; j++) {
             if (i === j) continue;
-            const particleOffset = j * ITEM_SIZE;
-            const dx = expected[particleOffset] - attractorX;
-            const dy = expected[particleOffset + 1] - attractorY;
+            const particleIndex = indices[j];
+            const particleOffset = particleIndex * ITEM_SIZE;
+            const dx = particles[particleOffset] - attractorX;
+            const dy = particles[particleOffset + 1] - attractorY;
             const distSquare = dx * dx + dy * dy;
             if (distSquare < settings.physics.minInteractionDistanceSq) continue;
             const force = -g / distSquare;
-            expected[particleOffset + 2] += dx * force;
-            expected[particleOffset + 3] += dy * force;
+            particles[particleOffset + 2] += dx * force;
+            particles[particleOffset + 3] += dy * force;
         }
     }
+}
+
+function applyLegacyDirectedObjects(particles, pForce, settings) {
+    for (let i = 0; i < particles.length; i++) {
+        const attractor = particles[i];
+        attractor.velX += pForce[0];
+        attractor.velY += pForce[1];
+        const g = settings.physics.particleGravity * attractor.mass;
+
+        for (let j = 0; j < particles.length; j++) {
+            if (i === j) continue;
+            const particle = particles[j];
+            const dx = particle.x - attractor.x;
+            const dy = particle.y - attractor.y;
+            const distSquare = dx * dx + dy * dy;
+            if (distSquare < settings.physics.minInteractionDistanceSq) continue;
+            const force = -g / distSquare;
+            particle.velX += dx * force;
+            particle.velY += dy * force;
+        }
+    }
+}
+
+function deterministicForceParticles(count) {
+    let seed = 0x12345678;
+    const next = () => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        return seed / 0x100000000;
+    };
+    const result = new Float32Array(count * ITEM_SIZE);
     for (let i = 0; i < count; i++) {
         const offset = i * ITEM_SIZE;
-        expected[offset] += expected[offset + 2];
-        expected[offset + 1] += expected[offset + 3];
+        result[offset] = i * 2.75 + next();
+        result[offset + 1] = (i % 5) * 3.25 + next();
+        result[offset + 2] = next() - 0.5;
+        result[offset + 3] = next() - 0.5;
+        result[offset + 4] = 0.5 + next() * 8;
     }
+    return result;
+}
 
-    const actual = new Float32Array(source);
-    new FlatPhysicsEngine(settings).step(actual);
-    assert.deepEqual([...actual], [...expected]);
+test("pair-once force kernel is bitwise equivalent to the legacy directed kernel", () => {
+    const settings = createEngineSettings();
+    settings.physics.particleGravity = 0.03125;
+    const source = deterministicForceParticles(17);
+    const indices = new Uint32Array([8, 1, 15, 4, 10, 0, 13, 6, 16, 3, 12, 7, 2, 14, 5, 11, 9]);
+    const pForceX = Math.fround(0.017);
+    const pForceY = Math.fround(-0.023);
+
+    const expectedFlat = new Float32Array(source);
+    applyLegacyDirectedFlat(expectedFlat, indices, pForceX, pForceY, settings);
+
+    const actualFlat = new Float32Array(source);
+    const flatEngine = new FlatPhysicsEngine(settings);
+    flatEngine._calculateLeafData({
+        particles: actualFlat,
+        indexBuffers: [indices],
+        nodeIndexBuffer: new Uint8Array([0]),
+        nodeStart: new Uint32Array([0]),
+        nodeParticleCount: new Uint32Array([indices.length]),
+    }, 0, pForceX, pForceY);
+    assert.deepEqual([...actualFlat], [...expectedFlat]);
+
+    const toObjects = buffer => Array.from({length: buffer.length / ITEM_SIZE}, (_, i) => {
+        const offset = i * ITEM_SIZE;
+        return {
+            x: buffer[offset],
+            y: buffer[offset + 1],
+            velX: buffer[offset + 2],
+            velY: buffer[offset + 3],
+            mass: buffer[offset + 4],
+        };
+    });
+    const orderedSource = Array.from(indices, index => toObjects(source)[index]);
+    const expectedObjects = orderedSource.map(particle => ({...particle}));
+    applyLegacyDirectedObjects(expectedObjects, [pForceX, pForceY], settings);
+
+    const actualObjects = orderedSource.map(particle => ({...particle}));
+    new PhysicsEngine(settings)._calculateLeafData(
+        {length: actualObjects.length, data: actualObjects},
+        [pForceX, pForceY],
+    );
+    assert.deepEqual(actualObjects, expectedObjects);
 });
 
-test("symmetric force calculation is opt-in and keeps CPU layouts aligned", () => {
+test("optimized exact force calculation keeps CPU layouts aligned", () => {
     const settings = createEngineSettings();
     settings.simulation.segmentMaxCount = 8;
     settings.physics.particleGravity = 0.25;
-    settings.physics.symmetricForce = true;
 
     const source = new Float32Array([
         0, 0, 0, 0, 2,

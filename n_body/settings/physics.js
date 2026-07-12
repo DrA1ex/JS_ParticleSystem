@@ -1,8 +1,7 @@
 import {ComponentType, Property, ReadOnlyProperty, SettingsBase} from "./base.js";
-import {BackendType, CollisionContactMode, ParticleInitType} from "./enum.js";
+import {CollisionContactMode, ParticleInitType} from "./enum.js";
 
 const collisionEnabled = settings => !!settings.physics.enableCollision;
-const symmetricForceSupported = settings => settings.simulation?.backend !== BackendType.gpgpu;
 
 function migrateLegacyCollisionValues(values) {
     if (!values || values.collisionContactMode !== undefined
@@ -70,12 +69,6 @@ export class PhysicsSettings extends SettingsBase {
             .setName("Gravity").setDescription("Attraction force")
             .setAffects(ComponentType.backend)
             .setConstraints(1e-6, 1e6),
-        symmetricForce: Property.bool("symmetric_force", false)
-            .setExportable(true)
-            .setName("Symmetric force calculation")
-            .setDescription("Calculate each exact particle pair once and update both particles. This is faster, but changes floating-point accumulation order and can alter the animation. Disabled preserves the legacy directed force calculation. GPGPU always uses the legacy directed kernel.")
-            .setAffects(ComponentType.backend)
-            .setVisibleWhen(symmetricForceSupported),
         enableCollision: Property.bool("collision", false)
             .setExportable(true)
             .setName("Collisions").setDescription("Enable particle collision")
@@ -173,7 +166,6 @@ export class PhysicsSettings extends SettingsBase {
     get particleMassFactor() {return this.config.particleMassFactor;}
     get resistance() {return this.config.resistance;}
     get gravity() {return this.config.gravity;}
-    get symmetricForce() {return this.config.symmetricForce;}
     get enableCollision() {return this.config.enableCollision;}
     get collisionSize() {return this.config.collisionSize;}
     get collisionRestitution() {return this.config.collisionRestitution;}

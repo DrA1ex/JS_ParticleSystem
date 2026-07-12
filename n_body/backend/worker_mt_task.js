@@ -191,7 +191,9 @@ function ensureCollisionBuffer(length) {
 
 
 
-function calculateLeafSymmetric(indices, start, count, pForceX, pForceY) {
+function calculateLeaf(indices, start, count, pForceX, pForceY) {
+    // Pair-once exact kernel with the same per-particle accumulation order and
+    // arithmetic grouping as the historical directed implementation.
     const end = start + count;
     const particleGravity = settings.physics.particleGravity;
     const minInteractionDistanceSq = settings.physics.minInteractionDistanceSq;
@@ -206,23 +208,32 @@ function calculateLeafSymmetric(indices, start, count, pForceX, pForceY) {
             forceX[indexI] += pForceX;
             forceY[indexI] += pForceY;
         }
+
         const xI = particles[offsetI];
         const yI = particles[offsetI + 1];
-        const massI = particles[offsetI + 4];
+        const gI = particleGravity * particles[offsetI + 4];
+
         for (let j = i + 1; j < end; j++) {
             const indexJ = indices[j];
             const offsetJ = indexJ * ITEM_SIZE;
-            const dx = particles[offsetJ] - xI;
-            const dy = particles[offsetJ + 1] - yI;
-            const distSquare = dx * dx + dy * dy;
+            const xJ = particles[offsetJ];
+            const yJ = particles[offsetJ + 1];
+            const dxIJ = xJ - xI;
+            const dyIJ = yJ - yI;
+            const distSquare = dxIJ * dxIJ + dyIJ * dyIJ;
             if (distSquare < minInteractionDistanceSq) continue;
 
-            const scale = particleGravity / distSquare;
-            const massJ = particles[offsetJ + 4];
-            const dvIX = dx * scale * massJ;
-            const dvIY = dy * scale * massJ;
-            const dvJX = -dx * scale * massI;
-            const dvJY = -dy * scale * massI;
+            const forceIJ = -gI / distSquare;
+            const dvJX = dxIJ * forceIJ;
+            const dvJY = dyIJ * forceIJ;
+
+            const dxJI = xI - xJ;
+            const dyJI = yI - yJ;
+            const gJ = particleGravity * particles[offsetJ + 4];
+            const forceJI = -gJ / distSquare;
+            const dvIX = dxJI * forceJI;
+            const dvIY = dyJI * forceJI;
+
             particles[offsetI + 2] += dvIX;
             particles[offsetI + 3] += dvIY;
             particles[offsetJ + 2] += dvJX;
@@ -236,6 +247,7 @@ function calculateLeafSymmetric(indices, start, count, pForceX, pForceY) {
             }
         }
     }
+
     if (count > 0) {
         const lastIndex = indices[end - 1];
         const lastOffset = lastIndex * ITEM_SIZE;
@@ -248,64 +260,12 @@ function calculateLeafSymmetric(indices, start, count, pForceX, pForceY) {
     }
 }
 
-
-function calculateLeafLegacy(indices, start, count, pForceX, pForceY) {
-    const end = start + count;
-    const particleGravity = settings.physics.particleGravity;
-    const minInteractionDistanceSq = settings.physics.minInteractionDistanceSq;
-    const accumulateForce = !!settings.common.debugForce && forceX && forceY;
-
-    for (let i = start; i < end; i++) {
-        const attractorIndex = indices[i];
-        const attractorOffset = attractorIndex * ITEM_SIZE;
-        const attractorX = particles[attractorOffset];
-        const attractorY = particles[attractorOffset + 1];
-        const g = particleGravity * particles[attractorOffset + 4];
-
-        particles[attractorOffset + 2] += pForceX;
-        particles[attractorOffset + 3] += pForceY;
-        if (accumulateForce) {
-            forceX[attractorIndex] += pForceX;
-            forceY[attractorIndex] += pForceY;
-        }
-
-        for (let j = start; j < end; j++) {
-            if (i === j) continue;
-            const particleIndex = indices[j];
-            const particleOffset = particleIndex * ITEM_SIZE;
-            const dx = particles[particleOffset] - attractorX;
-            const dy = particles[particleOffset + 1] - attractorY;
-            const distSquare = dx * dx + dy * dy;
-            if (distSquare < minInteractionDistanceSq) continue;
-
-            const force = -g / distSquare;
-            const vx = dx * force;
-            const vy = dy * force;
-            particles[particleOffset + 2] += vx;
-            particles[particleOffset + 3] += vy;
-            if (accumulateForce) {
-                forceX[particleIndex] += vx;
-                forceY[particleIndex] += vy;
-            }
-        }
-    }
-}
-
-function calculateLeaf(indices, start, count, pForceX, pForceY) {
-    if (settings.physics.symmetricForce) {
-        calculateLeafSymmetric(indices, start, count, pForceX, pForceY);
-    } else {
-        calculateLeafLegacy(indices, start, count, pForceX, pForceY);
-    }
-}
-
 function forceKernelName() {
-    return settings.physics.symmetricForce ? "symmetric" : "legacy";
+    return "pair-once-legacy-equivalent";
 }
 
 function forcePairChecks(count) {
-    const pairs = count * Math.max(0, count - 1);
-    return settings.physics.symmetricForce ? pairs / 2 : pairs;
+    return count * Math.max(0, count - 1) / 2;
 }
 
 function processCollisions(indices, start, count) {
@@ -684,8 +644,11 @@ function splitRecursiveNode(node) {
         const childTop = y === 0 ? top : yMid;
         const childBottom = y === 0 ? yMid : bottom + EPSILON;
         const mass = bucketMass[bucketIndex];
+        const geometricCenterX = childLeft + (childRight - childLeft) / 2;
+        const geometricCenterY = childTop + (childBottom - childTop) / 2;
         const massCenterX = mass !== 0 ? bucketMomentX[bucketIndex] / mass : NaN;
         const massCenterY = mass !== 0 ? bucketMomentY[bucketIndex] / mass : NaN;
+        const useMassCenter = settings.simulation.massCenteredTree;
         children.push({
             start: bucketStarts[bucketIndex],
             count,
@@ -695,8 +658,8 @@ function splitRecursiveNode(node) {
             top: childTop,
             right: childRight,
             bottom: childBottom,
-            centerX: Number.isFinite(massCenterX) ? massCenterX : childLeft + (childRight - childLeft) / 2,
-            centerY: Number.isFinite(massCenterY) ? massCenterY : childTop + (childBottom - childTop) / 2,
+            centerX: useMassCenter && Number.isFinite(massCenterX) ? massCenterX : geometricCenterX,
+            centerY: useMassCenter && Number.isFinite(massCenterY) ? massCenterY : geometricCenterY,
             mass,
             parentForceX: node.parentForceX,
             parentForceY: node.parentForceY,
@@ -820,6 +783,7 @@ function buildAndProcessTreeJobs(jobs, requestId, extra = {}, options = {}) {
             settings.simulation.segmentRandomness,
             treeWorkspace,
             {
+                massCentered: settings.simulation.massCenteredTree,
                 count: job.count,
                 indexCapacity: Math.floor(particles.length / ITEM_SIZE),
                 skipIndexReset: true,

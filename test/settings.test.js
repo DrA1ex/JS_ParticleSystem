@@ -14,8 +14,9 @@ const {
     SettingsBase,
 } = await import("../n_body/settings/base.js");
 const {PhysicsSettings} = await import("../n_body/settings/physics.js");
+const {SimulationSettings} = await import("../n_body/settings/simulation.js");
 const {RenderSettings} = await import("../n_body/settings/render.js");
-const {BackendType, BufferUploadMode, CollisionContactMode, ParticleSpriteMode, RenderColorMode, RenderType} = await import("../n_body/settings/enum.js");
+const {BufferUploadMode, CollisionContactMode, ParticleSpriteMode, RenderColorMode, RenderType} = await import("../n_body/settings/enum.js");
 const {AppPlayerSettings} = await import("../n_body/player/settings/app.js");
 
 test("property parsers normalize booleans, numbers, enums and colors", () => {
@@ -118,25 +119,36 @@ test("physics settings migrate legacy collision options and derive runtime value
     assert.equal(migrated.collisionSizeSq, 4);
     assert.equal(migrated.minInteractionDistanceSq, 0.25);
     assert.equal(migrated.particleGravity, 1);
-    assert.equal(migrated.symmetricForce, false);
 
+    // Removed tuning fields from older URLs/state files are ignored safely.
     setLocationSearch("?collision_average=0&particle_count=20&symmetric_force=1");
     const queryMigrated = PhysicsSettings.fromQueryParams();
     assert.equal(queryMigrated.collisionContactMode, CollisionContactMode.full);
-    assert.equal(queryMigrated.symmetricForce, true);
-    assert.equal(queryMigrated.export().symmetricForce, true);
-
-    const restoredLegacy = PhysicsSettings.deserialize({particleCount: 20, gravity: 1});
-    assert.equal(restoredLegacy.symmetricForce, false);
-    assert.equal(PhysicsSettings.Properties.symmetricForce.isVisible(
-        {simulation: {backend: BackendType.worker}}, restoredLegacy), true);
-    assert.equal(PhysicsSettings.Properties.symmetricForce.isVisible(
-        {simulation: {backend: BackendType.gpgpu}}, restoredLegacy), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(queryMigrated.export(), "symmetricForce"), false);
 
     const massSettings = PhysicsSettings.deserialize({particleCount: 10000, particleMassFactor: 6, gravity: 1});
     assert.equal(massSettings.particleMass, 64);
     assert.ok(massSettings.massDistribution.length > 0);
     assert.ok(massSettings.particleGravity < 1 / 10000);
+});
+
+test("mass-centered tree approximation defaults to the new model and preserves legacy mode", () => {
+    setLocationSearch("");
+    const defaults = SimulationSettings.fromQueryParams();
+    assert.equal(defaults.massCenteredTree, true);
+    assert.equal(defaults.toQueryParams().some(item => item.key === "tree_mass_center"), false);
+
+    setLocationSearch("?tree_mass_center=0");
+    const legacy = SimulationSettings.fromQueryParams();
+    assert.equal(legacy.massCenteredTree, false);
+    assert.deepEqual(legacy.toQueryParams().find(item => item.key === "tree_mass_center"), {
+        key: "tree_mass_center",
+        value: false,
+    });
+    assert.equal(legacy.serialize().massCenteredTree, false);
+    assert.equal(legacy.export().massCenteredTree, false);
+    assert.equal(SimulationSettings.deserialize({}).massCenteredTree, true);
+    assert.equal(SimulationSettings.import({massCenteredTree: false}).massCenteredTree, false);
 });
 
 test("render and app player settings preserve contextual defaults and visibility", () => {

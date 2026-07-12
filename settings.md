@@ -56,6 +56,12 @@ _Spatial subdivision randomness factor_
 > - default: **0.25**
 > - type: **float**
 > - constraints: **0-1**
+#### Mass-centered tree approximation - `tree_mass_center`
+
+_Uses each tree block's center of mass for its aggregated gravitational mass. Disable it to reproduce the legacy geometric subdivision-center model._
+
+> - default: **true**
+> - type: **bool**
 #### Buffer count - `buffers`
 
 _How many physics frames will be requested ahead of time_
@@ -92,12 +98,6 @@ _Attraction force_
 > - default: **1**
 > - type: **float**
 > - constraints: **0.000001-1000000**
-#### Symmetric force calculation - `symmetric_force`
-
-_Calculate each exact particle pair once and update both particles. This is faster, but changes floating-point accumulation order and can alter the animation. Disabled preserves the legacy directed force calculation. GPGPU always uses the legacy directed kernel._
-
-> - default: **false**
-> - type: **bool**
 #### Collisions - `collision`
 
 _Enable particle collision_

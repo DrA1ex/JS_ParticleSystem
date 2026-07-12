@@ -392,6 +392,7 @@ function snapshotSettings(app) {
             segmentMaxCount: settings.simulation.segmentMaxCount,
             segmentDivider: settings.simulation.segmentDivider,
             segmentRandomness: settings.simulation.segmentRandomness,
+            massCenteredTree: settings.simulation.massCenteredTree,
             autoTuneSegmentSize: settings.simulation.autoTuneSegmentSize,
             workerThreads: settings.simulation.workerThreads,
         },

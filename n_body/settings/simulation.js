@@ -52,6 +52,14 @@ export class SimulationSettings extends SettingsBase {
             .setAffects(ComponentType.backend)
             .setVisibleWhen(isCpuBackend)
             .setConstraints(0, 1),
+        massCenteredTree: Property.bool("tree_mass_center", true)
+            .setName("Mass-centered tree approximation").setDescription([
+                "Uses each tree block's center of mass as the position of its aggregated gravitational mass.",
+                "This is usually more accurate for uneven particle distributions and particles with different masses.",
+                "Disable it to reproduce the legacy model, which places aggregated mass at the geometric center of the subdivision cell."
+            ].join("\n"))
+            .setExportable(true)
+            .setAffects(ComponentType.backend),
         bufferCount: Property.int("buffers", 3)
             .setName("Buffer count").setDescription("How many physics frames will be requested ahead of time")
             .setBreaks(ComponentType.backend, ComponentType.debug)
@@ -74,6 +82,7 @@ export class SimulationSettings extends SettingsBase {
     get backend() {return this.config.backend;}
     get segmentDivider() {return this.config.segmentDivider;}
     get segmentRandomness() {return this.config.segmentRandomness;}
+    get massCenteredTree() {return this.config.massCenteredTree;}
     get segmentSize() {return this.config.segmentSize;}
     get autoTuneSegmentSize() {return this.config.autoTuneSegmentSize;}
     get workerThreads() {return this.config.workerThreads;}

@@ -71,18 +71,21 @@ class Leaf {
         let mass = 0;
         let momentX = 0;
         let momentY = 0;
+        const massCentered = this.tree.massCentered;
         for (let i = 0; i < data.length; i++) {
             const particle = data[i];
             mass += particle.mass;
-            momentX += particle.x * particle.mass;
-            momentY += particle.y * particle.mass;
+            if (massCentered) {
+                momentX += particle.x * particle.mass;
+                momentY += particle.y * particle.mass;
+            }
         }
         this.mass = mass;
         const geometricCenter = this.boundaryRect.center();
-        this.centerX = mass !== 0 && Number.isFinite(momentX / mass)
+        this.centerX = massCentered && mass !== 0 && Number.isFinite(momentX / mass)
             ? momentX / mass
             : geometricCenter.x;
-        this.centerY = mass !== 0 && Number.isFinite(momentY / mass)
+        this.centerY = massCentered && mass !== 0 && Number.isFinite(momentY / mass)
             ? momentY / mass
             : geometricCenter.y;
         // Keep the aggregate compatible with force helpers that consume an
@@ -108,16 +111,20 @@ export class SpatialTree {
      * @param {number} maxCount
      * @param {number} [divideFactor=4]
      * @param {number} [randomness=0.25]
+     * @param {boolean} [massCentered=true]
      */
-    constructor(data, maxCount, divideFactor = 2, randomness = 0.25) {
+    constructor(data, maxCount, divideFactor = 2, randomness = 0.25, massCentered = true) {
         this._index = 0;
         this.maxDepth = 0;
 
-        this.root = new Leaf(this, data);
         this.maxCount = maxCount;
         this.divideFactor = divideFactor;
         this.randomness = randomness;
+        this.massCentered = massCentered !== false;
 
+        // Select the aggregation mode before creating the root because every
+        // leaf caches the aggregate position during construction.
+        this.root = new Leaf(this, data);
         this._populate(this.root, data);
     }
 
