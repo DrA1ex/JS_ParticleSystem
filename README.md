@@ -197,6 +197,16 @@ _Simulation demo links with maximum accuracy_:
 ### Parameters:
 See params description here: [link](./settings.md)
 
+## Tests
+
+The project uses the built-in Node.js test runner, so no separate test framework is required.
+
+```bash
+npm install
+npm test
+npm run test:coverage
+```
+
 ## Limitations:
 Application originally developed and optimized for Chrome browser. In other browsers app can have significant performance degradation.
 
