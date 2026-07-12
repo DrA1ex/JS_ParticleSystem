@@ -211,6 +211,8 @@ export class Webgl2Renderer extends RendererBase {
         this._lastPreloadedBytes = 0;
         this._lastPreloadTime = 0;
         this._lastQueuedUploads = 0;
+        this._disposed = false;
+        this._lastCompactPromotion = "none";
 
         this.initWebgl();
         if (this.settings.common.debug) {
@@ -324,6 +326,51 @@ export class Webgl2Renderer extends RendererBase {
         return true;
     }
 
+    promoteCompactPositionFrame(positions, previousPositions = null) {
+        if (this._disposed || !(positions instanceof Float32Array) ||
+            positions.length % POSITION_ITEM_SIZE !== 0) {
+            this._lastCompactPromotion = "invalid";
+            return false;
+        }
+
+        const count = Math.floor(positions.length / POSITION_ITEM_SIZE);
+        const uploaded = !this._nextParticlesDirty &&
+            this._uploadedNextParticleSource === positions &&
+            this._uploadedNextParticleCount === count;
+        if (!uploaded) {
+            this._lastCompactPromotion = "miss";
+            return false;
+        }
+
+        const buffers = this._stateConfig?.[RENDER_BUFFER_PROGRAM]?.buffers;
+        if (!buffers?.previousPosition || !buffers?.currentPosition || !buffers?.nextPosition) {
+            this._lastCompactPromotion = "unavailable";
+            return false;
+        }
+
+        const oldPreviousBuffer = buffers.previousPosition;
+        buffers.previousPosition = buffers.currentPosition;
+        buffers.currentPosition = buffers.nextPosition;
+        buffers.nextPosition = oldPreviousBuffer;
+        this._rotateCompactBufferCapacities();
+        this._rebindCompactPositionBuffers();
+
+        const oldCurrentSource = this._uploadedCurrentPositionSource;
+        const oldCurrentCount = this._uploadedCurrentPositionCount;
+        this._uploadedPreviousPositionSource = oldCurrentSource || previousPositions || positions;
+        this._uploadedPreviousPositionCount = oldCurrentCount || count;
+        this._uploadedCurrentPositionSource = positions;
+        this._uploadedCurrentPositionCount = count;
+        this._uploadedNextParticleSource = null;
+        this._uploadedNextParticleCount = 0;
+        this._nextParticles = null;
+        this._nextPositionFrame = null;
+        this._nextParticlesDirty = true;
+        this._compactFrameDirty = false;
+        this._lastCompactPromotion = "hit";
+        return true;
+    }
+
     /**
      * DFRI supplies only the next physics frame. The renderer extracts x/y into
      * a compact next-position buffer, so the GPU interpolation path does not
@@ -385,7 +432,7 @@ export class Webgl2Renderer extends RendererBase {
     }
 
     _scheduleNextPositionPreload() {
-        if (!this._nextParticles && !this._nextPositionFrame) {
+        if (this._disposed || (!this._nextParticles && !this._nextPositionFrame)) {
             return;
         }
 
@@ -402,19 +449,25 @@ export class Webgl2Renderer extends RendererBase {
         this._uploadQueueTimer = schedule((deadline) => {
             this._uploadQueueTimer = null;
             this._uploadQueueTimerIsIdle = false;
+            if (this._disposed) {
+                return;
+            }
             const budget = Math.max(1, Math.min(6, deadline?.timeRemaining?.() ?? 4));
             this._flushUploadQueue(budget);
         });
     }
 
     _queueNextPositionUpload() {
+        if (this._disposed || !this._uploadQueue) {
+            return;
+        }
         if (!this._uploadQueue.some(job => job.type === "nextPosition")) {
             this._uploadQueue.push({type: "nextPosition"});
         }
     }
 
     _flushUploadQueue(budgetMs = 4) {
-        if (!this._uploadQueue.length) {
+        if (this._disposed || !this._uploadQueue?.length) {
             return 0;
         }
 
@@ -492,6 +545,7 @@ export class Webgl2Renderer extends RendererBase {
         this.stats.particleSprite = this.settings.render.particleSprite || ParticleSpriteMode.point;
         this.stats.particleSizeScale = this.settings.render.particleSizeScale;
         this.stats.sourceLayout = sourceLayout;
+        this.stats.compactPromotion = sourceLayout === "compact-position" ? this._lastCompactPromotion : "off";
     }
 
     _updateData(particles) {
@@ -577,7 +631,10 @@ export class Webgl2Renderer extends RendererBase {
         const particleScale = this.settings.render.fixedParticleSize
             ? this.settings.render.particleSizeScale
             : this.settings.render.particleSizeScale * this.scale;
-        const interpolationEnabled = this._useInterpolationProgram(count);
+        // Compact recording frames are preloaded outside render(). If the next
+        // frame is not ready yet, draw the current frame without interpolation
+        // instead of blocking this render call on a multi-megabyte GPU upload.
+        const interpolationEnabled = this._useCompactInterpolationProgram(count);
         const programName = this._getCompactProgramName(colorMode, interpolationEnabled);
 
         this._loadUniforms(programName, {
@@ -597,9 +654,6 @@ export class Webgl2Renderer extends RendererBase {
         this._uploadCompactPositionFrames(positions, previous, count, colorMode === RenderColorMode.velocity);
         if (STATIC_COLOR_MODES.has(colorMode)) {
             this._ensureStaticParticleColors(positions, count, colorMode, POSITION_ITEM_SIZE);
-        }
-        if (interpolationEnabled) {
-            this._uploadNextPositionIfNeeded(count);
         }
         const uploadTime = performance.now() - uploadStart;
 
@@ -629,6 +683,9 @@ export class Webgl2Renderer extends RendererBase {
             this._uploadArrayBuffer("currentPosition", current, count * POSITION_ITEM_SIZE);
             this._uploadedCurrentPositionSource = current;
             this._uploadedCurrentPositionCount = count;
+            if (this._lastCompactPromotion !== "hit") {
+                this._lastCompactPromotion = "upload";
+            }
         }
 
         if (uploadPrevious) {
@@ -641,6 +698,52 @@ export class Webgl2Renderer extends RendererBase {
             }
         }
         this._compactFrameDirty = false;
+    }
+
+    _rotateCompactBufferCapacities() {
+        if (!this._bufferCapacities) {
+            return;
+        }
+        const previous = this._bufferCapacities.get("previousPosition") || 0;
+        const current = this._bufferCapacities.get("currentPosition") || 0;
+        const next = this._bufferCapacities.get("nextPosition") || 0;
+        this._bufferCapacities.set("previousPosition", current);
+        this._bufferCapacities.set("currentPosition", next);
+        this._bufferCapacities.set("nextPosition", previous);
+    }
+
+    _rebindCompactPositionBuffers() {
+        const buffers = this._stateConfig[RENDER_BUFFER_PROGRAM].buffers;
+        for (const colorMode of Object.values(RenderColorMode)) {
+            for (const interpolated of [false, true]) {
+                const programName = this._getCompactProgramName(colorMode, interpolated);
+                const state = this._stateConfig[programName];
+                const vertexArray = state?.vertexArrays?.particle;
+                if (!state || !vertexArray) {
+                    continue;
+                }
+
+                this.gl.bindVertexArray(vertexArray);
+                this._rebindCompactAttribute(state, "position", buffers.currentPosition);
+                if (interpolated) {
+                    this._rebindCompactAttribute(state, "next_position", buffers.nextPosition);
+                }
+                if (colorMode === RenderColorMode.velocity) {
+                    this._rebindCompactAttribute(state, "previous_position", buffers.previousPosition);
+                }
+            }
+        }
+        this.gl.bindVertexArray(null);
+        this.gl.bindBuffer(GL.ARRAY_BUFFER, null);
+    }
+
+    _rebindCompactAttribute(state, name, buffer) {
+        const attribute = state.attributes?.[name];
+        if (!Number.isInteger(attribute) || attribute < 0) {
+            return;
+        }
+        this.gl.bindBuffer(GL.ARRAY_BUFFER, buffer);
+        this.gl.vertexAttribPointer(attribute, POSITION_ITEM_SIZE, GL.FLOAT, false, 0, 0);
     }
 
     get _particleSpriteId() {
@@ -683,8 +786,23 @@ export class Webgl2Renderer extends RendererBase {
         return this._hasInterpolationFrame(count);
     }
 
+    _isNextPositionUploaded(count = null) {
+        const data = this._nextPositionFrame || this._nextParticles;
+        if (!data || this._nextParticlesDirty || this._uploadedNextParticleSource !== data) {
+            return false;
+        }
+        return count === null || this._uploadedNextParticleCount === count;
+    }
+
+    _useCompactInterpolationProgram(count = null) {
+        return this._hasInterpolationFrame(count) && this._isNextPositionUploaded(count);
+    }
+
     _getGpuInterpolationStatus(count) {
-        return this._hasInterpolationFrame(count) ? "on" : "off";
+        if (!this._hasInterpolationFrame(count)) {
+            return "off";
+        }
+        return this._isNextPositionUploaded(count) ? "on" : "pending";
     }
 
     _ensureParticleBufferCapacity(count) {
@@ -911,6 +1029,7 @@ export class Webgl2Renderer extends RendererBase {
         if (directPositions) {
             nextPosition = directPositions;
         } else {
+            this._ensureNextPositionBufferCapacity(count);
             nextPosition = this._nextPositionBufferData;
             for (let i = 0; i < count; i++) {
                 const srcOffset = i * ITEM_SIZE;
@@ -927,6 +1046,9 @@ export class Webgl2Renderer extends RendererBase {
     }
 
     _uploadArrayBuffer(name, data, length, trackRenderBytes = true) {
+        if (this._disposed || !data || !this._stateConfig?.[RENDER_BUFFER_PROGRAM]) {
+            return;
+        }
         const buffer = this._stateConfig[RENDER_BUFFER_PROGRAM].buffers[name];
         const view = data.length === length ? data : data.subarray(0, length);
         const byteLength = view.byteLength;
@@ -1113,6 +1235,23 @@ export class Webgl2Renderer extends RendererBase {
     }
 
     dispose() {
+        this._disposed = true;
+        if (this._uploadQueueTimer !== null) {
+            if (this._uploadQueueTimerIsIdle && typeof window.cancelIdleCallback === "function") {
+                window.cancelIdleCallback(this._uploadQueueTimer);
+            } else {
+                clearTimeout(this._uploadQueueTimer);
+            }
+            this._uploadQueueTimer = null;
+            this._uploadQueueTimerIsIdle = false;
+        }
+
+        if (this._gpuTimerQuery) {
+            this.gl.deleteQuery(this._gpuTimerQuery);
+            this._gpuTimerQuery = null;
+        }
+        this._gpuTimerExt = null;
+
         this._stateConfig = null;
         this._particleBufferData = null;
         this._nextPositionBufferData = null;
@@ -1126,25 +1265,10 @@ export class Webgl2Renderer extends RendererBase {
         this._uploadedNextParticleSource = null;
         this._bufferCapacities = null;
         this._uploadQueue = null;
-        if (this._uploadQueueTimer !== null) {
-            if (this._uploadQueueTimerIsIdle && typeof window.cancelIdleCallback === "function") {
-                window.cancelIdleCallback(this._uploadQueueTimer);
-            } else {
-                clearTimeout(this._uploadQueueTimer);
-            }
-            this._uploadQueueTimer = null;
-            this._uploadQueueTimerIsIdle = false;
-        }
-        if (this._gpuTimerQuery) {
-            this.gl.deleteQuery(this._gpuTimerQuery);
-            this._gpuTimerQuery = null;
-        }
-        this._gpuTimerExt = null;
 
         if (this.debugCanvas) {
             this.debugCtx = null;
             this.debugCanvas.remove();
-
             this.debugCanvas = null;
         }
 

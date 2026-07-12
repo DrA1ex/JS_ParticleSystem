@@ -64,7 +64,8 @@ export class PlayerRenderStats {
             `timeline: ${formatNumber(position, 2)} / ${formatNumber(maxPosition, 0)} · ${formatNumber(progress, 1)}% · ${formatNumber(playback.speed, 2)}×`,
             `render: ${formatMs(stats.renderTime)} · prepare ${formatMs(stats.prepareDataTime)} · upload ${formatMs(stats.uploadTime)} · draw ${formatMs(stats.drawTime)}`,
             `gpu: ${formatMs(stats.gpuDrawTime)} (${stats.gpuTimerStatus || "n/a"}) · uploaded ${CommonUtils.formatByteSize(stats.uploadedBytes || 0)}`,
-            `source: ${stats.sourceLayout || "n/a"} · interpolation ${stats.gpuInterpolation || "off"} · ${stats.uploadMode || "n/a"}`,
+            `preload: ${formatMs(stats.preloadTime)} · ${CommonUtils.formatByteSize(stats.preloadedBytes || 0)} · queue ${stats.uploadQueue || 0}`,
+            `source: ${stats.sourceLayout || "n/a"} · promotion ${stats.compactPromotion || "off"} · interpolation ${stats.gpuInterpolation || "off"} · ${stats.uploadMode || "n/a"}`,
             `color: ${stats.colorMode || "n/a"}${stats.staticColorStatus && stats.staticColorStatus !== "off" ? ` (${stats.staticColorStatus})` : ""} · sprite ${stats.particleSprite || "n/a"}`,
         ].join("\n");
     }

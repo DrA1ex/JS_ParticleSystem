@@ -38,7 +38,11 @@ test("player render statistics can be toggled and summarize renderer timings", (
                 gpuDrawTime: 0.5,
                 gpuTimerStatus: "ready",
                 uploadedBytes: 4096,
+                preloadedBytes: 8192,
+                preloadTime: 3,
+                uploadQueue: 1,
                 sourceLayout: "compact-position",
+                compactPromotion: "hit",
                 gpuInterpolation: "on",
                 uploadMode: "stream",
                 colorMode: "cluster",
@@ -54,6 +58,8 @@ test("player render statistics can be toggled and summarize renderer timings", (
 
         assert.equal(stats.element.hidden, false);
         assert.match(stats.element.textContent, /compact-position/);
+        assert.match(stats.element.textContent, /promotion hit/);
+        assert.match(stats.element.textContent, /preload: 3\.00 ms/);
         assert.match(stats.element.textContent, /100\.0%/);
         assert.match(stats.element.textContent, /cluster \(ready\)/);
 

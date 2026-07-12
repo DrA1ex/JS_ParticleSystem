@@ -30,6 +30,11 @@ export class RendererBase {
             uploadMode: "n/a",
             gpuInterpolation: "off",
             uploadedBytes: 0,
+            preloadedBytes: 0,
+            preloadTime: 0,
+            uploadQueue: 0,
+            sourceLayout: "n/a",
+            compactPromotion: "off",
             filterMode: "off",
         };
 
@@ -117,6 +122,10 @@ export class RendererBase {
 
     renderPositionFrame(_positions, _previousPositions = null) {
         throw new Error("Compact position frames are not supported by this renderer");
+    }
+
+    promoteCompactPositionFrame(_positions, _previousPositions = null) {
+        return false;
     }
 
     setInterpolationFrame(_particles) {}

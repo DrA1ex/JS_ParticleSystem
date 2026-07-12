@@ -510,3 +510,178 @@ test("render settings update renderer and reset persistent colors", () => {
     assert.equal(calls.filter(value => value === "reset-colors").length, 1);
     assert.equal(calls.filter(value => Array.isArray(value) && value[0] === "reconfigure").length, 2);
 });
+
+test("simulation interpolation preload allocates lazy position staging before first render", () => {
+    const source = new Float32Array([
+        1, 2, 3, 4, 5,
+        6, 7, 8, 9, 10,
+    ]);
+    let uploaded = null;
+    const state = {
+        _disposed: false,
+        _nextPositionFrame: null,
+        _nextParticles: source,
+        _nextParticlesDirty: true,
+        _uploadedNextParticleSource: null,
+        _uploadedNextParticleCount: 0,
+        _nextPositionBufferData: null,
+        _ensureNextPositionBufferCapacity: Webgl2Renderer.prototype._ensureNextPositionBufferCapacity,
+        _uploadArrayBuffer(name, data, length, trackRenderBytes) {
+            uploaded = {name, values: [...data.subarray(0, length)], length, trackRenderBytes};
+        },
+    };
+
+    Webgl2Renderer.prototype._uploadNextPositionIfNeeded.call(state, 2, false);
+
+    assert.deepEqual(uploaded, {
+        name: "nextPosition",
+        values: [1, 2, 6, 7],
+        length: 4,
+        trackRenderBytes: false,
+    });
+    assert.ok(state._nextPositionBufferData instanceof Float32Array);
+    assert.equal(state._nextParticlesDirty, false);
+});
+
+test("compact playback defers pending next-frame uploads outside render", () => {
+    const current = new Float32Array([0, 0, 1, 1]);
+    const next = new Float32Array([2, 2, 3, 3]);
+    let syncNextUploads = 0;
+    const state = Object.create(Webgl2Renderer.prototype);
+    Object.assign(state, {
+        settings: {
+            render: {
+                fixedParticleSize: true,
+                particleSizeScale: 1,
+                particleSprite: "point",
+                colorMode: "fixed",
+                enableFilter: false,
+                fixedColor: "#ffffff",
+            },
+        },
+        scale: 1,
+        xOffset: 0,
+        yOffset: 0,
+        _maxSpeed: 1,
+        _lastMaxSpeedScanTime: 0,
+        _nextPositionFrame: next,
+        _nextParticles: null,
+        _nextParticlesDirty: true,
+        _uploadedNextParticleSource: null,
+        _uploadedNextParticleCount: 0,
+        _interpolationFactor: 0.5,
+        _compactFrameDirty: false,
+        _uploadedCurrentPositionSource: current,
+        _uploadedCurrentPositionCount: 2,
+        _uploadedPreviousPositionSource: current,
+        _uploadedPreviousPositionCount: 2,
+        _loadUniforms() {},
+        _uploadCompactPositionFrames() {},
+        _uploadNextPositionIfNeeded() { syncNextUploads += 1; },
+    });
+
+    const pending = state._updateCompactPositionData(current, current);
+    assert.match(pending.programName, /Compact$/);
+    assert.equal(syncNextUploads, 0);
+
+    state._nextParticlesDirty = false;
+    state._uploadedNextParticleSource = next;
+    state._uploadedNextParticleCount = 2;
+    const ready = state._updateCompactPositionData(current, current);
+    assert.match(ready.programName, /CompactInterpolated$/);
+    assert.equal(syncNextUploads, 0);
+});
+
+test("compact playback promotes preloaded next frame by rotating GPU buffers", () => {
+    const previousSource = new Float32Array([0, 0, 1, 1]);
+    const nextSource = new Float32Array([2, 2, 3, 3]);
+    const previousBuffer = {name: "previous"};
+    const currentBuffer = {name: "current"};
+    const nextBuffer = {name: "next"};
+    let rebinds = 0;
+    const state = Object.create(Webgl2Renderer.prototype);
+    Object.assign(state, {
+        _disposed: false,
+        _stateConfig: {
+            renderBuffers: {
+                buffers: {
+                    previousPosition: previousBuffer,
+                    currentPosition: currentBuffer,
+                    nextPosition: nextBuffer,
+                },
+            },
+        },
+        _bufferCapacities: new Map([
+            ["previousPosition", 8],
+            ["currentPosition", 16],
+            ["nextPosition", 24],
+        ]),
+        _nextParticlesDirty: false,
+        _uploadedNextParticleSource: nextSource,
+        _uploadedNextParticleCount: 2,
+        _uploadedCurrentPositionSource: previousSource,
+        _uploadedCurrentPositionCount: 2,
+        _uploadedPreviousPositionSource: previousSource,
+        _uploadedPreviousPositionCount: 2,
+        _nextPositionFrame: nextSource,
+        _nextParticles: null,
+        _compactFrameDirty: true,
+        _rebindCompactPositionBuffers() { rebinds += 1; },
+    });
+
+    assert.equal(state.promoteCompactPositionFrame(nextSource, previousSource), true);
+    const buffers = state._stateConfig.renderBuffers.buffers;
+    assert.equal(buffers.previousPosition, currentBuffer);
+    assert.equal(buffers.currentPosition, nextBuffer);
+    assert.equal(buffers.nextPosition, previousBuffer);
+    assert.equal(state._bufferCapacities.get("previousPosition"), 16);
+    assert.equal(state._bufferCapacities.get("currentPosition"), 24);
+    assert.equal(state._bufferCapacities.get("nextPosition"), 8);
+    assert.equal(state._uploadedCurrentPositionSource, nextSource);
+    assert.equal(state._uploadedPreviousPositionSource, previousSource);
+    assert.equal(state._nextPositionFrame, null);
+    assert.equal(state._nextParticlesDirty, true);
+    assert.equal(state._lastCompactPromotion, "hit");
+    assert.equal(rebinds, 1);
+});
+
+test("sequential compact playback uses GPU promotion without marking current frame dirty", () => {
+    const frames = [
+        new Float32Array([0, 0, 1, 1]),
+        new Float32Array([2, 2, 3, 3]),
+        new Float32Array([4, 4, 5, 5]),
+    ];
+    const calls = [];
+    const app = makeApp({
+        sequence: {
+            length: frames.length,
+            particleCount: 2,
+            componentsCount: 2,
+            getFrame(index) { return index >= 0 && index < frames.length ? frames[index] : null; },
+        },
+        frameIndex: 0,
+        currentFrame: frames[0],
+        previousFrame: frames[0],
+        _usesCompactPositionFrames: true,
+        renderer: {
+            promoteCompactPositionFrame(frame, previous) {
+                calls.push(["promote", frame, previous]);
+                return true;
+            },
+            markParticlesDirty() { calls.push(["dirty"]); },
+        },
+        dfri: {
+            setNextPositionFrame(frame, reset) {
+                calls.push(["target", frame, reset]);
+                return true;
+            },
+        },
+    });
+
+    app._applyPlaybackPosition(1.25);
+    assert.equal(app.frameIndex, 1);
+    assert.equal(app._interpolationFactor, 0.25);
+    assert.equal(calls.filter(([name]) => name === "promote").length, 1);
+    assert.equal(calls.filter(([name]) => name === "dirty").length, 0);
+    assert.ok(calls.some(([name, frame]) => name === "target" && frame === frames[2]));
+});

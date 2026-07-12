@@ -259,13 +259,20 @@ export class Application {
         if (force || currentFrameIndex !== this.frameIndex) {
             const frame = this.sequence.getFrame(currentFrameIndex);
             const prevFrame = this.sequence.getFrame(currentFrameIndex - 1) || frame;
+            const sequentialCompactAdvance = this._usesCompactPositionFrames && !force &&
+                currentFrameIndex === this.frameIndex + 1;
+            const promoted = sequentialCompactAdvance &&
+                !!this.renderer.promoteCompactPositionFrame?.(frame, prevFrame);
+
             this.currentFrame = frame;
             this.previousFrame = prevFrame;
             if (!this._usesCompactPositionFrames) {
                 this._copyFrameToParticles(frame, currentFrameIndex > 0 ? prevFrame : null);
             }
             this.frameIndex = currentFrameIndex;
-            this.renderer.markParticlesDirty?.();
+            if (!promoted) {
+                this.renderer.markParticlesDirty?.();
+            }
             this._setInterpolationTarget(frame, nextFrameIndex);
         }
 
