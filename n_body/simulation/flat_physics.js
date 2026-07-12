@@ -137,9 +137,64 @@ export class FlatPhysicsEngine {
     }
 
     _calculateLeafData(tree, nodeId, pForceX, pForceY) {
+        if (this.settings.physics.symmetricForce) {
+            this._calculateLeafDataSymmetric(tree, nodeId, pForceX, pForceY);
+        } else {
+            this._calculateLeafDataLegacy(tree, nodeId, pForceX, pForceY);
+        }
+    }
+
+    _calculateLeafDataLegacy(tree, nodeId, pForceX, pForceY) {
+        const particles = tree.particles;
+        const indices = tree.indexBuffers[tree.nodeIndexBuffer[nodeId]];
+        const start = tree.nodeStart[nodeId];
+        const end = start + tree.nodeParticleCount[nodeId];
+        const particleGravity = this.settings.physics.particleGravity;
+        const minInteractionDistanceSq = this.settings.physics.minInteractionDistanceSq;
+        const accumulateForce = this.settings.common.debugForce;
+        const forceXBuffer = this._forceX;
+        const forceYBuffer = this._forceY;
+
+        for (let i = start; i < end; i++) {
+            const attractorIndex = indices[i];
+            const attractorOffset = attractorIndex * ITEM_SIZE;
+            const attractorX = particles[attractorOffset];
+            const attractorY = particles[attractorOffset + 1];
+            const g = particleGravity * particles[attractorOffset + 4];
+
+            particles[attractorOffset + 2] += pForceX;
+            particles[attractorOffset + 3] += pForceY;
+            if (accumulateForce) {
+                forceXBuffer[attractorIndex] += pForceX;
+                forceYBuffer[attractorIndex] += pForceY;
+            }
+
+            for (let j = start; j < end; j++) {
+                if (i === j) continue;
+                const particleIndex = indices[j];
+                const particleOffset = particleIndex * ITEM_SIZE;
+                const dx = particles[particleOffset] - attractorX;
+                const dy = particles[particleOffset + 1] - attractorY;
+                const distSquare = dx * dx + dy * dy;
+                if (distSquare < minInteractionDistanceSq) continue;
+
+                const force = -g / distSquare;
+                const vx = dx * force;
+                const vy = dy * force;
+                particles[particleOffset + 2] += vx;
+                particles[particleOffset + 3] += vy;
+
+                if (accumulateForce) {
+                    forceXBuffer[particleIndex] += vx;
+                    forceYBuffer[particleIndex] += vy;
+                }
+            }
+        }
+    }
+
+    _calculateLeafDataSymmetric(tree, nodeId, pForceX, pForceY) {
         // Apply the inherited block force once per particle, then evaluate each
-        // exact pair once and update both endpoints. This matches the Worker MT
-        // kernel while avoiding the previous double traversal of every pair.
+        // exact pair once and update both endpoints.
         const particles = tree.particles;
         const indices = tree.indexBuffers[tree.nodeIndexBuffer[nodeId]];
         const start = tree.nodeStart[nodeId];
@@ -359,7 +414,8 @@ export class FlatPhysicsEngine {
             const childCount = tree.nodeChildCount[nodeId];
             if (childCount === 0) {
                 const particleCount = tree.nodeParticleCount[nodeId];
-                flops += particleCount * Math.max(0, particleCount - 1) / 2 * flopsPerOp;
+                const pairMultiplier = this.settings.physics.symmetricForce ? 0.5 : 1;
+                flops += particleCount * Math.max(0, particleCount - 1) * pairMultiplier * flopsPerOp;
             } else {
                 flops += childCount * Math.max(0, childCount - 1) * flopsPerOp;
             }

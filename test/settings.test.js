@@ -15,7 +15,7 @@ const {
 } = await import("../n_body/settings/base.js");
 const {PhysicsSettings} = await import("../n_body/settings/physics.js");
 const {RenderSettings} = await import("../n_body/settings/render.js");
-const {BufferUploadMode, CollisionContactMode, ParticleSpriteMode, RenderColorMode, RenderType} = await import("../n_body/settings/enum.js");
+const {BackendType, BufferUploadMode, CollisionContactMode, ParticleSpriteMode, RenderColorMode, RenderType} = await import("../n_body/settings/enum.js");
 const {AppPlayerSettings} = await import("../n_body/player/settings/app.js");
 
 test("property parsers normalize booleans, numbers, enums and colors", () => {
@@ -118,10 +118,20 @@ test("physics settings migrate legacy collision options and derive runtime value
     assert.equal(migrated.collisionSizeSq, 4);
     assert.equal(migrated.minInteractionDistanceSq, 0.25);
     assert.equal(migrated.particleGravity, 1);
+    assert.equal(migrated.symmetricForce, false);
 
-    setLocationSearch("?collision_average=0&particle_count=20");
+    setLocationSearch("?collision_average=0&particle_count=20&symmetric_force=1");
     const queryMigrated = PhysicsSettings.fromQueryParams();
     assert.equal(queryMigrated.collisionContactMode, CollisionContactMode.full);
+    assert.equal(queryMigrated.symmetricForce, true);
+    assert.equal(queryMigrated.export().symmetricForce, true);
+
+    const restoredLegacy = PhysicsSettings.deserialize({particleCount: 20, gravity: 1});
+    assert.equal(restoredLegacy.symmetricForce, false);
+    assert.equal(PhysicsSettings.Properties.symmetricForce.isVisible(
+        {simulation: {backend: BackendType.worker}}, restoredLegacy), true);
+    assert.equal(PhysicsSettings.Properties.symmetricForce.isVisible(
+        {simulation: {backend: BackendType.gpgpu}}, restoredLegacy), false);
 
     const massSettings = PhysicsSettings.deserialize({particleCount: 10000, particleMassFactor: 6, gravity: 1});
     assert.equal(massSettings.particleMass, 64);

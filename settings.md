@@ -92,6 +92,12 @@ _Attraction force_
 > - default: **1**
 > - type: **float**
 > - constraints: **0.000001-1000000**
+#### Symmetric force calculation - `symmetric_force`
+
+_Calculate each exact particle pair once and update both particles. This is faster, but changes floating-point accumulation order and can alter the animation. Disabled preserves the legacy directed force calculation. GPGPU always uses the legacy directed kernel._
+
+> - default: **false**
+> - type: **bool**
 #### Collisions - `collision`
 
 _Enable particle collision_

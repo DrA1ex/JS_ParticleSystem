@@ -1061,7 +1061,7 @@ export function installPerformanceReportConsole(app) {
             "  summary.workerMT.wallTime / parallelWaitTime / dispatchTime / coordinationTime / parallelEfficiency / parallelSpeedupEstimate",
             "  summary.workerMT.treeJobCount / treeTargetJobs / treeSplitLevels show initial tree seed scheduling",
             "  worker-mt uses one production pipeline: hybrid tree scheduling, 4 parallel seed jobs, split-first sorting, and symmetric leaf forces",
-            "  summary.workerMT.forceKernelsApplied / forceKernelConsistent verify the symmetric task-worker kernel",
+            "  summary.workerMT.forceKernelsApplied / forceKernelConsistent verify the selected task-worker force kernel",
             "  summary.workerMT.workerBuildIds / taskWorkerBuildIds / workerProtocolVersions verify runtime bundle consistency",
             "  summary.workerMT.treePartitionCountParticlesMax / treePartitionScatterParticlesMax show partition work volume",
             "  summary.workerMT.treePartitionCountTimeMax / treePartitionScatterTimeMax estimate partition phase cost",

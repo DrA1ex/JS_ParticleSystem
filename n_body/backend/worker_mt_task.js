@@ -191,7 +191,7 @@ function ensureCollisionBuffer(length) {
 
 
 
-function calculateLeaf(indices, start, count, pForceX, pForceY) {
+function calculateLeafSymmetric(indices, start, count, pForceX, pForceY) {
     const end = start + count;
     const particleGravity = settings.physics.particleGravity;
     const minInteractionDistanceSq = settings.physics.minInteractionDistanceSq;
@@ -246,6 +246,66 @@ function calculateLeaf(indices, start, count, pForceX, pForceY) {
             forceY[lastIndex] += pForceY;
         }
     }
+}
+
+
+function calculateLeafLegacy(indices, start, count, pForceX, pForceY) {
+    const end = start + count;
+    const particleGravity = settings.physics.particleGravity;
+    const minInteractionDistanceSq = settings.physics.minInteractionDistanceSq;
+    const accumulateForce = !!settings.common.debugForce && forceX && forceY;
+
+    for (let i = start; i < end; i++) {
+        const attractorIndex = indices[i];
+        const attractorOffset = attractorIndex * ITEM_SIZE;
+        const attractorX = particles[attractorOffset];
+        const attractorY = particles[attractorOffset + 1];
+        const g = particleGravity * particles[attractorOffset + 4];
+
+        particles[attractorOffset + 2] += pForceX;
+        particles[attractorOffset + 3] += pForceY;
+        if (accumulateForce) {
+            forceX[attractorIndex] += pForceX;
+            forceY[attractorIndex] += pForceY;
+        }
+
+        for (let j = start; j < end; j++) {
+            if (i === j) continue;
+            const particleIndex = indices[j];
+            const particleOffset = particleIndex * ITEM_SIZE;
+            const dx = particles[particleOffset] - attractorX;
+            const dy = particles[particleOffset + 1] - attractorY;
+            const distSquare = dx * dx + dy * dy;
+            if (distSquare < minInteractionDistanceSq) continue;
+
+            const force = -g / distSquare;
+            const vx = dx * force;
+            const vy = dy * force;
+            particles[particleOffset + 2] += vx;
+            particles[particleOffset + 3] += vy;
+            if (accumulateForce) {
+                forceX[particleIndex] += vx;
+                forceY[particleIndex] += vy;
+            }
+        }
+    }
+}
+
+function calculateLeaf(indices, start, count, pForceX, pForceY) {
+    if (settings.physics.symmetricForce) {
+        calculateLeafSymmetric(indices, start, count, pForceX, pForceY);
+    } else {
+        calculateLeafLegacy(indices, start, count, pForceX, pForceY);
+    }
+}
+
+function forceKernelName() {
+    return settings.physics.symmetricForce ? "symmetric" : "legacy";
+}
+
+function forcePairChecks(count) {
+    const pairs = count * Math.max(0, count - 1);
+    return settings.physics.symmetricForce ? pairs / 2 : pairs;
 }
 
 function processCollisions(indices, start, count) {
@@ -381,7 +441,7 @@ function buildTreeStats(tree) {
         const childCount = tree.nodeChildCount[nodeId];
         if (childCount === 0) {
             const particleCount = tree.nodeParticleCount[nodeId];
-            flops += particleCount * Math.max(0, particleCount - 1) / 2 * flopsPerOp;
+            flops += forcePairChecks(particleCount) * flopsPerOp;
         } else {
             flops += childCount * Math.max(0, childCount - 1) * flopsPerOp;
         }
@@ -465,7 +525,7 @@ function createForceMetrics() {
 
 function finalizeForceMetrics(metrics) {
     return {
-        forceKernel: "symmetric",
+        forceKernel: forceKernelName(),
         forcePairChecks: metrics.pairChecks,
         forceKernelTime: metrics.kernelTime,
         forceCollisionTime: metrics.collisionTime,
@@ -484,7 +544,7 @@ function processLeafTasks(tasks, taskCount = tasks.length) {
     for (let i = 0; i < taskCount; i++) {
         const task = tasks[i];
         const indices = indexBuffers[task.indexBuffer];
-        forceMetrics.pairChecks += task.count * Math.max(0, task.count - 1) / 2;
+        forceMetrics.pairChecks += forcePairChecks(task.count);
         calculateLeaf(indices, task.start, task.count, task.forceX, task.forceY);
         particleCount += task.count;
     }
@@ -834,7 +894,7 @@ function postEmptyHybridTreeResult(data, splitTime, spawnedJobs, splitCount, tre
         hybridEarlySplit: spawnedJobs.length > 0,
         hybridEarlySplitJobs: spawnedJobs.length,
         ...getRecursivePartitionProfile(),
-        forceKernel: "symmetric",
+        forceKernel: forceKernelName(),
     });
 }
 
@@ -899,7 +959,7 @@ function processTasks(data) {
     for (let i = 0; i < leafStarts.length; i++) {
         const indices = indexBuffers[leafIndexBuffers[i]];
         const count = leafCounts[i];
-        forceMetrics.pairChecks += count * Math.max(0, count - 1) / 2;
+        forceMetrics.pairChecks += forcePairChecks(count);
         calculateLeaf(indices, leafStarts[i], count, parentForceX[i], parentForceY[i]);
         particleCount += count;
     }

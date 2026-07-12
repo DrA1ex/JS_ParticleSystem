@@ -30,6 +30,7 @@ function createEngineSettings() {
         },
         physics: {
             particleGravity: 1,
+            symmetricForce: false,
             minInteractionDistanceSq: 1e-12,
             enableCollision: false,
             resistance: 1,
@@ -113,6 +114,74 @@ test("object and flat physics use center of mass for block approximation", () =>
     const objectEngine = new PhysicsEngine(settings);
     objectEngine.step(objectParticles);
     assert.ok(Math.abs(objectParticles[0].velX - expectedLeftVelocity) < 1e-10);
+});
+
+test("legacy directed force calculation remains the default", () => {
+    const settings = createEngineSettings();
+    settings.simulation.segmentMaxCount = 8;
+    settings.physics.particleGravity = 0.25;
+
+    const source = new Float32Array([
+        0, 0, 0, 0, 2,
+        3, 4, 0, 0, 5,
+        -7, 2, 0, 0, 3,
+    ]);
+    const expected = new Float32Array(source);
+    const count = expected.length / ITEM_SIZE;
+
+    // Historical directed kernel: every particle acts as an attractor and
+    // updates all other particles in a separate pass.
+    for (let i = 0; i < count; i++) {
+        const attractorOffset = i * ITEM_SIZE;
+        const attractorX = expected[attractorOffset];
+        const attractorY = expected[attractorOffset + 1];
+        const g = settings.physics.particleGravity * expected[attractorOffset + 4];
+        for (let j = 0; j < count; j++) {
+            if (i === j) continue;
+            const particleOffset = j * ITEM_SIZE;
+            const dx = expected[particleOffset] - attractorX;
+            const dy = expected[particleOffset + 1] - attractorY;
+            const distSquare = dx * dx + dy * dy;
+            if (distSquare < settings.physics.minInteractionDistanceSq) continue;
+            const force = -g / distSquare;
+            expected[particleOffset + 2] += dx * force;
+            expected[particleOffset + 3] += dy * force;
+        }
+    }
+    for (let i = 0; i < count; i++) {
+        const offset = i * ITEM_SIZE;
+        expected[offset] += expected[offset + 2];
+        expected[offset + 1] += expected[offset + 3];
+    }
+
+    const actual = new Float32Array(source);
+    new FlatPhysicsEngine(settings).step(actual);
+    assert.deepEqual([...actual], [...expected]);
+});
+
+test("symmetric force calculation is opt-in and keeps CPU layouts aligned", () => {
+    const settings = createEngineSettings();
+    settings.simulation.segmentMaxCount = 8;
+    settings.physics.particleGravity = 0.25;
+    settings.physics.symmetricForce = true;
+
+    const source = new Float32Array([
+        0, 0, 0, 0, 2,
+        3, 4, 0, 0, 5,
+    ]);
+    const flatParticles = new Float32Array(source);
+    new FlatPhysicsEngine(settings).step(flatParticles);
+
+    const objectParticles = [
+        {x: 0, y: 0, velX: 0, velY: 0, mass: 2},
+        {x: 3, y: 4, velX: 0, velY: 0, mass: 5},
+    ];
+    new PhysicsEngine(settings).step(objectParticles);
+
+    assert.ok(Math.abs(flatParticles[2] - 0.15) < 1e-6);
+    assert.ok(Math.abs(flatParticles[3] - 0.20) < 1e-6);
+    assert.ok(Math.abs(objectParticles[0].velX - flatParticles[2]) < 1e-6);
+    assert.ok(Math.abs(objectParticles[0].velY - flatParticles[3]) < 1e-6);
 });
 
 test("all particle initializers fill the requested range with finite values", () => {

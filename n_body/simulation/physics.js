@@ -116,9 +116,39 @@ export class PhysicsEngine {
      * @protected
      */
     _calculateLeafData(leaf, pForce) {
+        if (this.settings.physics.symmetricForce) {
+            this._calculateLeafDataSymmetric(leaf, pForce);
+        } else {
+            this._calculateLeafDataLegacy(leaf, pForce);
+        }
+    }
+
+    _calculateLeafDataLegacy(leaf, pForce) {
+        const accumulateForce = this.settings.common.debugForce;
+        const particleGravity = this.settings.physics.particleGravity;
+
+        for (let i = 0; i < leaf.length; i++) {
+            const attractor = leaf.data[i];
+            attractor.velX += pForce[0];
+            attractor.velY += pForce[1];
+            if (accumulateForce) {
+                attractor.forceX += pForce[0];
+                attractor.forceY += pForce[1];
+            }
+
+            const g = particleGravity * attractor.mass;
+            for (let j = 0; j < leaf.length; j++) {
+                if (i === j) continue;
+                const particle = leaf.data[j];
+                this._calculateForce(particle, attractor, g, particle, accumulateForce);
+            }
+        }
+    }
+
+    _calculateLeafDataSymmetric(leaf, pForce) {
         // Apply the inherited block force once, then solve every exact pair a
-        // single time and update both particles. The old directed i/j loop
-        // evaluated each pair twice and repeated all distance math.
+        // single time and update both particles. The legacy directed i/j loop
+        // evaluates each pair twice and preserves the historical accumulation.
         const accumulateForce = this.settings.common.debugForce;
         const particleGravity = this.settings.physics.particleGravity;
         const minInteractionDistanceSq = this.settings.physics.minInteractionDistanceSq;
@@ -322,7 +352,8 @@ export class PhysicsEngine {
 
         function _processLeaf(parent) {
             if (parent.children.length === 0) {
-                flops += parent.data.length * Math.max(0, parent.data.length - 1) / 2 * flopsPerOp;
+                const pairMultiplier = this.settings.physics.symmetricForce ? 0.5 : 1;
+                flops += parent.data.length * Math.max(0, parent.data.length - 1) * pairMultiplier * flopsPerOp;
                 return;
             }
 

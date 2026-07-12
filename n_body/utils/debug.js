@@ -349,7 +349,7 @@ export class Debug {
         const tree = state.treeParallel
             ? `tree hybrid, top ${this._formatMs(state.topTreeTime)}, tree max ${this._formatMs(state.treeTimeMax)}, seeds ${state.treeJobCount ?? "n/a"}/${state.treeTargetJobs ?? "n/a"}${spawned}, seed levels ${state.treeSplitLevels ?? "n/a"}, `
             : "tree off, ";
-        const forceKernel = state.forceKernel || "symmetric";
+        const forceKernel = state.forceKernel || "legacy";
         const appliedKernel = Array.isArray(state.forceKernelApplied) && state.forceKernelApplied.length
             ? state.forceKernelApplied.join("/")
             : "n/a";

@@ -14,7 +14,9 @@ const HYBRID_SEED_TARGET_JOBS = 4;
 const HYBRID_SPLIT_BUDGET = 1;
 const HYBRID_MIN_JOB_PARTICLES = 32768;
 const HYBRID_SEGMENT_MULTIPLIER = 256;
-const FORCE_KERNEL = "symmetric";
+function forceKernelName(settings) {
+    return settings.physics.symmetricForce ? "symmetric" : "legacy";
+}
 const TREE_FLOPS_PER_OP = 14;
 const EPSILON = 0.1e-6;
 
@@ -538,11 +540,11 @@ class WorkerMTBackendImpl {
             integrateTimeMax: integrateTime,
             forceTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceTime || 0), 0),
             integrateTimeTotal: workerResults.reduce((sum, item) => sum + (item.integrateTime || 0), 0),
-            forceKernel: FORCE_KERNEL,
+            forceKernel: forceKernelName(this.settings),
             forceKernelApplied: [...new Set(workerResults.map(item => item.forceKernel).filter(Boolean))],
             forceKernelConsistent: workerResults.some(item => item.forceKernel) && workerResults
                 .filter(item => item.forceKernel)
-                .every(item => item.forceKernel === FORCE_KERNEL),
+                .every(item => item.forceKernel === forceKernelName(this.settings)),
             forcePairChecks: workerResults.reduce((sum, item) => sum + (item.forcePairChecks || 0), 0),
             forceKernelTimeMax: Math.max(0, ...workerResults.map(item => item.forceKernelTime || 0)),
             forceKernelTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceKernelTime || 0), 0),
@@ -669,9 +671,9 @@ class WorkerMTBackendImpl {
             integrateTimeMax: integrateTime,
             forceTimeTotal: workerTiming.forceTimeTotal,
             integrateTimeTotal: workerTiming.integrateTimeTotal,
-            forceKernel: FORCE_KERNEL,
+            forceKernel: forceKernelName(this.settings),
             forceKernelApplied: [...new Set(workerResults.map(item => item.forceKernel).filter(Boolean))],
-            forceKernelConsistent: workerResults.some(item => item.forceKernel) && workerResults.filter(item => item.forceKernel).every(item => item.forceKernel === FORCE_KERNEL),
+            forceKernelConsistent: workerResults.some(item => item.forceKernel) && workerResults.filter(item => item.forceKernel).every(item => item.forceKernel === forceKernelName(this.settings)),
             forcePairChecks: workerResults.reduce((sum, item) => sum + (item.forcePairChecks || 0), 0),
             forceKernelTimeMax: Math.max(0, ...workerResults.map(item => item.forceKernelTime || 0)),
             forceKernelTimeTotal: workerResults.reduce((sum, item) => sum + (item.forceKernelTime || 0), 0),
@@ -1461,7 +1463,8 @@ class WorkerMTBackendImpl {
             const childCount = tree.nodeChildCount[nodeId];
             if (childCount === 0) {
                 const particleCount = tree.nodeParticleCount[nodeId];
-                flops += particleCount * Math.max(0, particleCount - 1) / 2 * flopsPerOp;
+                const pairMultiplier = this.settings.physics.symmetricForce ? 0.5 : 1;
+                flops += particleCount * Math.max(0, particleCount - 1) * pairMultiplier * flopsPerOp;
             } else {
                 flops += childCount * Math.max(0, childCount - 1) * flopsPerOp;
             }
