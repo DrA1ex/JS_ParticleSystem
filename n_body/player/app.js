@@ -27,11 +27,15 @@ export class Application {
     _playbackPosition = 0;
     _interpolationFactor = 0;
     _playbackClockTimestamp = null;
-    _lastPresentedTimestamp = null;
     _rafId = null;
+    _lastPresentationTimestamp = null;
+    _presentationIntervals = [];
+    _presentationFps = null;
+    _presentationRateResolved = false;
 
     constructor(settings) {
         this.settings = settings;
+        this._presentationFps = this.settings.world.fps;
 
         this.playerCtrl = new PlayerController(document.body);
         this.playerCtrl.subscribe(this, PlayerController.CONTROL_EVENT, (_, type) => this.handleControl(type));
@@ -126,7 +130,7 @@ export class Application {
                 this.renderer,
                 this.sequence.particleCount,
                 this.sequence.fps * this.currentSpeed,
-                this.settings.world.fps
+                this._getPresentationFps()
             );
             this.dfri.enable();
             this.dfri.init();
@@ -161,10 +165,7 @@ export class Application {
             return;
         }
         this._ensureRenderLoop();
-
-        if (!this._shouldPresent(timestamp)) {
-            return;
-        }
+        this._observePresentationRate(timestamp);
 
         if (this.playerCtrl.currentState === PlayerStateEnum.playing) {
             this._advancePlaybackClock(timestamp);
@@ -209,27 +210,58 @@ export class Application {
         }
     }
 
-    _shouldPresent(timestamp) {
-        const interval = 1000 / Math.max(1, this.settings.world.fps);
-        if (this._lastPresentedTimestamp === null) {
-            this._lastPresentedTimestamp = timestamp;
-            return true;
+    _observePresentationRate(timestamp) {
+        if (!Number.isFinite(timestamp)) {
+            return;
         }
 
-        const elapsed = timestamp - this._lastPresentedTimestamp;
-        if (elapsed >= interval - 0.5) {
-            // Advance the ideal presentation clock instead of assigning the
-            // current rAF timestamp. On 120/144 Hz displays this produces a
-            // stable average target rate rather than falling to an integer
-            // divisor such as 48 FPS on a 144 Hz panel.
-            const elapsedIntervals = Math.max(1, Math.floor((elapsed + 0.5) / interval));
-            this._lastPresentedTimestamp += elapsedIntervals * interval;
-            if (timestamp - this._lastPresentedTimestamp > interval * 4) {
-                this._lastPresentedTimestamp = timestamp;
-            }
-            return true;
+        const previous = this._lastPresentationTimestamp;
+        this._lastPresentationTimestamp = timestamp;
+        if (this._presentationRateResolved || !Number.isFinite(previous)) {
+            return;
         }
-        return false;
+
+        const elapsed = timestamp - previous;
+        // Ignore background-tab pauses and synthetic duplicate timestamps. A
+        // small median sample is enough to distinguish common 60/90/120/144 Hz
+        // displays without coupling playback to a hard-coded 60 FPS target.
+        if (elapsed < 2 || elapsed > 50) {
+            return;
+        }
+
+        this._presentationIntervals.push(elapsed);
+        if (this._presentationIntervals.length < 12) {
+            return;
+        }
+
+        const sorted = [...this._presentationIntervals].sort((a, b) => a - b);
+        const median = sorted[Math.floor(sorted.length / 2)];
+        const measuredFps = 1000 / median;
+        this._presentationFps = this._normalizePresentationFps(measuredFps);
+        this._presentationRateResolved = true;
+        this._presentationIntervals.length = 0;
+
+        if (this.dfri && this.sequence) {
+            this.dfri.reconfigure(this.sequence.fps * this.currentSpeed, this._presentationFps);
+            this.dfri.init();
+        }
+        this._updateSequenceUi();
+    }
+
+    _normalizePresentationFps(value) {
+        const measured = Math.max(1, Math.min(360, Number.isFinite(value) ? value : this.settings.world.fps));
+        const commonRates = [24, 25, 30, 48, 50, 60, 72, 75, 90, 100, 120, 144, 165, 180, 200, 240, 360];
+        let closest = commonRates[0];
+        for (const rate of commonRates) {
+            if (Math.abs(rate - measured) < Math.abs(closest - measured)) {
+                closest = rate;
+            }
+        }
+        return Math.abs(closest - measured) / measured <= 0.08 ? closest : Math.round(measured);
+    }
+
+    _getPresentationFps() {
+        return Math.max(1, this._presentationFps || this.settings.world.fps || 60);
     }
 
     _advancePlaybackClock(timestamp) {
@@ -331,7 +363,7 @@ export class Application {
         if (!this.sequence) {
             return 1;
         }
-        return this.settings.world.fps / Math.max(1e-9, this.sequence.fps * this.currentSpeed);
+        return this._getPresentationFps() / Math.max(1e-9, this.sequence.fps * this.currentSpeed);
     }
 
     _getUiSubFrameCount() {
@@ -346,7 +378,7 @@ export class Application {
         const framesPerStep = this._getFramesPerRecordedStep();
         this.playerCtrl.setupSequence(this.sequence.length, this._getUiSubFrameCount());
         this.playerCtrl.setPlaybackPacing({
-            targetFps: this.settings.world.fps,
+            targetFps: this._getPresentationFps(),
             sourceFps: this.sequence.fps,
             speed: this.currentSpeed,
             framesPerStep,
@@ -357,7 +389,6 @@ export class Application {
 
     _resetPlaybackClock(timestamp = null) {
         this._playbackClockTimestamp = timestamp;
-        this._lastPresentedTimestamp = null;
     }
 
     handleControl(state) {
@@ -424,7 +455,7 @@ export class Application {
 
         this.currentSpeed = parsed;
         if (this.dfri && this.sequence) {
-            this.dfri.reconfigure(this.sequence.fps * this.currentSpeed, this.settings.world.fps);
+            this.dfri.reconfigure(this.sequence.fps * this.currentSpeed, this._getPresentationFps());
             this.dfri.init();
         }
 

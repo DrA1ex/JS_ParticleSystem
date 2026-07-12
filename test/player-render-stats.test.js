@@ -44,7 +44,9 @@ test("player render statistics can be toggled and summarize renderer timings", (
                 sourceLayout: "compact-position",
                 compactPromotion: "hit",
                 gpuInterpolation: "on",
-                uploadMode: "stream",
+                uploadMode: "bufferSubData",
+                webglLowLatency: true,
+                webglDesynchronized: true,
                 colorMode: "cluster",
                 staticColorStatus: "ready",
                 particleSprite: "glow",
@@ -62,6 +64,10 @@ test("player render statistics can be toggled and summarize renderer timings", (
         assert.match(stats.element.textContent, /preload: 3\.00 ms/);
         assert.match(stats.element.textContent, /100\.0%/);
         assert.match(stats.element.textContent, /cluster \(ready\)/);
+        assert.match(stats.element.textContent, /presentation:/);
+        assert.match(stats.element.textContent, /upload bufferSubData/);
+        assert.match(stats.element.textContent, /low latency on/);
+        assert.match(stats.element.textContent, /desynchronized on/);
 
         stats.setEnabled(false);
         assert.equal(stats.element.hidden, true);

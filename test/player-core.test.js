@@ -26,8 +26,11 @@ function makeApp(overrides = {}) {
         _playbackPosition: 0,
         _interpolationFactor: 0,
         _playbackClockTimestamp: null,
-        _lastPresentedTimestamp: null,
         _rafId: null,
+        _lastPresentationTimestamp: null,
+        _presentationIntervals: [],
+        _presentationFps: 60,
+        _presentationRateResolved: false,
         _usesCompactPositionFrames: false,
         currentFrame: null,
         previousFrame: null,
@@ -82,19 +85,28 @@ test("compact WebGL uploads reuse frame references and cluster colors use x/y st
     assert.deepEqual([...colorState._particleColorBufferData], [0, 64, 0, 255, 64, 0, 255, 64, 255]);
 });
 
-test("presentation pacing targets 60 FPS on a simulated 144 Hz display", () => {
-    const app = makeApp();
-    let presented = 0;
-    const interval = 1000 / 144;
-    for (let timestamp = 0; timestamp <= 1000; timestamp += interval) {
-        if (app._shouldPresent(timestamp)) presented += 1;
+test("presentation pacing detects a 120 Hz RAF cadence without throttling it to 60 FPS", () => {
+    const pacing = [];
+    const app = makeApp({
+        sequence: {fps: 10, length: 2},
+        dfri: {
+            reconfigure(sourceFps, targetFps) { pacing.push([sourceFps, targetFps]); },
+            init() { pacing.push("init"); },
+        },
+        playerCtrl: {
+            setupSequence() {},
+            setPlaybackPacing(value) { pacing.push(value); },
+            setCurrentFrame() {},
+        },
+    });
+    const interval = 1000 / 120;
+    for (let i = 0; i < 13; i++) {
+        app._observePresentationRate(i * interval);
     }
-    assert.ok(presented >= 59 && presented <= 62, `expected about 60 presentations, got ${presented}`);
-
-    app._lastPresentedTimestamp = 0;
-    assert.equal(app._shouldPresent(5), false);
-    assert.equal(app._shouldPresent(1000), true);
-    assert.ok(Math.abs(app._lastPresentedTimestamp - 1000) < 1e-9);
+    assert.equal(app._presentationFps, 120);
+    assert.equal(app._presentationRateResolved, true);
+    assert.ok(pacing.some(value => Array.isArray(value) && value[1] === 120));
+    assert.ok(pacing.some(value => value?.targetFps === 120));
 });
 
 test("playback timeline advances by recording FPS and current speed", () => {
@@ -460,7 +472,7 @@ test("render loop schedules at most one requestAnimationFrame callback", () => {
     }
 });
 
-test("render loop skips inactive states and throttled presentation frames", () => {
+test("render loop skips inactive states and presents every active RAF callback", () => {
     let scheduled = 0;
     const originalRaf = globalThis.requestAnimationFrame;
     globalThis.requestAnimationFrame = () => { scheduled += 1; return 1; };
@@ -469,12 +481,17 @@ test("render loop skips inactive states and throttled presentation frames", () =
         waiting.render(0);
         assert.equal(scheduled, 0);
 
-        const throttled = makeApp({
-            playerCtrl: {currentState: PlayerStateEnum.playing},
-            _shouldPresent: () => false,
+        const playingCalls = [];
+        const playing = makeApp({
+            playerCtrl: {currentState: PlayerStateEnum.playing, setCurrentFrame() {}},
+            sequence: {length: 2, fps: 10},
+            particles: new Float32Array(5),
+            renderer: {render(value) { playingCalls.push(value); }},
+            frameIndex: 0,
         });
-        throttled.render(0);
+        playing.render(0);
         assert.equal(scheduled, 1);
+        assert.equal(playingCalls.length, 1);
 
         const pausedCalls = [];
         const paused = makeApp({

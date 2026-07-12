@@ -60,12 +60,13 @@ export class PlayerRenderStats {
         const progress = maxPosition > 0 ? position / maxPosition * 100 : 100;
 
         this.element.textContent = [
-            `player: ${formatNumber(fps)} FPS · frame ${formatMs(this._smoothedFrameTime)}`,
+            `presentation: ${formatNumber(fps)} FPS · interval ${formatMs(this._smoothedFrameTime)}`,
             `timeline: ${formatNumber(position, 2)} / ${formatNumber(maxPosition, 0)} · ${formatNumber(progress, 1)}% · ${formatNumber(playback.speed, 2)}×`,
             `render: ${formatMs(stats.renderTime)} · prepare ${formatMs(stats.prepareDataTime)} · upload ${formatMs(stats.uploadTime)} · draw ${formatMs(stats.drawTime)}`,
             `gpu: ${formatMs(stats.gpuDrawTime)} (${stats.gpuTimerStatus || "n/a"}) · uploaded ${CommonUtils.formatByteSize(stats.uploadedBytes || 0)}`,
             `preload: ${formatMs(stats.preloadTime)} · ${CommonUtils.formatByteSize(stats.preloadedBytes || 0)} · queue ${stats.uploadQueue || 0}`,
-            `source: ${stats.sourceLayout || "n/a"} · promotion ${stats.compactPromotion || "off"} · interpolation ${stats.gpuInterpolation || "off"} · ${stats.uploadMode || "n/a"}`,
+            `source: ${stats.sourceLayout || "n/a"} · promotion ${stats.compactPromotion || "off"} · interpolation ${stats.gpuInterpolation || "off"}`,
+            `webgl: upload ${stats.uploadMode || "n/a"} · low latency ${stats.webglLowLatency ? "on" : "off"} · desynchronized ${stats.webglDesynchronized === null || stats.webglDesynchronized === undefined ? "unknown" : (stats.webglDesynchronized ? "on" : "off")}`,
             `color: ${stats.colorMode || "n/a"}${stats.staticColorStatus && stats.staticColorStatus !== "off" ? ` (${stats.staticColorStatus})` : ""} · sprite ${stats.particleSprite || "n/a"}`,
         ].join("\n");
     }

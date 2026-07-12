@@ -15,7 +15,7 @@ const {
 } = await import("../n_body/settings/base.js");
 const {PhysicsSettings} = await import("../n_body/settings/physics.js");
 const {RenderSettings} = await import("../n_body/settings/render.js");
-const {CollisionContactMode, ParticleSpriteMode, RenderColorMode, RenderType} = await import("../n_body/settings/enum.js");
+const {BufferUploadMode, CollisionContactMode, ParticleSpriteMode, RenderColorMode, RenderType} = await import("../n_body/settings/enum.js");
 const {AppPlayerSettings} = await import("../n_body/player/settings/app.js");
 
 test("property parsers normalize booleans, numbers, enums and colors", () => {
@@ -140,6 +140,8 @@ test("render and app player settings preserve contextual defaults and visibility
     assert.equal(render.useDpr, true);
     assert.equal(render.particleSprite, ParticleSpriteMode.glow);
     assert.equal(render.fixedColor, "#123456");
+    assert.equal(render.bufferUploadMode, BufferUploadMode.bufferSubData);
+    assert.equal(render.webglLowLatency, true);
 
     const fakeApp = {render};
     assert.equal(RenderSettings.Properties.fixedColor.isVisible(fakeApp, render), true);
@@ -150,6 +152,8 @@ test("render and app player settings preserve contextual defaults and visibility
     const app = AppPlayerSettings.fromQueryParams();
     assert.equal(app.render.particleSprite, ParticleSpriteMode.softGlow);
     assert.equal(app.render.colorMode, RenderColorMode.cluster);
+    assert.equal(app.render.bufferUploadMode, BufferUploadMode.bufferSubData);
+    assert.equal(app.render.webglLowLatency, true);
     const serialized = app.serialize();
     const restored = AppPlayerSettings.deserialize(serialized);
     assert.deepEqual(restored.serialize(), serialized);

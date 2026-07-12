@@ -168,6 +168,7 @@ export class Webgl2Renderer extends RendererBase {
         if (!this.gl && contextOptions) {
             this.gl = canvas.getContext("webgl2");
         }
+        this._contextAttributes = this.gl?.getContextAttributes?.() || null;
         this._stateConfig = {};
 
         this._gpuTimerExt = this.gl.getExtension("EXT_disjoint_timer_query_webgl2");
@@ -540,6 +541,7 @@ export class Webgl2Renderer extends RendererBase {
         this.stats.preloadTime = this._lastPreloadTime || 0;
         this.stats.uploadQueue = this._uploadQueue?.length || 0;
         this.stats.webglLowLatency = !!this.settings.render.webglLowLatency;
+        this.stats.webglDesynchronized = this._contextAttributes?.desynchronized ?? null;
         this.stats.gpuInterpolation = this._getGpuInterpolationStatus(count);
         this.stats.filterMode = this.settings.render.enableFilter ? "shader" : "off";
         this.stats.particleSprite = this.settings.render.particleSprite || ParticleSpriteMode.point;
