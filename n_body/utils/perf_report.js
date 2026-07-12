@@ -790,6 +790,17 @@ function summarizeReportBlocks(blocks) {
             exportBuffer: summarizeAcrossBlocks(blocks, "physics.exportBuffer"),
             stats: summarizeAcrossBlocks(blocks, "physics.stats"),
         },
+        render: {
+            total: summarizeAcrossBlocks(blocks, "render.total"),
+            prepareData: summarizeAcrossBlocks(blocks, "render.prepareData"),
+            upload: summarizeAcrossBlocks(blocks, "render.upload"),
+            uploadedBytes: summarizeAcrossBlocks(blocks, "render.uploadedBytes"),
+            preload: summarizeAcrossBlocks(blocks, "render.preload"),
+            preloadedBytes: summarizeAcrossBlocks(blocks, "render.preloadedBytes"),
+            uploadQueue: summarizeAcrossBlocks(blocks, "render.uploadQueue"),
+            drawCall: summarizeAcrossBlocks(blocks, "render.drawCall"),
+            gpuDraw: summarizeAcrossBlocks(blocks, "render.gpuDraw"),
+        },
         workerMT: summarizeWorkerMTBlocks(blocks),
         noAheadBuffer: blocks.reduce((sum, block) => sum + block.countersDelta.noAheadBuffer, 0),
         missedAheadFrames: blocks.reduce((sum, block) => sum + block.countersDelta.missedAheadFrames, 0),
@@ -875,6 +886,10 @@ function fixedPercent(value, digits = 1) {
 }
 
 function metricAvg(report, path) {
+    return metricStat(report, path, "avg");
+}
+
+function metricStat(report, path, stat) {
     let current = report;
     for (const key of path.split(".")) {
         if (!current || typeof current !== "object") {
@@ -882,7 +897,7 @@ function metricAvg(report, path) {
         }
         current = current[key];
     }
-    return Number.isFinite(current?.avg) ? current.avg : null;
+    return Number.isFinite(current?.[stat]) ? current[stat] : null;
 }
 
 function buildCompactSummaryRows(reports) {
@@ -893,6 +908,15 @@ function buildCompactSummaryRows(reports) {
         actualThreads: fixed(metricAvg(report, "summary.workerMT.actualThreads"), 0),
         fps: fixed(metricAvg(report, "summary.measuredFps"), 1),
         rafP95: fixed(metricAvg(report, "summary.rafIntervals"), 1),
+        uploadMode: report.comparisonKey?.bufferUploadMode || report.settings?.render?.bufferUploadMode || "n/a",
+        render: fixed(metricAvg(report, "summary.render.total"), 3),
+        renderP95: fixed(metricStat(report, "summary.render.total", "p95"), 3),
+        upload: fixed(metricAvg(report, "summary.render.upload"), 3),
+        uploadP95: fixed(metricStat(report, "summary.render.upload", "p95"), 3),
+        uploadMiB: fixed((metricAvg(report, "summary.render.uploadedBytes") || 0) / (1024 * 1024), 2),
+        preload: fixed(metricAvg(report, "summary.render.preload"), 3),
+        draw: fixed(metricAvg(report, "summary.render.drawCall"), 3),
+        gpuDraw: fixed(metricAvg(report, "summary.render.gpuDraw"), 3),
         step: fixed(metricAvg(report, "summary.physics.stepTotal"), 1),
         tree: fixed(metricAvg(report, "summary.physics.tree"), 1),
         treeShare: fixedPercent(metricAvg(report, "summary.physics.treeShare"), 1),

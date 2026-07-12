@@ -313,7 +313,6 @@ function createArchive(result) {
     files["config.json"] = strToU8(JSON.stringify(result.config, null, 2));
     files["summary.json"] = strToU8(JSON.stringify(result.summary, null, 2));
     files["summary.csv"] = strToU8(rowsToCsv(result.summary));
-
     for (const item of result.cases) {
         const prefix = String(item.index).padStart(3, "0");
         const name = sanitizeFileName(item.name, `case-${prefix}`);
@@ -597,6 +596,22 @@ export function installBenchmarkConsole(app) {
             "The current universe is snapshotted once, restored before every case, and restored again after the run.",
             "Accepted setting keys: query keys, property names, or group.property paths.",
             "A ZIP with manifest.json, config.json, summary.json/csv, case metadata and all reports is downloaded by default.",
+            "Compare WebGL upload modes with the regular benchmark runner:",
+            "  await window.nBodyRunBenchmark({",
+            "    name: 'webgl-buffer-upload-modes',",
+            "    cases: [",
+            "      {name: 'stream-start', upload_mode: 'stream'},",
+            "      {name: 'buffer-data-1', upload_mode: 'bufferData'},",
+            "      {name: 'buffer-sub-data-1', upload_mode: 'bufferSubData'},",
+            "      {name: 'stream-middle', upload_mode: 'stream'},",
+            "      {name: 'buffer-sub-data-2', upload_mode: 'bufferSubData'},",
+            "      {name: 'buffer-data-2', upload_mode: 'bufferData'},",
+            "      {name: 'stream-end', upload_mode: 'stream'}",
+            "    ],",
+            "    warmupSteps: 5,",
+            "    stabilizationMs: 1000,",
+            "    report: {frames: 240, blocks: 4, intervalMs: 5000}",
+            "  })",
             "Cancel a running suite with window.nBodyCancelBenchmark().",
         ].join("\n");
         console.info(message);

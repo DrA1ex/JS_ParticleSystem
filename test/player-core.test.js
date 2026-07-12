@@ -10,6 +10,7 @@ const {ControlStateEnum} = await import("../n_body/player/controllers/control_ba
 const {PlayerController} = await import("../n_body/player/controllers/player.js");
 const {PlayingProgress} = await import("../n_body/ui/controls/playing_progress.js");
 const {Webgl2Renderer} = await import("../n_body/render/webgl/render.js");
+const {BufferUploadMode} = await import("../n_body/settings/enum.js");
 
 function makeApp(overrides = {}) {
     const app = Object.create(Application.prototype);
@@ -83,6 +84,58 @@ test("compact WebGL uploads reuse frame references and cluster colors use x/y st
     const colorState = {_particleColorBufferData: new Uint8Array(9)};
     Webgl2Renderer.prototype._bakeClusterParticleColors.call(colorState, current, 3, 2);
     assert.deepEqual([...colorState._particleColorBufferData], [0, 64, 0, 255, 64, 0, 255, 64, 255]);
+});
+
+test("all WebGL buffer upload modes use their intended allocation strategy", () => {
+    const makeState = mode => {
+        const calls = [];
+        return {
+            calls,
+            state: {
+                _disposed: false,
+                _stateConfig: {
+                    renderBuffers: {
+                        buffers: {particles: "particles-buffer"},
+                        _config: {buffers: {particles: {usageHint: WebGL2RenderingContext.STREAM_DRAW}}},
+                    },
+                },
+                settings: {render: {bufferUploadMode: mode}},
+                _bufferCapacities: new Map(),
+                _lastUploadedBytes: 0,
+                _lastPreloadedBytes: 0,
+                gl: {
+                    bindBuffer(...args) { calls.push(["bindBuffer", ...args]); },
+                    bufferData(...args) { calls.push(["bufferData", ...args]); },
+                    bufferSubData(...args) { calls.push(["bufferSubData", ...args]); },
+                },
+            },
+        };
+    };
+    const data = new Float32Array([1, 2, 3, 4]);
+
+    const direct = makeState(BufferUploadMode.bufferData);
+    Webgl2Renderer.prototype._uploadArrayBuffer.call(direct.state, "particles", data, data.length);
+    assert.deepEqual(direct.calls.map(call => call[0]), ["bindBuffer", "bufferData"]);
+    assert.equal(direct.calls[1][2], data);
+
+    const sub = makeState(BufferUploadMode.bufferSubData);
+    Webgl2Renderer.prototype._uploadArrayBuffer.call(sub.state, "particles", data, data.length);
+    Webgl2Renderer.prototype._uploadArrayBuffer.call(sub.state, "particles", data, data.length);
+    assert.deepEqual(sub.calls.map(call => call[0]), [
+        "bindBuffer", "bufferData", "bufferSubData",
+        "bindBuffer", "bufferSubData",
+    ]);
+    assert.equal(sub.calls[1][2], data.byteLength);
+
+    const stream = makeState(BufferUploadMode.stream);
+    Webgl2Renderer.prototype._uploadArrayBuffer.call(stream.state, "particles", data, data.length);
+    Webgl2Renderer.prototype._uploadArrayBuffer.call(stream.state, "particles", data, data.length);
+    assert.deepEqual(stream.calls.map(call => call[0]), [
+        "bindBuffer", "bufferData", "bufferSubData",
+        "bindBuffer", "bufferData", "bufferSubData",
+    ]);
+    assert.equal(stream.calls[1][2], data.byteLength);
+    assert.equal(stream.calls[4][2], data.byteLength);
 });
 
 test("presentation pacing detects a 120 Hz RAF cadence without throttling it to 60 FPS", () => {

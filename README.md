@@ -280,3 +280,34 @@ reports/*.json
 ```
 
 The original snapshot and settings are restored after the suite by default. Use `window.nBodyCancelBenchmark()` to stop a running suite and `window.nBodyBenchmarkHelp()` for console examples.
+
+For WebGL buffer uploads, use the same generic benchmark runner with an
+explicit balanced case list. No separate benchmark API is needed:
+
+```js
+await window.nBodyRunBenchmark({
+  name: "webgl-buffer-upload-modes",
+  cases: [
+    {name: "stream-start", upload_mode: "stream"},
+    {name: "buffer-data-1", upload_mode: "bufferData"},
+    {name: "buffer-sub-data-1", upload_mode: "bufferSubData"},
+    {name: "stream-middle", upload_mode: "stream"},
+    {name: "buffer-sub-data-2", upload_mode: "bufferSubData"},
+    {name: "buffer-data-2", upload_mode: "bufferData"},
+    {name: "stream-end", upload_mode: "stream"}
+  ],
+  warmupSteps: 5,
+  stabilizationMs: 1000,
+  report: {
+    frames: 240,
+    blocks: 4,
+    intervalMs: 5000
+  }
+})
+```
+
+Each case restores the same captured universe. The regular summary already
+includes `uploadMode`, average and p95 `render`/`upload` times, uploaded MiB per
+frame, draw-call time and GPU draw time. Upload-mode performance is
+driver-dependent, so the default remains `stream` until measurements on the
+target machine show a consistent advantage for another mode.
