@@ -327,7 +327,13 @@ export class Webgl2Renderer extends RendererBase {
 
     setInterpolationFactor(factor) {
         const value = Number.isFinite(factor) ? Math.max(0, Math.min(1, factor)) : 0;
-        this._interpolationFactor = this._nextParticles ? value : 0;
+
+        // The simulation normally supplies an interleaved particle buffer, while
+        // the recording player supplies a compact [x, y] position frame. The
+        // previous guard only recognized the simulation path, so the player did
+        // select the interpolation shader and upload the next frame, but forced
+        // interpolation_factor back to zero on every draw.
+        this._interpolationFactor = this._hasInterpolationFrame() ? value : 0;
     }
 
     markParticlesDirty() {
