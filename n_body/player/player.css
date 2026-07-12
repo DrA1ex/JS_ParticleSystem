@@ -110,3 +110,26 @@
     padding: 0.1em;
     box-sizing: border-box;
 }
+.player-settings-popup {
+    box-sizing: border-box;
+    max-width: calc(100vw - 0.5em);
+    max-height: calc(100vh - 2.5em);
+    overflow: auto;
+}
+
+#player-render-stats {
+    position: absolute;
+    z-index: 20;
+    top: 0.75em;
+    left: 0.75em;
+    max-width: calc(100vw - 1.5em);
+    box-sizing: border-box;
+    padding: 0.55em 0.7em;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 0.25em;
+    background: rgba(0, 0, 0, 0.72);
+    color: rgba(255, 255, 255, 0.9);
+    font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre-wrap;
+    pointer-events: none;
+}

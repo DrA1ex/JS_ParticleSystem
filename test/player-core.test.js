@@ -7,6 +7,8 @@ installBrowserStubs();
 const {Application} = await import("../n_body/player/app.js");
 const {PlayerStateEnum} = await import("../n_body/player/controllers/base.js");
 const {ControlStateEnum} = await import("../n_body/player/controllers/control_bar.js");
+const {PlayerController} = await import("../n_body/player/controllers/player.js");
+const {PlayingProgress} = await import("../n_body/ui/controls/playing_progress.js");
 const {Webgl2Renderer} = await import("../n_body/render/webgl/render.js");
 
 function makeApp(overrides = {}) {
@@ -25,6 +27,11 @@ function makeApp(overrides = {}) {
         _interpolationFactor: 0,
         _playbackClockTimestamp: null,
         _lastPresentedTimestamp: null,
+        _rafId: null,
+        _usesCompactPositionFrames: false,
+        currentFrame: null,
+        previousFrame: null,
+        renderStats: null,
         _renderFrame: () => {},
     }, overrides);
     return app;
@@ -48,6 +55,31 @@ test("WebGL renderer accepts interpolation factor for compact recording frames",
     state._nextParticles = null;
     Webgl2Renderer.prototype.setInterpolationFactor.call(state, 0.5);
     assert.equal(state._interpolationFactor, 0);
+});
+
+test("compact WebGL uploads reuse frame references and cluster colors use x/y stride", () => {
+    const uploads = [];
+    const state = {
+        _compactFrameDirty: true,
+        _uploadedCurrentPositionSource: null,
+        _uploadedCurrentPositionCount: 0,
+        _uploadedPreviousPositionSource: null,
+        _uploadedPreviousPositionCount: 0,
+        _uploadArrayBuffer(name, data, length) { uploads.push([name, data, length]); },
+    };
+    const current = new Float32Array([0, 0, 10, 0, 10, 10]);
+    const previous = new Float32Array([-1, 0, 9, 0, 9, 9]);
+
+    Webgl2Renderer.prototype._uploadCompactPositionFrames.call(state, current, previous, 3, true);
+    Webgl2Renderer.prototype._uploadCompactPositionFrames.call(state, current, previous, 3, true);
+    assert.deepEqual(uploads.map(([name, , length]) => [name, length]), [
+        ["currentPosition", 6],
+        ["previousPosition", 6],
+    ]);
+
+    const colorState = {_particleColorBufferData: new Uint8Array(9)};
+    Webgl2Renderer.prototype._bakeClusterParticleColors.call(colorState, current, 3, 2);
+    assert.deepEqual([...colorState._particleColorBufferData], [0, 64, 0, 255, 64, 0, 255, 64, 255]);
 });
 
 test("presentation pacing targets 60 FPS on a simulated 144 Hz display", () => {
@@ -125,6 +157,69 @@ test("applying playback position copies frames, derives velocity and updates GPU
     assert.equal(app._playbackPosition, 2);
     assert.equal(app._interpolationFactor, 0);
     assert.ok(targets.some(([name, value]) => name === "frame" && value === null));
+});
+
+
+test("compact playback keeps native position frames without allocating interleaved particles", () => {
+    const frames = [
+        new Float32Array([0, 0, 10, 20]),
+        new Float32Array([2, 4, 13, 25]),
+    ];
+    const app = makeApp({
+        sequence: {
+            length: 2,
+            particleCount: 2,
+            componentsCount: 2,
+            getFrame(index) { return index >= 0 && index < frames.length ? frames[index] : null; },
+        },
+        _usesCompactPositionFrames: true,
+        particles: null,
+        renderer: {markParticlesDirty() {}},
+        dfri: {setNextPositionFrame() { return true; }},
+    });
+
+    app._applyPlaybackPosition(1, true);
+    assert.equal(app.currentFrame, frames[1]);
+    assert.equal(app.previousFrame, frames[0]);
+    assert.equal(app.particles, null);
+});
+
+test("player progress range reaches exactly the last recorded frame", () => {
+    const calls = [];
+    const controller = Object.create(PlayerController.prototype);
+    Object.assign(controller, {
+        framesCount: 0,
+        subFrameCount: 0,
+        frameIndex: 0,
+        subFrameIndex: 0,
+        controlBarCtrl: {
+            setProgressRange(value) { calls.push(["range", value]); },
+            setProgress(value) { calls.push(["progress", value]); },
+        },
+        emitEvent(name, value) { calls.push([name, value]); },
+    });
+
+    controller.setupSequence(3, 4);
+    controller.setCurrentFrame(2, 0);
+    controller._onSeek(null, 999);
+
+    assert.deepEqual(calls[0], ["range", 8]);
+    assert.deepEqual(calls[1], ["progress", 8]);
+    assert.deepEqual(calls[2][1], {frame: 2, subFrame: 0});
+});
+
+test("zero-length progress ranges render as complete instead of dividing by zero", () => {
+    const values = [];
+    const progress = Object.create(PlayingProgress.prototype);
+    Object.assign(progress, {
+        min: 0, max: 1, value: 0,
+        progressElement: {style: {setProperty(name, value) { values.push([name, value]); }}},
+    });
+
+    progress.setRange(0, 0);
+    progress.setValue(0);
+    assert.equal(progress.max, 0);
+    assert.deepEqual(values.at(-1), ["--value", "1"]);
 });
 
 test("CPU interpolation fallback calculates deltas when compact GPU frames are unavailable", () => {
@@ -218,6 +313,7 @@ test("seek and playback controls reset clocks and state consistently", () => {
     calls.length = 0;
     app.handleControl(ControlStateEnum.rewind);
     assert.ok(calls.some(call => call[0] === "position" && call[1] === 0));
+    assert.equal(calls.some(call => call[0] === "renderer-reset"), false);
     assert.equal(playerCtrl.currentState, PlayerStateEnum.playing);
 
     calls.length = 0;
@@ -300,6 +396,8 @@ test("sequence setup creates compact particles and initializes playback dependen
         dispose() { calls.push("renderer-dispose"); },
         markParticlesDirty() { calls.push("dirty"); },
         supportsGpuInterpolation: () => true,
+        supportsCompactPositionFrames: () => true,
+        renderPositionFrame() {},
         setCoordinateTransformer() {},
         setInterpolationFrame() {},
         setInterpolationPositionFrame() {},
@@ -334,15 +432,31 @@ test("sequence setup creates compact particles and initializes playback dependen
         app._setSequence(sequence);
         assert.equal(app.sequence, sequence);
         assert.equal(app.settings.physics.config.particleCount, 2);
-        assert.equal(app.particles.length, 10);
-        assert.equal(app.particles[4], 1);
-        assert.equal(app.particles[9], 1);
+        assert.equal(app.particles, null);
+        assert.equal(app.currentFrame, frames[0]);
+        assert.equal(app.previousFrame, frames[0]);
         assert.equal(app.dfri.usesGpuInterpolation, true);
         assert.equal(app.frameIndex, 0);
         assert.ok(calls.includes("old-dfri-disable"));
         assert.ok(calls.includes("old-renderer-dispose"));
     } finally {
         RendererInitializer.initRenderer = originalInit;
+    }
+});
+
+test("render loop schedules at most one requestAnimationFrame callback", () => {
+    let scheduled = 0;
+    const originalRaf = globalThis.requestAnimationFrame;
+    globalThis.requestAnimationFrame = () => { scheduled += 1; return scheduled; };
+    try {
+        const app = makeApp();
+        app._ensureRenderLoop();
+        app._ensureRenderLoop();
+        app._ensureRenderLoop();
+        assert.equal(scheduled, 1);
+        assert.equal(app._rafId, 1);
+    } finally {
+        globalThis.requestAnimationFrame = originalRaf;
     }
 });
 

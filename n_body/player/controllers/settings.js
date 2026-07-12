@@ -15,6 +15,7 @@ export class SettingsController extends ControllerBase {
     static PARTICLE_SPRITE_EVENT = "particle_sprite";
     static COLOR_MODE_EVENT = "color_mode";
     static FIXED_COLOR_EVENT = "fixed_color";
+    static RENDER_STATS_EVENT = "render_stats";
 
     constructor(root, parentCtrl) {
         const viewObj = new View(root, view);
@@ -26,6 +27,9 @@ export class SettingsController extends ControllerBase {
         this.speedSelectControl.setOnChange(value => this.emitEvent(SettingsController.SPEED_EVENT, value));
 
         this.pacingLabel = document.getElementById("playback-pacing");
+
+        this.renderStatsControl = Checkbox.byId("render_stats_checkbox");
+        this.renderStatsControl.setOnChange(value => this.emitEvent(SettingsController.RENDER_STATS_EVENT, value));
 
         this.fixedSizeControl = Checkbox.byId("fixed_size_checkbox");
         this.fixedSizeControl.setOnChange(value => this.emitEvent(SettingsController.PARTICLE_FIXED_SIZE_EVENT, value));
@@ -64,6 +68,7 @@ export class SettingsController extends ControllerBase {
     }
 
     configure(settings) {
+        this.renderStatsControl.setValue(!!settings.common.renderStats);
         this.fixedSizeControl.setValue(settings.render.fixedParticleSize);
         this.particleScaleControl.setValue(settings.render.particleSizeScale);
         this.particleSpriteControl.setValue(settings.render.particleSprite);

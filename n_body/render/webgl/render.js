@@ -27,39 +27,54 @@ const PARTICLE_SPRITE_IDS = {
 const PROGRAM_NAMES = {
     [RenderColorMode.velocity]: {
         plain: "renderVelocity",
-        interpolated: "renderVelocityInterpolated"
+        interpolated: "renderVelocityInterpolated",
+        compactPlain: "renderVelocityCompact",
+        compactInterpolated: "renderVelocityCompactInterpolated"
     },
     [RenderColorMode.random]: {
         plain: "renderRandom",
-        interpolated: "renderRandomInterpolated"
+        interpolated: "renderRandomInterpolated",
+        compactPlain: "renderRandomCompact",
+        compactInterpolated: "renderRandomCompactInterpolated"
     },
     [RenderColorMode.cluster]: {
         plain: "renderCluster",
-        interpolated: "renderClusterInterpolated"
+        interpolated: "renderClusterInterpolated",
+        compactPlain: "renderClusterCompact",
+        compactInterpolated: "renderClusterCompactInterpolated"
     },
     [RenderColorMode.mass]: {
         plain: "renderMass",
-        interpolated: "renderMassInterpolated"
+        interpolated: "renderMassInterpolated",
+        compactPlain: "renderMassCompact",
+        compactInterpolated: "renderMassCompactInterpolated"
     },
     [RenderColorMode.fixed]: {
         plain: "renderFixed",
-        interpolated: "renderFixedInterpolated"
+        interpolated: "renderFixedInterpolated",
+        compactPlain: "renderFixedCompact",
+        compactInterpolated: "renderFixedCompactInterpolated"
     }
 };
 
-function makeVertexShaderSource(colorMode, interpolated) {
+function makeVertexShaderSource(colorMode, interpolated, compact = false) {
     const defines = [
         `#define COLOR_MODE_${colorMode.toUpperCase()} 1`,
-        `#define USE_INTERPOLATION ${interpolated ? 1 : 0}`
+        `#define USE_INTERPOLATION ${interpolated ? 1 : 0}`,
+        `#define USE_COMPACT_FRAME ${compact ? 1 : 0}`
     ];
     return RenderVertexShaderSource.replace("#version 300 es", `#version 300 es\n${defines.join("\n")}`);
 }
 
-function makeProgramConfig(colorMode, interpolated) {
-    const program = PROGRAM_NAMES[colorMode][interpolated ? "interpolated" : "plain"];
+function makeProgramConfig(colorMode, interpolated, compact = false) {
+    const programKey = compact
+        ? (interpolated ? "compactInterpolated" : "compactPlain")
+        : (interpolated ? "interpolated" : "plain");
+    const program = PROGRAM_NAMES[colorMode][programKey];
     const attributes = [{name: "position"}];
-    const entries = [
-        {name: "position", buffer: `${RENDER_BUFFER_PROGRAM}.particles`, type: GL.FLOAT, size: 2, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 0}
+    const entries = [compact
+        ? {name: "position", buffer: `${RENDER_BUFFER_PROGRAM}.currentPosition`, type: GL.FLOAT, size: 2}
+        : {name: "position", buffer: `${RENDER_BUFFER_PROGRAM}.particles`, type: GL.FLOAT, size: 2, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 0}
     ];
 
     if (interpolated) {
@@ -68,31 +83,37 @@ function makeProgramConfig(colorMode, interpolated) {
     }
 
     if (colorMode === RenderColorMode.velocity) {
-        attributes.push({name: "velocity"}, {name: "mass"});
-        entries.push(
-            {name: "velocity", buffer: `${RENDER_BUFFER_PROGRAM}.particles`, type: GL.FLOAT, size: 2, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 2 * Float32Array.BYTES_PER_ELEMENT},
-            {name: "mass", buffer: `${RENDER_BUFFER_PROGRAM}.particles`, type: GL.FLOAT, size: 1, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 4 * Float32Array.BYTES_PER_ELEMENT}
-        );
+        if (compact) {
+            attributes.push({name: "previous_position"});
+            entries.push({name: "previous_position", buffer: `${RENDER_BUFFER_PROGRAM}.previousPosition`, type: GL.FLOAT, size: 2});
+        } else {
+            attributes.push({name: "velocity"}, {name: "mass"});
+            entries.push(
+                {name: "velocity", buffer: `${RENDER_BUFFER_PROGRAM}.particles`, type: GL.FLOAT, size: 2, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 2 * Float32Array.BYTES_PER_ELEMENT},
+                {name: "mass", buffer: `${RENDER_BUFFER_PROGRAM}.particles`, type: GL.FLOAT, size: 1, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 4 * Float32Array.BYTES_PER_ELEMENT}
+            );
+        }
     } else if (STATIC_COLOR_MODES.has(colorMode)) {
-        attributes.push({name: "mass"}, {name: "fixed_color"});
-        entries.push(
-            {name: "mass", buffer: `${RENDER_BUFFER_PROGRAM}.particles`, type: GL.FLOAT, size: 1, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 4 * Float32Array.BYTES_PER_ELEMENT},
-            {
-                name: "fixed_color",
-                buffer: `${RENDER_BUFFER_PROGRAM}.particleColors`,
-                type: GL.UNSIGNED_BYTE,
-                size: 3,
-                normalized: true
-            }
-        );
-    } else if (colorMode === RenderColorMode.mass) {
+        if (!compact) {
+            attributes.push({name: "mass"});
+            entries.push({name: "mass", buffer: `${RENDER_BUFFER_PROGRAM}.particles`, type: GL.FLOAT, size: 1, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 4 * Float32Array.BYTES_PER_ELEMENT});
+        }
+        attributes.push({name: "fixed_color"});
+        entries.push({
+            name: "fixed_color",
+            buffer: `${RENDER_BUFFER_PROGRAM}.particleColors`,
+            type: GL.UNSIGNED_BYTE,
+            size: 3,
+            normalized: true
+        });
+    } else if (colorMode === RenderColorMode.mass && !compact) {
         attributes.push({name: "mass"});
         entries.push({name: "mass", buffer: `${RENDER_BUFFER_PROGRAM}.particles`, type: GL.FLOAT, size: 1, stride: ITEM_SIZE * Float32Array.BYTES_PER_ELEMENT, offset: 4 * Float32Array.BYTES_PER_ELEMENT});
     }
 
     return {
         program,
-        vs: makeVertexShaderSource(colorMode, interpolated),
+        vs: makeVertexShaderSource(colorMode, interpolated, compact),
         fs: RenderFragmentShaderSource,
         attributes,
         uniforms: [
@@ -119,20 +140,18 @@ const CONFIGURATION = [
         internal: true,
         buffers: [
             {name: "particles", usageHint: GL.STREAM_DRAW},
+            {name: "currentPosition", usageHint: GL.STREAM_DRAW},
+            {name: "previousPosition", usageHint: GL.STREAM_DRAW},
             {name: "nextPosition", usageHint: GL.STREAM_DRAW},
             {name: "particleColors", usageHint: GL.STATIC_DRAW},
         ]
     },
-    makeProgramConfig(RenderColorMode.velocity, false),
-    makeProgramConfig(RenderColorMode.velocity, true),
-    makeProgramConfig(RenderColorMode.random, false),
-    makeProgramConfig(RenderColorMode.random, true),
-    makeProgramConfig(RenderColorMode.cluster, false),
-    makeProgramConfig(RenderColorMode.cluster, true),
-    makeProgramConfig(RenderColorMode.mass, false),
-    makeProgramConfig(RenderColorMode.mass, true),
-    makeProgramConfig(RenderColorMode.fixed, false),
-    makeProgramConfig(RenderColorMode.fixed, true),
+    ...Object.values(RenderColorMode).flatMap(colorMode => [
+        makeProgramConfig(colorMode, false),
+        makeProgramConfig(colorMode, true),
+        makeProgramConfig(colorMode, false, true),
+        makeProgramConfig(colorMode, true, true),
+    ]),
 ];
 
 export class Webgl2Renderer extends RendererBase {
@@ -168,6 +187,11 @@ export class Webgl2Renderer extends RendererBase {
         this._particleDataDirty = true;
         this._uploadedParticleSource = null;
         this._uploadedParticleCount = 0;
+        this._compactFrameDirty = true;
+        this._uploadedCurrentPositionSource = null;
+        this._uploadedCurrentPositionCount = 0;
+        this._uploadedPreviousPositionSource = null;
+        this._uploadedPreviousPositionCount = 0;
 
         this._nextParticles = null;
         this._nextPositionFrame = null;
@@ -296,6 +320,10 @@ export class Webgl2Renderer extends RendererBase {
         return true;
     }
 
+    supportsCompactPositionFrames() {
+        return true;
+    }
+
     /**
      * DFRI supplies only the next physics frame. The renderer extracts x/y into
      * a compact next-position buffer, so the GPU interpolation path does not
@@ -338,6 +366,7 @@ export class Webgl2Renderer extends RendererBase {
 
     markParticlesDirty() {
         this._particleDataDirty = true;
+        this._compactFrameDirty = true;
     }
 
     preloadInterpolationFrame(particles, budgetMs = 4) {
@@ -416,11 +445,19 @@ export class Webgl2Renderer extends RendererBase {
     }
 
     render(particles) {
+        this._renderPreparedFrame(() => this._updateData(particles));
+    }
+
+    renderPositionFrame(positions, previousPositions = null) {
+        this._renderPreparedFrame(() => this._updateCompactPositionData(positions, previousPositions));
+    }
+
+    _renderPreparedFrame(prepareFn) {
         const renderStart = performance.now();
         this._updateShaderFilterState();
 
         this.debugCtx?.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-        const {count, prepareDataTime, uploadTime, programName} = this._updateData(particles)
+        const {count, prepareDataTime, uploadTime, programName, sourceLayout = "interleaved"} = prepareFn();
 
         const drawStart = performance.now();
         this._pollGpuTimer();
@@ -454,6 +491,7 @@ export class Webgl2Renderer extends RendererBase {
         this.stats.filterMode = this.settings.render.enableFilter ? "shader" : "off";
         this.stats.particleSprite = this.settings.render.particleSprite || ParticleSpriteMode.point;
         this.stats.particleSizeScale = this.settings.render.particleSizeScale;
+        this.stats.sourceLayout = sourceLayout;
     }
 
     _updateData(particles) {
@@ -516,7 +554,93 @@ export class Webgl2Renderer extends RendererBase {
         }
         const uploadTime = performance.now() - uploadStart;
 
-        return {count, prepareDataTime, uploadTime, programName};
+        return {count, prepareDataTime, uploadTime, programName, sourceLayout: "interleaved"};
+    }
+
+    _updateCompactPositionData(positions, previousPositions = null) {
+        if (!(positions instanceof Float32Array) || positions.length % POSITION_ITEM_SIZE !== 0) {
+            throw new Error("Compact position frame must be a Float32Array of [x, y] pairs");
+        }
+
+        const count = Math.floor(positions.length / POSITION_ITEM_SIZE);
+        const previous = previousPositions instanceof Float32Array && previousPositions.length >= positions.length
+            ? previousPositions
+            : positions;
+        const colorMode = this._colorMode;
+        const prepareStart = performance.now();
+        const scanMaxSpeed = colorMode === RenderColorMode.velocity && this._shouldScanMaxSpeed(prepareStart);
+        if (scanMaxSpeed) {
+            this._maxSpeed = this._scanMaxSpeedFromPositionFrames(positions, previous, count, this._maxSpeed);
+            this._lastMaxSpeedScanTime = prepareStart;
+        }
+
+        const particleScale = this.settings.render.fixedParticleSize
+            ? this.settings.render.particleSizeScale
+            : this.settings.render.particleSizeScale * this.scale;
+        const interpolationEnabled = this._useInterpolationProgram(count);
+        const programName = this._getCompactProgramName(colorMode, interpolationEnabled);
+
+        this._loadUniforms(programName, {
+            scale: this.scale,
+            max_speed: this._maxSpeed,
+            offset: [this.xOffset, this.yOffset],
+            particle_scale: particleScale,
+            sprite_mode: this._particleSpriteId,
+            interpolation_factor: interpolationEnabled ? this._interpolationFactor : 0,
+            filter_enabled: this.settings.render.enableFilter ? 1 : 0,
+            hue_angle: this.settings.render.enableFilter ? this._hueAngle * Math.PI / 180 : 0,
+            fixed_color: this._fixedColorRgb,
+        });
+
+        const prepareDataTime = performance.now() - prepareStart;
+        const uploadStart = performance.now();
+        this._uploadCompactPositionFrames(positions, previous, count, colorMode === RenderColorMode.velocity);
+        if (STATIC_COLOR_MODES.has(colorMode)) {
+            this._ensureStaticParticleColors(positions, count, colorMode, POSITION_ITEM_SIZE);
+        }
+        if (interpolationEnabled) {
+            this._uploadNextPositionIfNeeded(count);
+        }
+        const uploadTime = performance.now() - uploadStart;
+
+        return {count, prepareDataTime, uploadTime, programName, sourceLayout: "compact-position"};
+    }
+
+    _scanMaxSpeedFromPositionFrames(current, previous, count, currentMaxSpeed) {
+        let maxSpeed = Math.max(1e-9, currentMaxSpeed);
+        const step = Math.max(1, Math.floor(count / 4096));
+        for (let i = 0; i < count; i += step) {
+            const offset = i * POSITION_ITEM_SIZE;
+            const speed = Math.max(
+                Math.abs(current[offset] - previous[offset]),
+                Math.abs(current[offset + 1] - previous[offset + 1]),
+            );
+            if (Number.isFinite(speed) && speed > maxSpeed) {
+                maxSpeed = speed;
+            }
+        }
+        return maxSpeed;
+    }
+
+    _uploadCompactPositionFrames(current, previous, count, uploadPrevious) {
+        const currentChanged = this._compactFrameDirty ||
+            this._uploadedCurrentPositionSource !== current || this._uploadedCurrentPositionCount !== count;
+        if (currentChanged) {
+            this._uploadArrayBuffer("currentPosition", current, count * POSITION_ITEM_SIZE);
+            this._uploadedCurrentPositionSource = current;
+            this._uploadedCurrentPositionCount = count;
+        }
+
+        if (uploadPrevious) {
+            const previousChanged = this._compactFrameDirty ||
+                this._uploadedPreviousPositionSource !== previous || this._uploadedPreviousPositionCount !== count;
+            if (previousChanged) {
+                this._uploadArrayBuffer("previousPosition", previous, count * POSITION_ITEM_SIZE);
+                this._uploadedPreviousPositionSource = previous;
+                this._uploadedPreviousPositionCount = count;
+            }
+        }
+        this._compactFrameDirty = false;
     }
 
     get _particleSpriteId() {
@@ -530,6 +654,11 @@ export class Webgl2Renderer extends RendererBase {
     _getProgramName(colorMode = this._colorMode, interpolated = this._useInterpolationProgram()) {
         const programs = PROGRAM_NAMES[colorMode] || PROGRAM_NAMES[RenderColorMode.velocity];
         return programs[interpolated ? "interpolated" : "plain"];
+    }
+
+    _getCompactProgramName(colorMode = this._colorMode, interpolated = this._useInterpolationProgram()) {
+        const programs = PROGRAM_NAMES[colorMode] || PROGRAM_NAMES[RenderColorMode.velocity];
+        return programs[interpolated ? "compactInterpolated" : "compactPlain"];
     }
 
     _hasInterpolationFrame(count = null) {
@@ -681,14 +810,14 @@ export class Webgl2Renderer extends RendererBase {
         return value & 0xff;
     }
 
-    _ensureStaticParticleColors(data, count, mode) {
+    _ensureStaticParticleColors(data, count, mode, positionStride = ITEM_SIZE) {
         const state = this._staticColorState;
         if (!state || state.mode !== mode || state.count !== count || !state.generated) {
             this._ensureParticleColorBufferCapacity(count);
             if (mode === RenderColorMode.random) {
                 this._bakeRandomParticleColors(count);
             } else {
-                this._bakeClusterParticleColors(data, count);
+                this._bakeClusterParticleColors(data, count, positionStride);
             }
             this._staticColorState = {mode, count, generated: true, uploaded: false};
         }
@@ -709,7 +838,7 @@ export class Webgl2Renderer extends RendererBase {
         }
     }
 
-    _bakeClusterParticleColors(data, count) {
+    _bakeClusterParticleColors(data, count, positionStride = ITEM_SIZE) {
         const colors = this._particleColorBufferData;
         let minX = Infinity;
         let maxX = -Infinity;
@@ -717,7 +846,7 @@ export class Webgl2Renderer extends RendererBase {
         let maxY = -Infinity;
 
         for (let i = 0; i < count; i++) {
-            const offset = i * ITEM_SIZE;
+            const offset = i * positionStride;
             const x = data[offset];
             const y = data[offset + 1];
             if (x < minX) minX = x;
@@ -729,7 +858,7 @@ export class Webgl2Renderer extends RendererBase {
         const spanX = Math.max(1e-9, maxX - minX);
         const spanY = Math.max(1e-9, maxY - minY);
         for (let i = 0; i < count; i++) {
-            const sourceOffset = i * ITEM_SIZE;
+            const sourceOffset = i * positionStride;
             const colorOffset = i * COLOR_ITEM_SIZE;
             const nx = Math.max(0, Math.min(1, (data[sourceOffset] - minX) / spanX));
             const ny = Math.max(0, Math.min(1, (data[sourceOffset + 1] - minY) / spanY));
@@ -842,8 +971,11 @@ export class Webgl2Renderer extends RendererBase {
 
     _loadUniformsForAllPrograms(values) {
         for (const colorMode of Object.values(RenderColorMode)) {
-            this._loadUniforms(PROGRAM_NAMES[colorMode].plain, values);
-            this._loadUniforms(PROGRAM_NAMES[colorMode].interpolated, values);
+            const programs = PROGRAM_NAMES[colorMode];
+            this._loadUniforms(programs.plain, values);
+            this._loadUniforms(programs.interpolated, values);
+            this._loadUniforms(programs.compactPlain, values);
+            this._loadUniforms(programs.compactInterpolated, values);
         }
     }
 
@@ -989,6 +1121,8 @@ export class Webgl2Renderer extends RendererBase {
         this._nextParticles = null;
         this._nextPositionFrame = null;
         this._uploadedParticleSource = null;
+        this._uploadedCurrentPositionSource = null;
+        this._uploadedPreviousPositionSource = null;
         this._uploadedNextParticleSource = null;
         this._bufferCapacities = null;
         this._uploadQueue = null;

@@ -47,10 +47,6 @@ export class PlayingProgress extends Control {
     setRange(min, max) {
         this.min = Math.min(min, max);
         this.max = Math.max(max, min);
-        if (this.max <= this.min) {
-            this.max += 1;
-        }
-
         this.value = this.min;
     }
 
@@ -58,7 +54,8 @@ export class PlayingProgress extends Control {
         value = Math.max(this.min, Math.min(this.max, value));
         this.value = value;
 
-        let progress = (value - this.min) / (this.max - this.min);
+        const range = this.max - this.min;
+        const progress = range > 0 ? (value - this.min) / range : 1;
         this.progressElement.style.setProperty("--value", `${progress}`);
     }
 }

@@ -36,7 +36,8 @@ export class Popup extends Control {
         this.element.appendChild(this.contentNode);
 
         this._docClickListener = this._onDocumentClick.bind(this);
-        this._sizeObserver = new ResizeObserver(this._reposition.bind(this));
+        this._repositionHandler = this._reposition.bind(this);
+        this._sizeObserver = new ResizeObserver(this._repositionHandler);
     }
 
     show() {
@@ -49,9 +50,14 @@ export class Popup extends Control {
 
         document.addEventListener("mousedown", this._docClickListener);
         document.addEventListener("touchstart", this._docClickListener);
-        this._sizeObserver.observe(document.body, {box: 'border-box'});
-
         this.shown = true;
+        this._sizeObserver.observe(document.body, {box: 'border-box'});
+        this._sizeObserver.observe(this.element, {box: 'border-box'});
+        if (this.contentNode !== this.element) {
+            this._sizeObserver.observe(this.contentNode, {box: 'border-box'});
+        }
+        window.addEventListener("resize", this._repositionHandler);
+
         this.element.classList.add("popup-shown");
 
         this.anchor.classList.add("popup-trigger-opened");
@@ -70,6 +76,7 @@ export class Popup extends Control {
         document.removeEventListener("mousedown", this._docClickListener);
         document.removeEventListener("touchstart", this._docClickListener);
         this._sizeObserver.disconnect();
+        window.removeEventListener("resize", this._repositionHandler);
 
     }
 

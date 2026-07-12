@@ -7,14 +7,18 @@ import {FetchDataAsyncReader, FileAsyncReader, ObservableStreamLoader} from "../
 import {InteractionHandler} from "../render/interactions.js";
 import {RendererInitializer} from "../render/init.js";
 import {ITEM_SIZE} from "../utils/particles.js";
+import {PlayerRenderStats} from "./render_stats.js";
 
 export class Application {
     _statesToRender = new Set([PlayerStateEnum.playing, PlayerStateEnum.paused, PlayerStateEnum.finished]);
 
     particles = null;
+    currentFrame = null;
+    previousFrame = null;
     sequence = null;
     frameIndex = -1;
     currentSpeed = 1;
+    _usesCompactPositionFrames = false;
 
     renderer = null;
     renderInteractions = null;
@@ -24,6 +28,7 @@ export class Application {
     _interpolationFactor = 0;
     _playbackClockTimestamp = null;
     _lastPresentedTimestamp = null;
+    _rafId = null;
 
     constructor(settings) {
         this.settings = settings;
@@ -38,9 +43,12 @@ export class Application {
         this.playerCtrl.subscribe(this, PlayerController.PARTICLE_SPRITE_EVENT, (_, value) => this._updateRenderSetting("particleSprite", value));
         this.playerCtrl.subscribe(this, PlayerController.COLOR_MODE_EVENT, (_, value) => this._updateColorMode(value));
         this.playerCtrl.subscribe(this, PlayerController.FIXED_COLOR_EVENT, (_, value) => this._updateRenderSetting("fixedColor", value));
+        this.playerCtrl.subscribe(this, PlayerController.RENDER_STATS_EVENT, (_, value) => this._setRenderStatsEnabled(value));
         this.playerCtrl.setState(PlayerStateEnum.waiting);
         this.playerCtrl.configure(this.settings);
         this._renderFrame = this.render.bind(this);
+        this.renderStats = new PlayerRenderStats(document.body);
+        this.renderStats.setEnabled(!!this.settings.common.renderStats);
     }
 
     async loadDataFromUrl(url) {
@@ -85,7 +93,7 @@ export class Application {
         if (success) {
             this.playerCtrl.setState(PlayerStateEnum.playing);
             this.handleSpeed(this.currentSpeed);
-            requestAnimationFrame(this._renderFrame);
+            this._ensureRenderLoop();
         } else {
             this.playerCtrl.setState(PlayerStateEnum.waiting);
         }
@@ -98,6 +106,8 @@ export class Application {
 
         this.sequence = sequence;
         this.frameIndex = -1;
+        this.currentFrame = null;
+        this.previousFrame = null;
         this._playbackPosition = 0;
         this._interpolationFactor = 0;
         this._resetPlaybackClock();
@@ -105,6 +115,9 @@ export class Application {
         this.settings.physics.config.particleCount = this.sequence.particleCount;
 
         this.renderer = RendererInitializer.initRenderer(document.getElementById("canvas"), this.settings.render.render, this.settings);
+        this._usesCompactPositionFrames = this.sequence.componentsCount === 2 &&
+            !!this.renderer.supportsCompactPositionFrames?.();
+        this.renderStats?.setRenderer(this.renderer);
         this.renderInteractions = new InteractionHandler(this.renderer);
         this.renderInteractions.enable();
 
@@ -121,12 +134,17 @@ export class Application {
             this.dfri = null;
         }
 
-        // Keep playback data in the same compact interleaved layout as the
-        // simulation backend. Five million JS particle objects (plus five
-        // million DFRI delta objects) can freeze or exhaust the player.
-        this.particles = new Float32Array(this.sequence.particleCount * ITEM_SIZE);
-        for (let i = 0; i < this.sequence.particleCount; i++) {
-            this.particles[i * ITEM_SIZE + 4] = 1;
+        // WebGL can now consume the recording's native [x, y] frames directly.
+        // Canvas and legacy renderers keep the interleaved fallback, but the
+        // common WebGL path avoids a full JavaScript conversion and a 5-float
+        // upload for every recorded frame.
+        if (this._usesCompactPositionFrames) {
+            this.particles = null;
+        } else {
+            this.particles = new Float32Array(this.sequence.particleCount * ITEM_SIZE);
+            for (let i = 0; i < this.sequence.particleCount; i++) {
+                this.particles[i * ITEM_SIZE + 4] = 1;
+            }
         }
 
         this._applyPlaybackPosition(0, true);
@@ -134,12 +152,17 @@ export class Application {
     }
 
     render(timestamp = performance.now()) {
+        // The callback currently being executed is no longer pending. Schedule
+        // the next one before any potentially expensive upload/draw work, using
+        // a single tracked RAF so repeated file loads cannot create duplicate
+        // render loops.
+        this._rafId = null;
         if (!this._statesToRender.has(this.playerCtrl.currentState)) {
             return;
         }
+        this._ensureRenderLoop();
 
         if (!this._shouldPresent(timestamp)) {
-            requestAnimationFrame(this._renderFrame);
             return;
         }
 
@@ -149,21 +172,41 @@ export class Application {
             this._playbackClockTimestamp = null;
         }
 
-        if (this.dfri) {
-            this.dfri.renderAtFactor(this.particles, this._interpolationFactor);
-        } else {
-            this.renderer.render(this.particles);
-        }
-
+        this._renderCurrentFrame();
         this._updateProgressUi();
+        this.renderStats?.sample(timestamp, {
+            position: this._playbackPosition,
+            maxPosition: Math.max(0, this.sequence.length - 1),
+            speed: this.currentSpeed,
+        });
 
         if (this.playerCtrl.currentState === PlayerStateEnum.playing &&
             this._playbackPosition >= this.sequence.length - 1) {
             this.playerCtrl.setState(PlayerStateEnum.finished);
             this._playbackClockTimestamp = null;
         }
+    }
 
-        requestAnimationFrame(this._renderFrame);
+    _ensureRenderLoop() {
+        if (this._rafId === null) {
+            this._rafId = requestAnimationFrame(this._renderFrame);
+        }
+    }
+
+    _renderCurrentFrame() {
+        if (this._usesCompactPositionFrames) {
+            if (this.dfri?.usesGpuInterpolation) {
+                this.renderer.setInterpolationFactor?.(this._interpolationFactor);
+            }
+            this.renderer.renderPositionFrame(this.currentFrame, this.previousFrame);
+            return;
+        }
+
+        if (this.dfri) {
+            this.dfri.renderAtFactor(this.particles, this._interpolationFactor);
+        } else {
+            this.renderer.render(this.particles);
+        }
     }
 
     _shouldPresent(timestamp) {
@@ -215,8 +258,12 @@ export class Application {
 
         if (force || currentFrameIndex !== this.frameIndex) {
             const frame = this.sequence.getFrame(currentFrameIndex);
-            const prevFrame = this.sequence.getFrame(currentFrameIndex - 1);
-            this._copyFrameToParticles(frame, prevFrame);
+            const prevFrame = this.sequence.getFrame(currentFrameIndex - 1) || frame;
+            this.currentFrame = frame;
+            this.previousFrame = prevFrame;
+            if (!this._usesCompactPositionFrames) {
+                this._copyFrameToParticles(frame, currentFrameIndex > 0 ? prevFrame : null);
+            }
             this.frameIndex = currentFrameIndex;
             this.renderer.markParticlesDirty?.();
             this._setInterpolationTarget(frame, nextFrameIndex);
@@ -311,6 +358,7 @@ export class Application {
             case ControlStateEnum.play:
                 this._resetPlaybackClock();
                 this.playerCtrl.setState(PlayerStateEnum.playing);
+                this._ensureRenderLoop();
                 break;
 
             case ControlStateEnum.pause:
@@ -319,16 +367,19 @@ export class Application {
                 break;
 
             case ControlStateEnum.rewind:
-                this.renderer.reset();
+                // Do not reset the renderer here: resetParticleColors() changes
+                // random assignments and rebakes cluster colors, so rewinding
+                // made static color modes appear corrupted. Frame uploads and
+                // interpolation targets are refreshed explicitly below.
                 this.renderer.clear();
                 this.dfri?.reset();
                 this._applyPlaybackPosition(0, true);
                 this._resetPlaybackClock();
                 this.playerCtrl.setState(PlayerStateEnum.playing);
+                this._ensureRenderLoop();
                 break;
 
             case ControlStateEnum.reset:
-                this.renderer.reset();
                 this.renderer.clear();
                 this.dfri?.reset();
                 this._applyPlaybackPosition(0, true);
@@ -384,4 +435,10 @@ export class Application {
         this.renderer?.resetParticleColors?.();
         this.renderer?.reconfigure?.(this.settings);
     }
+    _setRenderStatsEnabled(value) {
+        const enabled = !!value;
+        this.settings.common.renderStats = enabled;
+        this.renderStats?.setEnabled(enabled);
+    }
+
 }

@@ -30,6 +30,7 @@ export class PlayerController extends StateControllerBase {
     static PARTICLE_SPRITE_EVENT = "player_particle_sprite";
     static COLOR_MODE_EVENT = "player_color_mode";
     static FIXED_COLOR_EVENT = "player_fixed_color";
+    static RENDER_STATS_EVENT = "player_render_stats";
 
     static MOUSE_INACTIVE_DELAY = 2000;
 
@@ -59,8 +60,10 @@ export class PlayerController extends StateControllerBase {
         this.settingsCtrl.subscribe(this, SettingsController.PARTICLE_SPRITE_EVENT, (_, value) => this.emitEvent(PlayerController.PARTICLE_SPRITE_EVENT, value));
         this.settingsCtrl.subscribe(this, SettingsController.COLOR_MODE_EVENT, (_, value) => this.emitEvent(PlayerController.COLOR_MODE_EVENT, value));
         this.settingsCtrl.subscribe(this, SettingsController.FIXED_COLOR_EVENT, (_, value) => this.emitEvent(PlayerController.FIXED_COLOR_EVENT, value));
+        this.settingsCtrl.subscribe(this, SettingsController.RENDER_STATS_EVENT, (_, value) => this.emitEvent(PlayerController.RENDER_STATS_EVENT, value));
 
         this.settingsPopup = Popup.byId("settings-popup", this.settingsCtrl.root);
+        this.settingsPopup.addClass("player-settings-popup");
         this.settingsPopup.offsetY = 0.4;
         this.settingsPopup.direction = PopupDirectionEnum.up;
         this.settingsPopup.anchor = this.controlBarCtrl.settingsControl.element;
@@ -100,7 +103,7 @@ export class PlayerController extends StateControllerBase {
         this.framesCount = frameCount;
         this.subFrameCount = subFrameCount;
 
-        this.controlBarCtrl.setProgressRange(this.framesCount * this.subFrameCount);
+        this.controlBarCtrl.setProgressRange(Math.max(0, (this.framesCount - 1) * this.subFrameCount));
     }
 
     setCurrentFrame(frameIndex, subFrameIndex) {
@@ -119,7 +122,8 @@ export class PlayerController extends StateControllerBase {
             return;
         }
 
-        value = Math.max(0, Math.min(this.framesCount * this.subFrameCount - 1, value));
+        const maxProgress = Math.max(0, (this.framesCount - 1) * this.subFrameCount);
+        value = Math.max(0, Math.min(maxProgress, value));
         const frameIndex = Math.floor(value / this.subFrameCount);
         const subFrameIndex = Math.floor(value % this.subFrameCount);
 

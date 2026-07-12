@@ -21,6 +21,7 @@ export class AppPlayerSettings extends AppSettingsBase {
     get render() {return this.config.render;}
 
     common = {
-        debug: false
+        debug: false,
+        renderStats: false
     }
 }

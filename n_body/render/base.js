@@ -111,6 +111,14 @@ export class RendererBase {
         return false;
     }
 
+    supportsCompactPositionFrames() {
+        return false;
+    }
+
+    renderPositionFrame(_positions, _previousPositions = null) {
+        throw new Error("Compact position frames are not supported by this renderer");
+    }
+
     setInterpolationFrame(_particles) {}
 
     setInterpolationPositionFrame(_positions) {}
